@@ -1,0 +1,24 @@
+# Service names that otpauth codes commonly use but site-domains.tsv lacks or spells differently. Maintained by hand;
+# entries here take precedence over site-domains.tsv. Format: name<TAB>domain.
+Adobe	adobe.com
+Amazon Web Services	aws.amazon.com
+Atlassian	atlassian.com
+AWS	aws.amazon.com
+EA	ea.com
+Electronic Arts	ea.com
+Gemini	gemini.com
+Gmail	mail.google.com
+Google	google.com
+Microsoft	microsoft.com
+Microsoft Account	microsoft.com
+Nintendo	nintendo.com
+npm	npmjs.com
+OpenAI	openai.com
+Proton Mail	proton.me
+ProtonMail	proton.me
+Robinhood	robinhood.com
+Tailscale	tailscale.com
+Twitter	x.com
+Ubisoft	ubisoft.com
+Vercel	vercel.com
+X	x.com

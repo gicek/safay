@@ -1,0 +1,22 @@
+[package]
+name = "safay-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+safay-core = { path = "../safay-core" }
+cloudset = { path = "../cloudset" }
+getrandom = "=0.4.3"
+zeroize = "=1.9.0"
+uuid = { version = "=1.26.1", features = ["serde"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+thiserror = "=2.0.21"
+
+tempfile = "=3.27.0"
+
+[dev-dependencies]
+cloudset = { path = "../cloudset", features = ["testing"] }

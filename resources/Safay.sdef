@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE dictionary SYSTEM "file://localhost/System/Library/DTDs/sdef.dtd">
+<dictionary title="Safay Terminology">
+    <suite name="Safay Launcher Suite" code="SaFy"
+        description="For launchers such as Alfred, Raycast and Tinycast. Off unless Settings → Advanced → Enable Third-Party Plugin Interface is on. macOS Automation decides which apps may send these commands.">
+
+        <command name="find accounts" code="SaFyfacc"
+            description="Matches accounts by service name and account name, as Safay's own search does. Returns JSON: {&quot;enabled&quot;: bool, &quot;ready&quot;: bool, &quot;accounts&quot;: [{&quot;id&quot;, &quot;issuer&quot;, &quot;username&quot;}]}, at most 50 accounts, account names masked. Never a secret or a code. `ready` is false until Safay has been unlocked once since it started.">
+            <cocoa class="SafayFindAccountsCommand"/>
+            <direct-parameter type="text" description="Search text; empty matches every account."/>
+            <result type="text" description="JSON, as above."/>
+        </command>
+
+        <command name="copy code" code="SaFyccid"
+            description="Asks the user to prove it is them (Touch ID, or the master password in Safay's window), then copies the account's current code to the clipboard and shows a notice. The code is never returned.">
+            <cocoa class="SafayCopyCodeCommand"/>
+            <direct-parameter type="text" description="An account id from `find accounts`."/>
+            <result type="text" description="copied, pending (continues in Safay's window), cancelled, failed, busy, not_found, disabled or not_ready."/>
+        </command>
+
+    </suite>
+</dictionary>

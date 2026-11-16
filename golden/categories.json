@@ -1,0 +1,60 @@
+{
+  "description": "Vault and encrypted export with categories, as written by the Rust core; pins the current format.",
+  "export": {
+    "accountIDs": [
+      "0B9A6F2E-5D41-4C7B-8E3A-1F2D3C4B5A60",
+      "1C8B7E3F-6E52-4D8C-9F4B-2E3D4C5B6A71"
+    ],
+    "categories": [
+      {
+        "accountIDs": [
+          "1C8B7E3F-6E52-4D8C-9F4B-2E3D4C5B6A71",
+          "0B9A6F2E-5D41-4C7B-8E3A-1F2D3C4B5A60"
+        ],
+        "id": "A1B2C3D4-0000-4000-8000-000000000001",
+        "name": "工作"
+      },
+      {
+        "accountIDs": [
+          "0B9A6F2E-5D41-4C7B-8E3A-1F2D3C4B5A60"
+        ],
+        "id": "A1B2C3D4-0000-4000-8000-000000000002",
+        "name": "Crypto"
+      }
+    ],
+    "file": "{\n  \"accountCount\": 2,\n  \"app\": \"safay\",\n  \"cipher\": \"AES-256-GCM\",\n  \"ciphertext\": \"jr0O9OCq+SdbSq9vAFBCTgdPDUZcqgqoogO6V6tTK3fhqYfgq1VAIQI3z0l5bx6Fol+7cWvnfFpGKmpgMcbSgffHuQaouGwQ6Q+hI4yR4MCSDr7l5sQ7m4PzkcOJ4/vRvCHRoetpoYZjrXEZGEFFHNqLxuG/sV9PWZ6j3qyEyXkR/lqbXglcqRBIpzJK1Is5NV9v+c2Ls3b73nubd+XXSSu5yfzGbAmgQWpmdkfZdwTtmFun1GinK1DbUXAo9Mviisp7zE1R3jwSFraXd/ptYsLQQjaUGtvfBNCqsAJQ2FmU8/rrUMXhjrUGwP6bSlTjj4IIVWqQTMqLS3hl4ybplFG2GPaZ+7beTg4j8gpGNHTI1wyT6B3UScOI2XFdghcvWOAD4N4qCgGlPoMYYflWfebkLDW1CpqpjWOeh4PygI6SSJkbAiwkSQUJjYDMYxy+LiG6QwjOO9aIs+H13B5yc8PJg5djXL8MhHiposqRINNHHUC+5kO8zAw8zg6Bop3TcExO1L01hwCc2OS2C5rDUuTbhqceC2MWTeUQ4+t/lkdfpI+j/Hg7ByadwEpht4Jv0igTY2aaZE56dygglWs8ydgoVotThN18ji4OV8lsFAXcr6qA27OpSamLqO/ReB3v5v8HIykppFIwSD+h738L6CrWIqgexly43+c92V54zqxWirHEGFEQuSg/wI5G6AHTZyCfq6ZNXZPiXtKASROP6KjVKxx8Bl1o+SuzCqTQ97FEw+82cgAjKfz4/A/HvfhWKKySVIyVolepOOosEL0Upyhl7QRWOk+fE0d/JyqWbv6OWZ5X/6WpGE8etGrr2AUseU2jd94qfe7fwTQzfsaqAoMrNNgQuZMVOLUNp1Lr2IUTFMOF4zIq9Jao4/c10jZWluYSsnrjY7Vh7xW6XoHGQyAxDzHO+Ow/skKxzjJbk/rNAam25jJMuoBZQSRLo/jdoA36P5mGU9HztdlM4rBWsnxrdj6/q/xkXbaeTMXD/RT54uyo+risY/KRSRSVURMh+phVuCZI1Fl20Ns1bxgexLxFRZ+RO+RkGFcGX9VRUIb7bZCKpmMb9oP4Qbp0NCYtjZ/hw0tMrYJ1Ii+0Cpi1X54r9BewBcxuqFzKTuVESmuyKwxAraBzJ9nMVtgHksrPDMhGlIVlvcSznH3rJnD3wXiG/3aAf6MrTR/0Nau4Di6SNxpDbcW8r3QrGbUnMStJE/K63nJT9YM0rWcdoxMDDOUkmzLSS1u7Vsbh2iqCej3rhZ4ZAcYQ5vUsLPKSYTktoHn2OGANDyJwn1XazqVqGnxk+qRkGMq0ilnVm9lF9Drle9FYCuU8q9rNXC+svuOziwqZuJAYFVONnLUn57bZKhaXDzq+L0QXscAh1W34ZxjvSozhFysu/rT1MEpoHROLNzgYuyyX2I/9uWVyBYIUitK/8/WPtrih80Lvp9v8x1LfQSGE\",\n  \"exportedAt\": \"2026-10-24T00:00:00Z\",\n  \"iterations\": 3,\n  \"kdf\": \"Argon2id\",\n  \"keyLength\": 32,\n  \"kind\": \"encrypted-account-export\",\n  \"memoryKiB\": 65536,\n  \"nonce\": \"jr0O9OCq+SdbSq9v\",\n  \"parallelism\": 1,\n  \"salt\": \"lhoMiTEYL8fTBbAflTp/IuqlgUKAgLqMg847Mk+tPww=\",\n  \"version\": 2\n}",
+    "password": "safay-export-pw"
+  },
+  "vault": {
+    "accountIDs": [
+      "0B9A6F2E-5D41-4C7B-8E3A-1F2D3C4B5A60",
+      "1C8B7E3F-6E52-4D8C-9F4B-2E3D4C5B6A71",
+      "2D7C8F40-7F63-4E9D-A05C-3F4E5D6C7B82"
+    ],
+    "categories": [
+      {
+        "accountIDs": [
+          "1C8B7E3F-6E52-4D8C-9F4B-2E3D4C5B6A71",
+          "0B9A6F2E-5D41-4C7B-8E3A-1F2D3C4B5A60"
+        ],
+        "id": "A1B2C3D4-0000-4000-8000-000000000001",
+        "name": "工作"
+      },
+      {
+        "accountIDs": [
+          "2D7C8F40-7F63-4E9D-A05C-3F4E5D6C7B82",
+          "0B9A6F2E-5D41-4C7B-8E3A-1F2D3C4B5A60"
+        ],
+        "id": "A1B2C3D4-0000-4000-8000-000000000002",
+        "name": "Crypto"
+      },
+      {
+        "accountIDs": [],
+        "id": "A1B2C3D4-0000-4000-8000-000000000003",
+        "name": "空分类"
+      }
+    ],
+    "file": "{\n  \"cipher\": \"AES-256-GCM\",\n  \"ciphertext\": \"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\",\n  \"createdAt\": \"2026-10-24T00:00:00Z\",\n  \"iterations\": 3,\n  \"kdf\": \"Argon2id\",\n  \"keyLength\": 32,\n  \"memoryKiB\": 65536,\n  \"nonce\": \"tPT9FvhPpuekH4uO\",\n  \"parallelism\": 1,\n  \"salt\": \"4fM6ijquhi61HaOtR1Vnm1iCCyX3KTs0QIDmlOtJxdY=\",\n  \"updatedAt\": \"2026-10-24T00:00:00Z\",\n  \"version\": 2\n}",
+    "password": "safay-golden-pw"
+  }
+}

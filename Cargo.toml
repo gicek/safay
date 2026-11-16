@@ -1,0 +1,76 @@
+[package]
+name = "safay"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.97"
+publish = false
+
+[workspace]
+resolver = "3"
+members = [".", "crates/safay-core", "crates/cloudset", "crates/safay-app"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+rust-version = "1.97"
+
+[dependencies]
+safay-app = { path = "crates/safay-app" }
+nsh-core = { git = "https://github.com/longbridge/nsh", branch = "main" }
+nsh-base = { git = "https://github.com/longbridge/nsh", branch = "main", default-features = false }
+zeroize = "=1.9.0"
+base64 = "=0.22.1"
+serde_json = "=1.0.151"
+image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg", "ico", "gif", "webp"] }
+ureq = { version = "=3.5.1", default-features = false, features = ["rustls", "platform-verifier"] }
+# The pinned-certificate TLS step (src/platform/tls.rs), on the same rustls, provider and verifier as ureq.
+rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pki-types = "=1.15.1"
+rustls-platform-verifier = "=0.7.1"
+sha2 = "=0.11.0"
+qrcode = { version = "=0.14.1", default-features = false, features = ["image"] }
+rqrr = "=0.11.0"
+nsh-updater = { git = "https://github.com/longbridge/nsh", branch = "main" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSAlert", "NSAppearance", "NSApplication", "NSOpenPanel", "NSSavePanel", "NSText", "NSTextView", "NSTextInputContext", "NSPopover", "NSStatusBar", "NSStatusBarButton", "NSStatusItem", "NSViewController", "NSMenu", "NSMenuItem", "NSEvent", "NSControl", "NSButton", "NSWindow", "NSRunningApplication", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSGraphicsContext", "NSGraphics", "NSFontDescriptor", "NSPanel", "NSScreen", "NSColor", "NSResponder", "NSView", "objc2-core-foundation", "objc2-quartz-core"] }
+dispatch2 = "=0.3.1"
+libc = "=0.2.189"
+block2 = "=0.6.2"
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSData", "NSDictionary", "NSValue", "NSString", "NSError", "NSObject", "NSGeometry", "NSBundle", "NSURL", "NSArray", "NSDate", "NSNotification", "NSDistributedNotificationCenter", "NSScriptCommand", "NSAppleEventDescriptor"] }
+nsh-platform-macos = { git = "https://github.com/longbridge/nsh", branch = "main", default-features = false }
+tempfile = "=3.27.0"
+keyring = { version = "=3.6.3", default-features = false, features = ["apple-native"] }
+objc2-authentication-services = { version = "=0.3.2", default-features = false, features = ["std", "ASWebAuthenticationSession", "ASFoundation", "block2"] }
+objc2-av-foundation = { version = "=0.3.2", default-features = false, features = ["std", "AVCaptureDevice", "AVCaptureInput", "AVCaptureOutputBase", "AVCaptureVideoDataOutput", "AVCaptureSession", "AVMediaFormat", "AVCaptureSessionPreset", "objc2-core-media", "objc2-core-video", "block2", "dispatch2"] }
+objc2-cloud-kit = { version = "=0.3.2", default-features = false, features = ["std", "block2", "CKContainer", "CKDatabase", "CKRecord", "CKRecordID", "CKRecordZone", "CKRecordZoneID", "CKAsset", "CKError", "CKOperation", "CKDatabaseOperation", "CKModifyRecordsOperation", "CKSubscription", "CKNotification"] }
+objc2-core-media = { version = "=0.3.2", default-features = false, features = ["std", "CMSampleBuffer", "objc2-core-video"] }
+objc2-core-video = { version = "=0.3.2", default-features = false, features = ["std", "CVPixelBuffer", "CVImageBuffer", "CVBuffer", "CVReturn", "CVPixelFormatDescription"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "=3.6.3", default-features = false, features = ["windows-native"] }
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Controls", "Win32_System_RemoteDesktop", "Win32_System_LibraryLoader"] }
+nsh-platform-windows = { git = "https://github.com/longbridge/nsh", branch = "main", default-features = false }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+nsh-platform-linux = { git = "https://github.com/longbridge/nsh", branch = "main", default-features = false }
+
+[dev-dependencies]
+ed25519-dalek = "=2.2.0"
+nsh-engine = { git = "https://github.com/longbridge/nsh", branch = "main", default-features = false }
+nsh-testing = { git = "https://github.com/longbridge/nsh", branch = "main", default-features = false }
+tempfile = "=3.27.0"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
+
+# Dependencies are optimized in development builds too; the app's own crates stay unoptimized with full debug info.
+# Unoptimized, NSH's AppKit backend spent about 360 ms of main-thread time applying the card/list switch of a 105-account
+# vault (a few ms optimized), and the vault's Argon2id ran about 13 times slower. Release builds are unaffected.
+[profile.dev.package."*"]
+opt-level = 3

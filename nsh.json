@@ -1,0 +1,15 @@
+{
+  "name": "Safay",
+  "id": "com.gicek.safay",
+  "version": "0.1.0",
+  "build": 5,
+  "rust": ".",
+  "root": "App",
+  "appearance": "system",
+  "capabilities": {},
+  "theme": "theme.json",
+  "icon": "assets/icon.png",
+  "schemes": [
+    "safay"
+  ]
+}
