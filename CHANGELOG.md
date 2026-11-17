@@ -13,6 +13,7 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 - After Touch ID verifies you, the master password dialog no longer flashes before the QR code, secret or export shows.
 - Turning off "Delay After Failed Attempts" with your master password closes the dialog.
+- Choosing "Use Password…" in the Touch ID prompt puts the cursor in the password field.
 
 ## [1.1.2] - 2026-11-17
 

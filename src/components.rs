@@ -329,6 +329,19 @@ pub fn secure_field_with(
     let on_blur = on_focus_change.clone();
     let shown = signal(false);
     let mac = look() == Look::Mac;
+    // `auto_focus` does not take while another app is in front (the system's Touch ID prompt, after "Use Password…"):
+    // until the field has had the focus once, it takes it when its window gets the keyboard.
+    let field = element_ref();
+    let had_focus = std::rc::Rc::new(std::cell::Cell::new(false));
+    if autofocus {
+        let window = nsh_core::element::desktop::current_window();
+        let had_focus = had_focus.clone();
+        effect(move || {
+            if window.state().is_some_and(|w| w.focused) && !had_focus.get() {
+                untracked(|| field.focus());
+            }
+        });
+    }
     input_chrome(
         view()
             .flex_row()
@@ -347,6 +360,7 @@ pub fn secure_field_with(
             .pr(px(6.0))
             .child(
                 input()
+                    .element_ref(&field)
                     .test_id(id)
                     .label(label)
                     .auto_focus(autofocus)
@@ -360,6 +374,7 @@ pub fn secure_field_with(
                     })
                     .on_submit(move |_: &str| on_submit())
                     .on_focus(move |_: &()| {
+                        had_focus.set(true);
                         roman_input_only(true);
                         on_focus_change(true)
                     })

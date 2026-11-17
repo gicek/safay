@@ -429,9 +429,13 @@ fn search_field(s: Store) -> impl IntoElement {
             // Read first: the window losing the keyboard is noted too.
             let was = was_key.replace(key);
             if key && !was && editing.get() {
+                let editing = editing.clone();
                 set_timeout(std::time::Duration::from_millis(50), move || {
-                    r.blur();
-                    r.focus();
+                    // Unless another field of the window took the focus meanwhile (a dialog's password field).
+                    if editing.get() {
+                        r.blur();
+                        r.focus();
+                    }
                 });
             }
         }
