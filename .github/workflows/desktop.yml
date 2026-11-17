@@ -4,15 +4,26 @@ on:
   pull_request:
 permissions:
   contents: read
+concurrency:
+  # A newer push to the same branch or tag supersedes a run still in progress.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   macos:
     runs-on: macos-15
     # A cold run builds the NSH CLI and every dependency from source; cached runs skip most of it.
     timeout-minutes: 90
+    env:
+      # Line tables keep test backtraces readable while cutting link time and cache size for the many test binaries.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Rust toolchain
         run: rustup toolchain install 1.100.0 --profile minimal --component rustfmt,clippy
+      # Restored before the NSH checkout exists: rust-cache hashes every rust-toolchain.toml and .cargo/config.toml it
+      # finds, so a restored checkout would change the key and miss the cache.
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Pinned NSH commit
         id: nsh
         run: echo "commit=$(python3 -c 'import sys; sys.path.insert(0, "scripts"); import install_nsh; print(install_nsh.pinned_commit())')" >> "$GITHUB_OUTPUT"
@@ -32,8 +43,13 @@ jobs:
           # NSH's release profile is fat LTO with one codegen unit; CI only runs the CLI, so it skips that optimization.
           CARGO_PROFILE_RELEASE_LTO: "off"
           CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
-      - name: Cargo cache
-        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # The app's generated NSH workspace (development host, headless runner) builds into its own target directory.
+      - name: NSH workspace cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .nsh/rust/target
+          key: nsh-rust-${{ runner.os }}-${{ runner.arch }}-rust-1.100.0-${{ steps.nsh.outputs.commit }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: nsh-rust-${{ runner.os }}-${{ runner.arch }}-rust-1.100.0-${{ steps.nsh.outputs.commit }}-
       - name: Formatting
         run: cargo fmt --all -- --check
       - name: Clippy
@@ -48,7 +64,9 @@ jobs:
         run: python3 scripts/nsh.py test App.test.tsx
       - name: macOS native UI
         run: python3 scripts/nsh.py test App.test.tsx --target macos
+      # Thin LTO with one codegen unit takes minutes; release tags check it, branch pushes skip it.
       - name: Production build
+        if: startsWith(github.ref, 'refs/tags/')
         run: cargo build --release --locked
 
   dependencies:
