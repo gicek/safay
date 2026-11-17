@@ -901,7 +901,11 @@ impl Store {
                 self.capture_notice(Tone::Error, self.label("No QR code found"));
                 return;
             };
-            self.dispatch(true, move |s| Ok(Payload::Captured(issuer, s.import_text(&text)?)));
+            // A code the vault already has is reported as such (the desktop notice), not as a failed import.
+            self.dispatch(true, move |s| match s.import_text(&text) {
+                Err(Error::Duplicate) => Ok(Payload::Captured(issuer, 0)),
+                result => Ok(Payload::Captured(issuer, result?)),
+            });
         });
     }
     pub fn choose_images(self) {

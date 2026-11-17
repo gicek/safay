@@ -5,6 +5,11 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+### Fixed
+
+- Capturing a QR code the vault already has from the shortcut or the menu bar now says it already exists instead of
+  showing nothing.
+
 ## [0.1.0] - 2026-11-16
 
 The first release, for macOS 14 or later on Apple silicon.
