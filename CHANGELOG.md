@@ -5,6 +5,10 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-17
+
+Safay finds 2FA QR codes on your screen by itself, and the capture shortcut works while Safay is locked.
+
 ### Changed
 
 - **Select on Screen**: Safay's own selection replaces the system's screenshot crosshair. It finds the 2FA QR codes on

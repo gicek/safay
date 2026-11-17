@@ -21,7 +21,7 @@ mod shell;
 mod store;
 use store::{Store, Surface};
 /// The development build number, from nsh.json.
-pub const BUILD: &str = "5";
+pub const BUILD: &str = "6";
 static CONTROLLER: OnceLock<(Arc<Controller>, bool)> = OnceLock::new();
 /// Running under the app's own launcher, not an NSH test or preview runner.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
