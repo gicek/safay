@@ -299,11 +299,21 @@ fn empty(s: Store) -> impl IntoElement {
                     .text_color(move || tok("code-accent"))
                     .child(icon(Icon::LockShield).size(px(26.0)))
             })
+            // An empty category or search: the empty vault's tile, smaller, as in the main window.
             .otherwise(move || {
-                view().text_color(move || theme().muted_foreground).child(
-                    when(move || s.query.with(|q| q.is_empty()), || icon(Icon::Folder).size(px(25.0)))
-                        .otherwise(|| icon(Icon::Search).size(px(25.0))),
-                )
+                view()
+                    .size(px(44.0))
+                    .rounded(px(11.0))
+                    .items_center()
+                    .justify_center()
+                    .bg(move || tok("code-accent").opacity(0.10))
+                    .border_1()
+                    .border_color(move || tok("code-accent").opacity(0.18))
+                    .text_color(move || tok("code-accent"))
+                    .child(
+                        when(move || s.query.with(|q| q.is_empty()), || icon(Icon::Folder).size(px(20.0)))
+                            .otherwise(|| icon(Icon::Search).size(px(20.0))),
+                    )
             }),
         )
         .child(

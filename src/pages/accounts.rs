@@ -515,10 +515,18 @@ fn empty_message(s: Store) -> impl IntoElement {
                             .child(icon(Icon::LockShield).size(px(38.0))),
                     )
             })
+            // An empty category or search: the empty vault's tile, smaller and without its halos.
             .otherwise(move || {
                 view()
-                    .text_color(move || theme().muted_foreground)
-                    .child(when(in_category, || icon(Icon::Folder).size(px(32.0))).otherwise(|| icon(Icon::Search).size(px(32.0))))
+                    .size(px(56.0))
+                    .rounded(px(14.0))
+                    .items_center()
+                    .justify_center()
+                    .bg(move || tok("code-accent").opacity(0.10))
+                    .border_1()
+                    .border_color(move || tok("code-accent").opacity(0.18))
+                    .text_color(move || tok("code-accent"))
+                    .child(when(in_category, || icon(Icon::Folder).size(px(26.0))).otherwise(|| icon(Icon::Search).size(px(26.0))))
             }),
         )
         .child(
@@ -536,22 +544,10 @@ fn empty_message(s: Store) -> impl IntoElement {
                     s.label("No matching accounts")
                 }
             })
-            .text_size(move || px(if vault_empty() { 20.0 } else { 13.0 }))
+            .text_size(move || px(if vault_empty() { 20.0 } else { 15.0 }))
             .font_weight(FontWeight::SEMIBOLD)
-            .text_color(move || if vault_empty() { theme().foreground } else { theme().muted_foreground }),
+            .text_color(move || theme().foreground),
         )
-        // An empty category says how accounts get into it; the empty vault's arrows say the rest.
-        .child(when(
-            move || !vault_empty() && in_category(),
-            move || {
-                text(move || s.label("In the main window, right-click an account and choose Add to."))
-                    .max_w(px(360.0))
-                    .text_center()
-                    .text_size(px(13.0))
-                    .line_height(px(19.0))
-                    .text_color(move || theme().muted_foreground)
-            },
-        ))
         // With the sidebar hidden the import hint has nothing to point at: a link takes its place.
         .child(when(
             move || vault_empty() && !sidebar_shown(s),

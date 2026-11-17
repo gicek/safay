@@ -9,6 +9,7 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 - **Verify It’s You**: a narrower dialog that simply asks for your master password.
 - **QR codes**: an account's QR code and link leave out the default algorithm, digits and period, so the code is simpler to scan.
+- **Empty categories**: an empty category or search shows a simple icon and title, in the main window and the menu bar panel.
 
 ### Fixed
 
