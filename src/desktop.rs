@@ -162,7 +162,7 @@ pub fn install(controller: Arc<Controller>, preview: bool) {
     effect(move || {
         let Some(keys) = keys.get() else { return };
         unregister_all_global_shortcuts();
-        let actions: [fn(); 3] = [toggle_panel, open_main, platform::request_capture];
+        let actions: [fn(); 3] = [toggle_panel, open_main, platform::request_capture_from_shortcut];
         for (keystroke, action) in keys.into_iter().zip(actions) {
             if let Some(keystroke) = keystroke {
                 // A keystroke another app holds is not taken; the answer is not awaited.

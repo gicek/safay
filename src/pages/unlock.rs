@@ -60,7 +60,13 @@ pub fn unlock_form(s: Store, panel: bool) -> impl IntoElement {
             .max_w(px(280.0))
             .text_center()
             .text_size(px(11.5))
-            .text_color(move || theme().destructive),
+            // Errors and the wait in red; a hint (the panel's "Unlock Safay first") in the secondary color.
+            .text_color(move || {
+                let hint = s.projection.with(|p| p.waiting) == 0
+                    && s.error.get().is_none()
+                    && s.status.get().is_some_and(|st| st.tone == crate::store::Tone::Info);
+                if hint { theme().muted_foreground } else { theme().destructive }
+            }),
         )
         .child(when(
             move || !panel && corrupt() && s.projection.with(|p| p.has_snapshot),

@@ -12,6 +12,9 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
   Esc or Cancel cancels. Codes the vault already has are marked "Already in Safay".
 - **Desktop notices** use a card with Safay's icon at the top of the screen.
 - **Add Account** marks scanned accounts the vault already has.
+- **The capture shortcut works while Safay is locked**: it selects the QR code first, then unlocks with Touch ID (or
+  the master password on the lock screen) and adds the account. The menu bar panel's screenshot button unlocks in the
+  panel first, then starts the capture.
 
 ### Fixed
 

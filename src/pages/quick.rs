@@ -13,6 +13,16 @@ pub fn page(s: Store) -> impl IntoElement {
     when(move || s.ready.get(), move || content(s)).otherwise(|| view().flex_1())
 }
 fn content(s: Store) -> impl IntoElement {
+    // The screenshot button pressed while locked: the panel unlocks first, then the capture starts.
+    let capture_after_unlock = signal(false);
+    #[cfg(target_os = "macos")]
+    effect(move || {
+        if s.unlocked() && capture_after_unlock.get() {
+            capture_after_unlock.set(false);
+            s.status.set(None);
+            start_capture();
+        }
+    });
     view()
         .flex_1()
         .child(when(move || s.unlocked(), move || unlocked(s)).otherwise(move || {
@@ -22,7 +32,13 @@ fn content(s: Store) -> impl IntoElement {
             )
             .otherwise(move || setup(s))
         }))
-        .child(when(move || s.projection.with(|p| p.exists), move || footer(s)))
+        .child(when(move || s.projection.with(|p| p.exists), move || footer(s, capture_after_unlock)))
+}
+/// The panel closes while the user selects; the main window runs the capture and shows the result.
+#[cfg(target_os = "macos")]
+fn start_capture() {
+    crate::desktop::close_panel();
+    crate::platform::request_capture();
 }
 fn setup(s: Store) -> impl IntoElement {
     view()
@@ -305,7 +321,7 @@ fn footer_button(label: impl Fn() -> SharedString + 'static) -> nsh_base::Button
         .hover(|st| st.bg(move || tok("hover")))
         .focus(|st| st.bg(move || tok("hover")))
 }
-fn footer(s: Store) -> impl IntoElement {
+fn footer(s: Store, capture_after_unlock: Signal<bool>) -> impl IntoElement {
     view().child(divider()).child(
         view()
             .flex_row()
@@ -313,15 +329,26 @@ fn footer(s: Store) -> impl IntoElement {
             .px(px(8.0))
             .py(px(7.0))
             .child(if crate::platform::supports::SCREEN_CAPTURE {
-                // "Add account via screenshot". The popover closes while the user selects, so the main
-                // window runs the capture and shows the result.
+                // "Add account via screenshot". While locked, the panel's own unlock comes first (Touch ID at once when
+                // it is set up, else the password field), and the capture starts once it is unlocked.
                 footer_button(move || s.label("Add account via screenshot"))
                     .on_press(move || {
                         #[cfg(target_os = "macos")]
                         {
-                            crate::desktop::close_panel();
-                            crate::platform::request_capture();
+                            if s.unlocked() {
+                                start_capture();
+                            } else {
+                                capture_after_unlock.set(true);
+                                s.status.set(Some(crate::store::Status {
+                                    tone: crate::store::Tone::Info,
+                                    text: s.label("Unlock Safay first"),
+                                }));
+                                if s.touch_id_ready() && !s.busy.get() {
+                                    s.unlock_touch_id();
+                                }
+                            }
                         }
+                        let _ = capture_after_unlock;
                     })
                     .child(crate::icons::symbol(Icon::QrScan, 15.0, move || theme().foreground))
                     .into_element()

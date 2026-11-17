@@ -145,7 +145,9 @@ per app, who may send them. There is no local socket, port or other channel.
   with a matching provisioning profile. Screen Recording, camera and Automation are requested through the system.
   Selecting a QR code on screen pictures each display once with the system's `screencapture` into a private temporary
   directory and deletes each picture after one read; the pictures stay in memory, in gray, only until the user picks a
-  code or cancels. Only codes that hold a valid account are outlined, named by their issuer; camera frames are
+  code or cancels. Only codes that hold a valid account are outlined, named by their issuer. From the capture shortcut
+  while Safay is locked, the picked code is read first and imported only after Touch ID or the master password unlocks
+  the vault; until then (two minutes at most) its text stays in memory and nothing is written. Camera frames are
   processed in memory only.
 - **Windows / Linux**: see [Platforms](docs/PLATFORMS.md) for what is implemented; file permissions on Windows follow the
   user profile's ACLs.

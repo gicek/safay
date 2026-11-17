@@ -90,13 +90,22 @@ pub fn update_phase() -> Option<updates::Phase> {
     updates::updater().map(updates::Updater::phase)
 }
 static REQUEST: Mutex<Option<crate::store::Sheet>> = Mutex::new(None);
-static CAPTURE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-/// The capture shortcut asks the main window to select a QR code on screen and import it.
+/// A capture asked for: 0 none, 1 from the menu bar panel, 2 from the capture shortcut.
+static CAPTURE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+/// The menu bar panel asks the main window to select a QR code on screen and import it (only while unlocked).
 pub fn request_capture() {
-    CAPTURE.store(true, std::sync::atomic::Ordering::SeqCst);
+    CAPTURE.store(1, std::sync::atomic::Ordering::SeqCst);
 }
-pub fn take_capture_request() -> bool {
-    CAPTURE.swap(false, std::sync::atomic::Ordering::SeqCst)
+/// The capture shortcut asks the same; while locked, the code is selected first and the vault unlocked after.
+pub fn request_capture_from_shortcut() {
+    CAPTURE.store(2, std::sync::atomic::Ordering::SeqCst);
+}
+/// The capture asked for, if any: `Some(true)` from the shortcut.
+pub fn take_capture_request() -> Option<bool> {
+    match CAPTURE.swap(0, std::sync::atomic::Ordering::SeqCst) {
+        0 => None,
+        n => Some(n == 2),
+    }
 }
 /// A sheet another window asked the main window to show. Only a sheet kind crosses stores.
 pub fn request_sheet(sheet: crate::store::Sheet) {

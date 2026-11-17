@@ -90,8 +90,8 @@ pub fn main_window(controller: Arc<Controller>, fixture: bool) -> impl IntoEleme
     // Requests from the Settings window, the tray panel or a global shortcut; only a sheet kind crosses stores.
     set_interval(std::time::Duration::from_millis(200), move || {
         #[cfg(target_os = "macos")]
-        if crate::platform::take_capture_request() {
-            s.capture_and_import();
+        if let Some(from_shortcut) = crate::platform::take_capture_request() {
+            s.capture_and_import(from_shortcut);
         }
         // Another device changed the iCloud backup (silent push): sync now; while locked, the sync after
         // unlocking picks it up.
@@ -104,6 +104,8 @@ pub fn main_window(controller: Arc<Controller>, fixture: bool) -> impl IntoEleme
             s.launcher_copy_request(id);
         }
         s.launcher_copy_after_unlock();
+        #[cfg(target_os = "macos")]
+        s.capture_after_unlock();
         if let Some(sheet) = crate::platform::take_request()
             && (s.unlocked() || sheet == Sheet::Settings)
         {
