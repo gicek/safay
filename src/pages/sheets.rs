@@ -1556,21 +1556,12 @@ fn restore_sheet(s: Store) -> impl IntoElement {
 
 /// The master password prompt before a sensitive action, when Touch ID is not set up or did not verify (the system's
 /// Touch ID prompt comes first when it is: `Store::reveal`). A compact alert: the app icon (with the lock screen's
-/// fingerprint button on its corner when Touch ID is set up, to try it again), the title and why, the password field
+/// fingerprint button on its corner when Touch ID is set up, to try it again), the title and a short prompt, the password field
 /// (Return continues), a slim error line, then Cancel and Continue.
 pub fn auth_dialog(s: Store) -> impl IntoElement {
     when(
         move || s.auth.get().is_some() && !s.auth_prompting.get(),
         move || {
-            let reason = move || match s.auth.get() {
-                Some(Auth::Secret(_)) => "Enter your master password to show the secret.",
-                Some(Auth::Qr(_)) => "Enter your master password to show the QR code.",
-                Some(Auth::Export) => "Enter your master password to export accounts.",
-                Some(Auth::Reset) => "Enter your master password to erase local data.",
-                Some(Auth::DisableDelay) => "Enter your master password to turn off the delay.",
-                Some(Auth::Copy(_)) => "Enter your master password to copy the code.",
-                None => "",
-            };
             let submit = move || {
                 if !s.auth_password.with(|p| p.is_empty()) && !s.busy.get() {
                     s.authorize()
@@ -1587,8 +1578,9 @@ pub fn auth_dialog(s: Store) -> impl IntoElement {
             on_key_with("escape", KeyOptions { when: nsh_core::keymap::When::Always, ..Default::default() }, move |_| s.cancel_auth());
             nsh_base::dialog().animation(nsh_core::ModalAnimation::Fade).on_cancel(move |_: &()| s.cancel_auth()).child(
                 modal_backdrop().child(
+                    // Narrow, as a system alert: the field and buttons keep close to the icon above them.
                     modal_surface(view().role(nsh_core::AccessibilityRole::Alert))
-                        .w(px(360.0))
+                        .w(px(272.0))
                         .px(px(24.0))
                         .pt(px(24.0))
                         .pb(px(20.0))
@@ -1621,8 +1613,11 @@ pub fn auth_dialog(s: Store) -> impl IntoElement {
                         .child(view().h(px(18.0)))
                         .child(heading(move || s.label("Verify It’s You"), 15.0))
                         .child(
-                            text(move || s.label(reason()))
+                            text(move || s.label("Enter your master password."))
                                 .mt(px(5.0))
+                                // Two even lines in English ("Enter your master password" / "to show the QR code."),
+                                // not a last word alone.
+                                .max_w(px(176.0) * font_scale())
                                 .text_center()
                                 .text_size(px(12.0))
                                 .line_height(px(17.0))

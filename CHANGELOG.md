@@ -5,6 +5,10 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+### Changed
+
+- **Verify It’s You**: a narrower dialog that simply asks for your master password.
+
 ## [1.1.2] - 2026-11-17
 
 The menu bar panel is ready for typing as soon as it opens.
