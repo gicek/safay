@@ -2,7 +2,7 @@
 //! and which version the user has, the version's notes (the manifest's Markdown, from CHANGELOG.md) in a box that
 //! scrolls, the choice to download and install future updates on their own, and the buttons. Installing stays in the
 //! window: the download's progress, then "Install and Relaunch".
-use crate::{components::*, pages::unlock::check_box, platform::updates::Phase, store::Store};
+use crate::{components::*, i18n::Language, pages::unlock::check_box, platform::updates::Phase, store::Store};
 use nsh_base::{TextViewLinks, TextViewPart, TextViewParts, text_view, theme};
 use nsh_core::{element::StyleRefinement, element::desktop::current_window, prelude::*};
 
@@ -11,6 +11,26 @@ pub fn version_numbers(version: &str) -> Option<(u32, u32, u32)> {
     let mut parts = version.trim().trim_start_matches('v').split('.').map(|p| p.parse::<u32>().ok());
     let numbers = (parts.next()??, parts.next()??, parts.next()??);
     parts.next().is_none().then_some(numbers)
+}
+/// The part of a version's notes in `language`. The manifest carries the English notes, then each translation after a
+/// `<!-- lang: <code> -->` line (`scripts/release.py`); English stands in for a language the notes lack.
+pub fn notes_in(notes: &str, language: Language) -> String {
+    let wanted = crate::i18n::code(language);
+    let mut parts: Vec<(&str, Vec<&str>)> = vec![("en", Vec::new())];
+    for line in notes.lines() {
+        let marker = line.trim().strip_prefix("<!-- lang:").and_then(|rest| rest.strip_suffix("-->")).map(str::trim);
+        match marker {
+            Some(code) => parts.push((code, Vec::new())),
+            None => parts.last_mut().expect("the English part").1.push(line),
+        }
+    }
+    let text = |lines: &[&str]| lines.join("\n").trim().to_string();
+    parts
+        .iter()
+        .find(|(code, lines)| *code == wanted && !text(lines).is_empty())
+        .or_else(|| parts.first())
+        .map(|(_, lines)| text(lines))
+        .unwrap_or_default()
 }
 /// Whether `version` is the one the user chose to skip.
 pub fn is_skipped(version: &str, skipped: Option<(u32, u32, u32)>) -> bool {
@@ -37,7 +57,14 @@ pub fn page(s: Store, version: String, notes: Option<String>) -> impl IntoElemen
             s.refresh_updates();
         }
     });
-    let notes: Option<SharedString> = notes.filter(|n| !n.trim().is_empty()).map(Into::into);
+    // The notes in the window's language, following it when it changes.
+    let localized = signal(None::<SharedString>);
+    effect(move || {
+        let next: Option<SharedString> = notes.as_deref().map(|n| notes_in(n, s.language.get())).filter(|n| !n.is_empty()).map(Into::into);
+        if untracked(|| localized.get()) != next {
+            localized.set(next);
+        }
+    });
     let skippable = version_numbers(&version);
     let subtitle = s.fmt("Safay {} is now available—you have {}. Would you like to download it now?", &[&version, current]);
     provide_context(parts());
@@ -73,26 +100,25 @@ pub fn page(s: Store, version: String, notes: Option<String>) -> impl IntoElemen
                 .border_color(move || tok("card-border"))
                 .bg(move || tok("card"))
                 .overflow_hidden()
-                .child(match notes {
-                    Some(notes) => scroll()
-                        .flex_1()
-                        .child(
-                            text_view()
-                                .markdown(move || Some(notes.clone()))
-                                .links(TextViewLinks::Open)
-                                .gap(px(10.0))
-                                .p(px(16.0))
-                                .text_size(px(13.0))
-                                .text_color(move || theme().foreground),
-                        )
-                        .into_element(),
-                    None => view()
-                        .flex_1()
-                        .items_center()
-                        .justify_center()
-                        .child(note(move || s.label("This update has no release notes.")))
-                        .into_element(),
-                }),
+                .child(
+                    when(
+                        move || localized.with(Option::is_some),
+                        move || {
+                            scroll().flex_1().child(
+                                text_view()
+                                    .markdown(move || localized.get())
+                                    .links(TextViewLinks::Open)
+                                    .gap(px(10.0))
+                                    .p(px(16.0))
+                                    .text_size(px(13.0))
+                                    .text_color(move || theme().foreground),
+                            )
+                        },
+                    )
+                    .otherwise(move || {
+                        view().flex_1().items_center().justify_center().child(note(move || s.label("This update has no release notes.")))
+                    }),
+                ),
         )
         .child(
             view().flex_row().self_start().window_drag(false).child(
@@ -225,5 +251,15 @@ mod tests {
         assert!(is_skipped("1.1.0", Some((1, 1, 0))));
         assert!(!is_skipped("1.1.1", Some((1, 1, 0))));
         assert!(!is_skipped("1.1.0", None));
+    }
+    #[test]
+    fn notes_show_in_the_apps_language_or_in_english() {
+        let notes = "Intro\n\n- **A**: one\n\n<!-- lang: zh-Hans -->\n\nHans\n\n<!-- lang: zh-Hant -->\n\nHant\n";
+        assert_eq!(notes_in(notes, Language::En), "Intro\n\n- **A**: one");
+        assert_eq!(notes_in(notes, Language::Hans), "Hans");
+        assert_eq!(notes_in(notes, Language::Hant), "Hant");
+        // Notes without translations, or with an empty one, fall back to English.
+        assert_eq!(notes_in("Only English", Language::Hans), "Only English");
+        assert_eq!(notes_in("English\n<!-- lang: zh-Hans -->\n\n", Language::Hans), "English");
     }
 }

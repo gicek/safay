@@ -12,8 +12,9 @@ Outputs in build/dist/: `Safay.app` (notarized and stapled), `Safay-<version>.dm
 `latest.json` and `latest.json.sig` (with an update source; publish them next to the archive, or under
 `download_url_prefix`), and `Safay-<version>.env` (version, build, hashes, what was done).
 
-`--manifest-only` writes the manifest again for the update archive already in build/dist (after the version's notes in
-CHANGELOG.md changed), without building, signing or notarizing anything.
+The manifest's notes are the version's section of CHANGELOG.md followed by its translations in locales/release-notes/;
+a release stops when one of them is missing. `--manifest-only` writes the manifest again for the update archive already
+in build/dist (after the version's notes changed), without building, signing or notarizing anything.
 """
 from pathlib import Path
 import argparse
@@ -37,10 +38,17 @@ def run(*command: str, **kwargs) -> subprocess.CompletedProcess:
     return subprocess.run(command, check=True, **kwargs)
 
 
-def changelog_section(version: str) -> str | None:
-    """This version's notes from CHANGELOG.md (`## [<version>] - <date>` up to the next `## `)."""
+# The update notes' translations: locales/release-notes/<code>.md, sectioned as CHANGELOG.md.
+NOTE_LANGUAGES = ["zh-Hans", "zh-Hant"]
+
+
+def changelog_section(version: str, path: Path | None = None) -> str | None:
+    """This version's notes from CHANGELOG.md, or from a translation (`## [<version>]` up to the next `## `)."""
+    path = path or root / "CHANGELOG.md"
+    if not path.is_file():
+        return None
     lines, found = [], False
-    for line in (root / "CHANGELOG.md").read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         if line.startswith("## "):
             if found:
                 break
@@ -51,6 +59,25 @@ def changelog_section(version: str) -> str | None:
     return "\n".join(lines).strip() if found else None
 
 
+def update_notes(version: str) -> str:
+    """The manifest's notes: the English section, then each translation after a `<!-- lang: <code> -->` line. The app
+    shows the part in its own language (`pages::update::notes_in`); the signature covers them all."""
+    parts = [changelog_section(version) or ""]
+    for code in NOTE_LANGUAGES:
+        parts.append(f"<!-- lang: {code} -->\n\n{changelog_section(version, translation(code))}")
+    return "\n\n".join(parts) + "\n"
+
+
+def translation(code: str) -> Path:
+    return root / "locales" / "release-notes" / f"{code}.md"
+
+
+def missing_notes(version: str) -> list[str]:
+    """Where this version's notes are missing: CHANGELOG.md or a translation."""
+    files = [root / "CHANGELOG.md"] + [translation(code) for code in NOTE_LANGUAGES]
+    return [str(f.relative_to(root)) for f in files if changelog_section(version, f) is None]
+
+
 def write_manifest(metadata: dict, version: str, update_url: str, secret: Path, archive: Path, dist: Path, config: dict) -> None:
     """`latest.json` and `latest.json.sig` for `archive`, with this version's update notes."""
     # `nsh update-manifest` reads the id, version and key from an nsh.json with "updater": the project's own nsh.json
@@ -58,9 +85,9 @@ def write_manifest(metadata: dict, version: str, update_url: str, secret: Path, 
     with tempfile.TemporaryDirectory() as entry:
         entry_config = dict(metadata, updater={"url": update_url, "publicKey": package.UPDATE_PUBLIC_KEY})
         (Path(entry) / "nsh.json").write_text(json.dumps(entry_config), encoding="utf-8")
-        # The section's Markdown as it is: the update window renders it.
+        # The sections' Markdown as it is: the update window renders the one in the app's language.
         notes = Path(entry) / "notes.md"
-        notes.write_text(changelog_section(version) or "", encoding="utf-8")
+        notes.write_text(update_notes(version), encoding="utf-8")
         command = ["update-manifest", "--entry", entry, "--key", str(secret), "--notes", str(notes), "-o", str(dist), str(archive)]
         if config["download_url_prefix"]:
             command[1:1] = ["--base-url", config["download_url_prefix"]]
@@ -74,10 +101,16 @@ def notarize(path: Path, profile: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--manifest-only", action="store_true", help="write the manifest again for build/dist's update archive")
+    parser.add_argument("--notes", action="store_true", help="print this version's update notes, as the manifest carries them")
     args = parser.parse_args()
-    config = package.settings()
     metadata = json.loads((root / "nsh.json").read_text(encoding="utf-8"))
     version, build = metadata["version"], str(metadata["build"])
+    if args.notes:
+        if missing := missing_notes(version):
+            raise SystemExit(f"error: no '## [{version}]' section for the update notes in {', '.join(missing)}")
+        print(update_notes(version), end="")
+        return
+    config = package.settings()
     identity, notary = config["identity"], config["notary_profile"]
     update_url, update_key = config["update_url"], config["update_key"]
     if not identity.startswith("Developer ID Application"):
@@ -100,8 +133,8 @@ def main() -> None:
         public = secret.with_suffix(".pub")
         if not public.is_file() or public.read_text(encoding="utf-8").strip() != package.UPDATE_PUBLIC_KEY:
             raise SystemExit(f"error: {public} does not hold the public key in scripts/package.py")
-        if changelog_section(version) is None:
-            raise SystemExit(f"error: CHANGELOG.md has no '## {version}' section for the update notes")
+        if missing := missing_notes(version):
+            raise SystemExit(f"error: no '## [{version}]' section for the update notes in {', '.join(missing)}")
     else:
         print("note: update_url is empty; no update manifest is written, and the app will not update itself")
     if args.manifest_only:

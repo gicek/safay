@@ -144,17 +144,24 @@ writes into `build/dist/`:
 - `Safay-<version>.dmg`: signed and notarized, for first installs;
 - `Safay-<version>-macos-<arch>.zip`: the stapled app;
 - `Safay-<version>-macos-<arch>.tar.gz`: the update archive;
-- `latest.json` and `latest.json.sig`: with an update source configured, the signed manifest with the matching
-  `CHANGELOG.md` section as its notes, in Markdown (the update window renders it);
+- `latest.json` and `latest.json.sig`: with an update source configured, the signed manifest with the version's
+  update notes (below);
 - `Safay-<version>.env`: version, build and SHA-256 of each file.
+
+The update notes follow the app's language. Each version's notes are its `CHANGELOG.md` section, translated item for
+item in `locales/release-notes/zh-Hans.md` and `zh-Hant.md` under the same `## [<version>]` heading; `make release`
+stops when one of them is missing. The manifest carries the English section, then each translation after a
+`<!-- lang: <code> -->` line, all under its signature; the update window renders the part in the app's language, and
+English where a translation is missing. `python3 scripts/release.py --notes` prints them as the manifest will carry
+them.
 
 `python3 scripts/release.py --manifest-only` writes the manifest again for the update archive already in `build/dist`,
 without building or notarizing, after the version's notes changed.
 
 To see a version's notes in the update window before releasing, start a development package with
-`SAFAY_PREVIEW_UPDATE=<version> SAFAY_PREVIEW_NOTES=<file with the section's Markdown>`
-(`build/debug/Safay.app/Contents/MacOS/Safay --preview`). Its "Install Update" simulates a download, so the progress
-and "Install and Relaunch" can be seen too.
+`SAFAY_PREVIEW_UPDATE=<version> SAFAY_PREVIEW_NOTES=<file>`, the file holding the output of `release.py --notes`
+(`build/debug/Safay.app/Contents/MacOS/Safay --preview`). Switch the language in Settings to see each translation. Its
+"Install Update" simulates a download, so the progress and "Install and Relaunch" can be seen too.
 
 Nothing is uploaded. Releases are published on GitHub Releases: upload the DMG, the zip, the update archive,
 `latest.json` and `latest.json.sig` to the release. Release packages read their update manifest from

@@ -20,7 +20,8 @@ Thank you for helping with Safay. Security issues go through [SECURITY.md](SECUR
 - **Core behaviour**: `crates/safay-core` is the only implementation of the formats and cryptography. If behaviour
   changes on purpose, update the affected `golden/` vectors in the same commit and explain why.
 - **Text**: English source strings are the keys. Add every new key to `locales/zh-Hans.json` and `locales/zh-Hant.json`;
-  `locales/en.json` holds only keys whose English differs from the key.
+  `locales/en.json` holds only keys whose English differs from the key. A release's notes in `CHANGELOG.md` are
+  translated in `locales/release-notes/`.
 - **Tests**: add tests at the lowest layer that can catch the bug — core, session, headless UI, then native. Use public
   RFC vectors and synthetic data only.
 - **Documentation**: keep the docs in step with the code; record user-visible changes under `[Unreleased]` in

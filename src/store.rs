@@ -1545,7 +1545,7 @@ impl Store {
             return;
         }
         let mut dialog = crate::alert::alert(self.fmt("Safay {} is available", &[&version]));
-        if let Some(notes) = notes.filter(|n| !n.trim().is_empty()) {
+        if let Some(notes) = notes.map(|n| crate::pages::update::notes_in(&n, self.language.get())).filter(|n| !n.is_empty()) {
             dialog = dialog.description(notes);
         }
         let chosen = dialog.cancel("later", self.label("Later")).action("download", self.label("Download and Install")).show();
