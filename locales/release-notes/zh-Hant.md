@@ -3,6 +3,15 @@
 Each version's section translates the one in CHANGELOG.md, item for item. The update window shows it to people who use
 Safay in Traditional Chinese.
 
+## [1.1.2] - 2026-11-17
+
+選單列面板一打開就可以直接輸入。
+
+### 修正
+
+- 選單列面板每次打開時搜尋欄位都可以直接輸入，在面板裡解鎖後也一樣。
+- 按一次 Esc 就能關閉選單列面板；用過面板後，主視窗搜尋欄位的焦點外框也會正常顯示。
+
 ## [1.1.1] - 2026-11-17
 
 刪除的帳號會在「最近刪除」裡保留 30 天，隨時可以找回。

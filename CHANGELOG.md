@@ -5,6 +5,10 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-11-17
+
+The menu bar panel is ready for typing as soon as it opens.
+
 ### Fixed
 
 - The menu bar panel's search field is ready for typing whenever the panel opens, also right after you unlock it there.

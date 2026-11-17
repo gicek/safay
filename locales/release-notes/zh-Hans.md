@@ -3,6 +3,15 @@
 Each version's section translates the one in CHANGELOG.md, item for item. The update window shows it to people who use
 Safay in Simplified Chinese.
 
+## [1.1.2] - 2026-11-17
+
+菜单栏面板一打开就可以直接输入。
+
+### 修复
+
+- 菜单栏面板每次打开时搜索框都可以直接输入，在面板里解锁后也一样。
+- 按一次 Esc 就能关闭菜单栏面板；用过面板后，主窗口搜索框的焦点边框也会正常显示。
+
 ## [1.1.1] - 2026-11-17
 
 删除的账户会在“最近删除”里保留 30 天，随时可以找回。
