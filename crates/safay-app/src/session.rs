@@ -1087,7 +1087,7 @@ impl Session {
         Ok(vault::export(&chosen.0.accounts, &chosen.0.categories, password, self.clock.wall())?)
     }
     /// Imports a backup or export file in any supported format ([`import::import_file`]); accounts the vault already has
-    /// are skipped. `skipped` in the result counts entries Safay does not support (HOTP, Steam, …), not duplicates.
+    /// are skipped. `skipped` in the result counts entries Safay does not support (HOTP, mOTP, …), not duplicates.
     pub fn import_file(&mut self, data: &[u8], password: &str) -> Result<ImportSummary, Error> {
         self.guard()?;
         if data.len() as u64 > MAX_FILE_BYTES {

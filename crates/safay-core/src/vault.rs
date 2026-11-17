@@ -11,8 +11,8 @@
 //! - The KDF parameters in the envelope come from the file and may be corrupt or malicious: they are rejected above the
 //!   `MAX_*` limits when read, so a single unlock or import cannot run for hours or exhaust memory. The limits leave
 //!   room to raise the parameters later; the worst case costs about 20 times the current parameters.
-//! - Accounts may carry `type` ([`OtpType`]: `steam` or `battle`; missing means TOTP, and an unknown value is
-//!   `CorruptVault`).
+//! - Accounts may carry `type` ([`OtpType`]: `steam` or `battle`; an unknown value is `CorruptVault`). Missing means
+//!   TOTP, or Steam Guard with five digits: older versions drop the field when they rewrite a vault.
 //! - Accounts may carry `website` (a normalized host) and `icon` (a base64 PNG within the site icon limits). Either one
 //!   missing reads as none; an invalid value is dropped on read, never treated as corruption.
 //! - The payload's `categories` are user categories; missing means empty. Accounts carry no favorite flag, and
@@ -183,6 +183,9 @@ impl PersistedAccount {
             secret: self.secret,
             otp_type: match self.otp_type {
                 Some(value) => OtpType::from_raw_value(&value)?,
+                // Safay 1.1.3 and earlier drop `type` when they rewrite a vault. TOTP never has five digits, so such an
+                // account was Steam Guard.
+                None if self.digits == 5 => OtpType::Steam,
                 None => OtpType::Totp,
             },
             algorithm: TotpAlgorithm::from_raw_value(&self.algorithm)?,
@@ -652,17 +655,19 @@ mod tests {
         let plaintext = String::from_utf8(payload_json(&accounts, &[], now()).to_vec()).unwrap();
         assert_eq!(plaintext.matches("\"type\"").count(), 2);
 
-        let read = |field: &str| {
+        let read = |digits: u32, field: &str| {
             let text = format!(
                 r#"{{"id":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F","issuer":"Steam","username":"","secret":"MZXW6YTBOI",
-                "algorithm":"SHA1","digits":5,"period":30,"createdAt":"2026-01-01T00:00:00Z","addedBy":"manual"{field}}}"#
+                "algorithm":"SHA1","digits":{digits},"period":30,"createdAt":"2026-01-01T00:00:00Z","addedBy":"manual"{field}}}"#
             );
             serde_json::from_str::<PersistedAccount>(&text).unwrap().into_account().map(|account| account.otp_type)
         };
-        assert_eq!(read(""), Some(OtpType::Totp));
-        assert_eq!(read(r#","type":"steam""#), Some(OtpType::Steam));
-        assert_eq!(read(r#","type":"battle""#), Some(OtpType::BattleNet));
-        assert_eq!(read(r#","type":"hotp""#), None, "an unknown type is not read as TOTP");
+        assert_eq!(read(6, ""), Some(OtpType::Totp));
+        assert_eq!(read(8, ""), Some(OtpType::Totp), "a Battle.net account without its type still shows the same codes");
+        assert_eq!(read(5, ""), Some(OtpType::Steam), "an older version dropped the type of a Steam Guard account");
+        assert_eq!(read(5, r#","type":"steam""#), Some(OtpType::Steam));
+        assert_eq!(read(8, r#","type":"battle""#), Some(OtpType::BattleNet));
+        assert_eq!(read(5, r#","type":"hotp""#), None, "an unknown type is not read as TOTP");
     }
 
     #[test]
