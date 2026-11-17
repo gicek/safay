@@ -138,6 +138,8 @@ fn secret_needs_the_master_password_and_lock_removes_it() {
     app.wait_for("Fixture").unwrap();
     app.press("role:button[Details]").unwrap();
     app.wait_for("Account Details").unwrap();
+    // The details load after the sheet opens.
+    app.wait_for("Show Secret").unwrap();
     app.press("role:button[Show Secret]").unwrap();
     app.wait_for("Verify It’s You").unwrap();
     assert!(!app.screen().texts().contains(&"JBSWY3DPEHPK3PXP"));
