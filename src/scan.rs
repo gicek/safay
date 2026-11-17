@@ -159,13 +159,22 @@ fn ring(found: &Found) -> Rect {
 fn pick_area(found: &Found) -> Rect {
     found.rect.inset(-(found.rect.w.max(found.rect.h) * 0.2).max(12.0))
 }
+/// The drag's frame from `a` to `b`, on whole points like the dimming around it.
 fn between(a: (f32, f32), b: (f32, f32)) -> Rect {
-    Rect { x: a.0.min(b.0), y: a.1.min(b.1), w: (a.0 - b.0).abs(), h: (a.1 - b.1).abs() }
+    whole(Rect { x: a.0.min(b.0), y: a.1.min(b.1), w: (a.0 - b.0).abs(), h: (a.1 - b.1).abs() })
+}
+/// `r` with its edges on whole points: on the pixel grid at any scale, so the dimming's pieces meet without a seam
+/// (edges inside a pixel are antialiased, and two of them leave a light line across the screen).
+fn whole(r: Rect) -> Rect {
+    let (x, y) = (r.x.round(), r.y.round());
+    Rect { x, y, w: (r.x + r.w).round() - x, h: (r.y + r.h).round() - y }
 }
 
 /// The parts of `area` outside every hole, as rectangles: bands between the holes' top and bottom edges, each cut
 /// around the holes that cross it.
 fn cover(area: Rect, holes: &[Rect]) -> Vec<Rect> {
+    let holes: Vec<Rect> = holes.iter().copied().map(whole).collect();
+    let holes = holes.as_slice();
     let bottom = area.y + area.h;
     let mut ys = vec![area.y, bottom];
     for h in holes {
@@ -599,6 +608,18 @@ mod tests {
     fn cover_without_holes_is_the_screen() {
         let screen = Rect { x: 0.0, y: 0.0, w: 50.0, h: 40.0 };
         assert_eq!(cover(screen, &[]), vec![screen]);
+    }
+    #[test]
+    fn pieces_meet_on_whole_points() {
+        let screen = Rect { x: 0.0, y: 0.0, w: 100.0, h: 80.0 };
+        let parts = cover(screen, &[Rect { x: 10.4, y: 20.6, w: 30.3, h: 15.2 }]);
+        for p in &parts {
+            for v in [p.x, p.y, p.x + p.w, p.y + p.h] {
+                assert_eq!(v, v.round(), "{p:?}");
+            }
+        }
+        // The hole rounds out to (10, 21)–(41, 36): 31 × 15.
+        assert_eq!(area(&parts), 100.0 * 80.0 - 31.0 * 15.0);
     }
     #[test]
     fn a_drag_frames_both_ways() {
