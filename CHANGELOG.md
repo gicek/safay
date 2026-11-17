@@ -7,23 +7,18 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [1.0.0] - 2026-11-17
 
-Safay finds 2FA QR codes on your screen by itself, and the capture shortcut works while Safay is locked.
+Safay now finds 2FA QR codes on your screen for you, even while it is locked.
 
 ### Changed
 
-- **Select on Screen**: Safay's own selection replaces the system's screenshot crosshair. It finds the 2FA QR codes on
-  every display and outlines each with its account's name, so one click adds it; dragging still selects any area, and
-  Esc or Cancel cancels. Codes the vault already has are marked "Already in Safay".
-- **Desktop notices** use a card with Safay's icon at the top of the screen.
-- **Add Account** marks scanned accounts the vault already has.
-- **The capture shortcut works while Safay is locked**: it selects the QR code first, then unlocks with Touch ID (or
-  the master password on the lock screen) and adds the account. The menu bar panel's screenshot button unlocks in the
-  panel first, then starts the capture.
+- **Select on Screen**: Safay outlines every 2FA QR code on your displays; click one to add it, or drag over any area.
+- **Capture while locked**: the capture shortcut reads the QR code first, then unlocks with Touch ID and adds it.
+- **Already in Safay**: codes and scanned accounts you have already added are marked as such.
+- **Desktop notices**: results show in a card at the top of the screen.
 
 ### Fixed
 
-- Capturing a QR code the vault already has from the shortcut or the menu bar now says it already exists instead of
-  showing nothing.
+- Capturing a QR code that is already in Safay from the shortcut or the menu bar now says so.
 
 ## [0.1.0] - 2026-11-16
 

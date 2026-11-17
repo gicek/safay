@@ -141,8 +141,12 @@ writes into `build/dist/`:
 - `Safay-<version>-macos-<arch>.zip`: the stapled app;
 - `Safay-<version>-macos-<arch>.tar.gz`: the update archive;
 - `latest.json` and `latest.json.sig`: with an update source configured, the signed manifest with the matching
-  `CHANGELOG.md` section;
+  `CHANGELOG.md` section as plain text (the update dialog shows it as is: headings and emphasis are dropped, wrapped
+  lines joined, list items become `•` lines);
 - `Safay-<version>.env`: version, build and SHA-256 of each file.
+
+`python3 scripts/release.py --manifest-only` writes the manifest again for the update archive already in `build/dist`,
+without building or notarizing, after the version's notes changed.
 
 Nothing is uploaded. Releases are published on GitHub Releases: upload the DMG, the zip, the update archive,
 `latest.json` and `latest.json.sig` to the release. Release packages read their update manifest from

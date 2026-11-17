@@ -11,11 +11,16 @@ Outputs in build/dist/: `Safay.app` (notarized and stapled), `Safay-<version>.dm
 `Safay-<version>-macos-<arch>.zip` (the stapled app), `Safay-<version>-macos-<arch>.tar.gz` (the update archive),
 `latest.json` and `latest.json.sig` (with an update source; publish them next to the archive, or under
 `download_url_prefix`), and `Safay-<version>.env` (version, build, hashes, what was done).
+
+`--manifest-only` writes the manifest again for the update archive already in build/dist (after the version's notes in
+CHANGELOG.md changed), without building, signing or notarizing anything.
 """
 from pathlib import Path
+import argparse
 import hashlib
 import json
 import os
+import re
 import plistlib
 import shutil
 import subprocess
@@ -47,11 +52,54 @@ def changelog_section(version: str) -> str | None:
     return "\n".join(lines).strip() if found else None
 
 
+def update_notes(section: str) -> str:
+    """The update dialog's text from a CHANGELOG section: plain text, as the app shows it as is. Lines wrapped in the
+    Markdown are joined, the `###` headings are left out, emphasis, code and link marks go, and list items become `•`
+    lines; paragraphs stay apart by a blank line."""
+    blocks: list[list[str]] = []
+    for line in section.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            blocks.append([])
+            continue
+        item = stripped.startswith(("- ", "* "))
+        text = stripped[2:] if item else stripped
+        text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)
+        text = text.replace("**", "").replace("`", "")
+        if item or not blocks or not blocks[-1]:
+            if not blocks or (not item and blocks[-1]):
+                blocks.append([])
+            blocks[-1].append(("• " if item else "") + text)
+        else:
+            # A wrapped line goes on with the line above.
+            blocks[-1][-1] += " " + text
+    paragraphs = ["\n".join(lines) for lines in blocks if lines]
+    return "\n\n".join(paragraphs)
+
+
+def write_manifest(metadata: dict, version: str, update_url: str, secret: Path, archive: Path, dist: Path, config: dict) -> None:
+    """`latest.json` and `latest.json.sig` for `archive`, with this version's update notes."""
+    # `nsh update-manifest` reads the id, version and key from an nsh.json with "updater": the project's own nsh.json
+    # stays without one, so a copy with this release's source is used.
+    with tempfile.TemporaryDirectory() as entry:
+        entry_config = dict(metadata, updater={"url": update_url, "publicKey": package.UPDATE_PUBLIC_KEY})
+        (Path(entry) / "nsh.json").write_text(json.dumps(entry_config), encoding="utf-8")
+        notes = Path(entry) / "notes.txt"
+        notes.write_text(update_notes(changelog_section(version) or ""), encoding="utf-8")
+        command = ["update-manifest", "--entry", entry, "--key", str(secret), "--notes", str(notes), "-o", str(dist), str(archive)]
+        if config["download_url_prefix"]:
+            command[1:1] = ["--base-url", config["download_url_prefix"]]
+        run(sys.executable, str(root / "scripts/nsh.py"), *command, cwd=root)
+
+
 def notarize(path: Path, profile: str) -> None:
     run("xcrun", "notarytool", "submit", str(path), "--keychain-profile", profile, "--wait")
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--manifest-only", action="store_true", help="write the manifest again for build/dist's update archive")
+    args = parser.parse_args()
     config = package.settings()
     metadata = json.loads((root / "nsh.json").read_text(encoding="utf-8"))
     version, build = metadata["version"], str(metadata["build"])
@@ -81,6 +129,16 @@ def main() -> None:
             raise SystemExit(f"error: CHANGELOG.md has no '## {version}' section for the update notes")
     else:
         print("note: update_url is empty; no update manifest is written, and the app will not update itself")
+    if args.manifest_only:
+        if not manifest:
+            raise SystemExit("error: --manifest-only needs an update source (update_url)")
+        dist = root / "build/dist"
+        archive = dist / f"Safay-{version}-macos-{package.arch()}.tar.gz"
+        if not archive.is_file():
+            raise SystemExit(f"error: no {archive.relative_to(root)}: run the whole release first")
+        write_manifest(metadata, version, update_url, secret, archive, dist, config)
+        print(update_notes(changelog_section(version) or ""))
+        return
     if subprocess.run(["xcrun", "notarytool", "history", "--keychain-profile", notary], capture_output=True).returncode != 0:
         raise SystemExit(f"error: notarytool profile '{notary}' is missing or invalid")
 
@@ -122,17 +180,7 @@ def main() -> None:
     run("spctl", "--assess", "--type", "open", "--context", "context:primary-signature", "--verbose", str(dmg))
 
     if manifest:
-        # `nsh update-manifest` reads the id, version and key from an nsh.json with "updater": the project's own nsh.json
-        # stays without one, so a copy with this release's source is used.
-        with tempfile.TemporaryDirectory() as entry:
-            entry_config = dict(metadata, updater={"url": update_url, "publicKey": package.UPDATE_PUBLIC_KEY})
-            (Path(entry) / "nsh.json").write_text(json.dumps(entry_config), encoding="utf-8")
-            notes = Path(entry) / "notes.md"
-            notes.write_text(changelog_section(version) or "", encoding="utf-8")
-            command = ["update-manifest", "--entry", entry, "--key", str(secret), "--notes", str(notes), "-o", str(dist), str(archive)]
-            if config["download_url_prefix"]:
-                command[1:1] = ["--base-url", config["download_url_prefix"]]
-            run(sys.executable, str(root / "scripts/nsh.py"), *command, cwd=root)
+        write_manifest(metadata, version, update_url, secret, archive, dist, config)
 
     digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
     (dist / f"{stem}.env").write_text(
