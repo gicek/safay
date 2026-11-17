@@ -15,6 +15,8 @@ mod icons;
 mod launcher;
 mod pages;
 pub mod platform;
+#[cfg(target_os = "macos")]
+mod scan;
 mod shell;
 mod store;
 use store::{Store, Surface};

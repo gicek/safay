@@ -143,8 +143,10 @@ per app, who may send them. There is no local socket, port or other channel.
 
 - **macOS**: not sandboxed, Hardened Runtime. Entitlements: camera; iCloud and push notifications only in packages built
   with a matching provisioning profile. Screen Recording, camera and Automation are requested through the system.
-  Selecting a QR code on screen uses the system's `screencapture` into a private temporary directory that is deleted
-  after one read; camera frames are processed in memory only.
+  Selecting a QR code on screen pictures each display once with the system's `screencapture` into a private temporary
+  directory and deletes each picture after one read; the pictures stay in memory, in gray, only until the user picks a
+  code or cancels. Only codes that hold a valid account are outlined, named by their issuer; camera frames are
+  processed in memory only.
 - **Windows / Linux**: see [Platforms](docs/PLATFORMS.md) for what is implemented; file permissions on Windows follow the
   user profile's ACLs.
 

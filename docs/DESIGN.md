@@ -40,8 +40,16 @@ appearance only — never capabilities.
   location and Safay export files.
 - **Menu bar panel**: 310 pt wide; search, 44 pt rows, arrow keys and Return to copy, select-on-screen in the footer,
   category scope; it closes on Escape or when focus leaves.
-- **Desktop notice**: a 430 × 58 capsule near the top of the screen for 2.6 s, never activating Safay or taking input
-  (results of on-screen QR selection and launcher copies).
+- **Desktop card**: the glass card of the desktop notice and of the selection's instructions: 56 pt tall, the 36 pt
+  app icon 10 pt in, its 8 pt corners concentric with the card's 18 pt ones. It sits 44 pt under the top of the visible
+  area of the display under the pointer.
+- **Select on screen**: every display dims under an overlay that never activates Safay. 2FA QR codes found on screen
+  get an accent outline and an "Add <issuer>" capsule ("Already in Safay" when the vault has them); a click on either
+  adds the code, and a drag frames any area with viewfinder corners. A badge by the pointer shows a square viewfinder
+  and Safay's name, since macOS keeps the cursor of an app in the background. The desktop card says what Safay found,
+  with "esc Cancel" as a button; anything under the pointer that takes a click lights up.
+- **Desktop notice**: the desktop card with the result's symbol on the app icon, for 2.6 s, never activating Safay or
+  taking input (results of on-screen QR selection and launcher copies).
 - **Verification**: with Touch ID set up, the system prompt comes first; Safay's own 360 pt dialog (master password,
   plus a button to retry Touch ID) appears only without Touch ID or when it did not verify.
 

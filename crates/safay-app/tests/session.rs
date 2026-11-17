@@ -159,8 +159,14 @@ fn importing_and_categories_preserve_shared_rules() {
     let (mut s, _, _, _) = setup();
     s.create(PASSWORD, false).unwrap();
     let uri = format!("otpauth://totp/Fixture:test?secret={SECRET}&issuer=Fixture");
+    let other = format!("otpauth://totp/Other:test?secret={SECRET}&issuer=Other");
+    assert_eq!(s.known_accounts(&format!("{uri}\n{other}")), Ok(vec![false, false]));
     assert_eq!(s.import_text(&uri), Ok(1));
     assert_eq!(s.import_text(&uri), Err(Error::Duplicate));
+    // Matched by the import's rule (issuer case-insensitive), and nothing is added by asking.
+    let upper = format!("otpauth://totp/FIXTURE:test?secret={SECRET}&issuer=FIXTURE");
+    assert_eq!(s.known_accounts(&format!("{upper}\nnot a link\n{other}")), Ok(vec![true, false]));
+    assert_eq!(s.projection("", None).unwrap().rows.len(), 1);
     s.category(None, "Personal").unwrap();
     assert_eq!(s.category(None, " personal "), Err(Error::Category));
     let p = s.projection("", None).unwrap();

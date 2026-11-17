@@ -877,42 +877,75 @@ pub fn app_icon(size: f32) -> impl IntoElement + Styled {
     image(asset!("icon.png")).size(px(size)).overflow_hidden()
 }
 
-/// The desktop notice's content: a 17pt tinted symbol and up to two centered lines
-/// of 13pt medium text in a 430×58 capsule. The capsule outline is here; the panel clips to the capsule shape.
+/// Safay's glass card on the desktop: the selection's instructions and the desktop notice. The app icon (with the
+/// result's symbol on it, when there is one), a title and an optional line under it; callers add trailing content. 56 pt
+/// tall: 10 pt around the 36 pt icon, whose 8 pt corners are concentric with the card's 18 pt ones.
+pub const CARD_HEIGHT: f32 = 56.0;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub fn desktop_toast(message: Option<(Tone, String)>) -> impl IntoElement {
-    let tone = message.as_ref().map(|m| m.0).unwrap_or(Tone::Info);
-    let text_value: SharedString = message.map(|m| m.1).unwrap_or_default().into();
-    let tint = move || match tone {
-        Tone::Success => tok("success"),
-        Tone::Error => theme().destructive,
-        Tone::Info => tok("code-accent"),
-    };
-    let glyph = match tone {
-        Tone::Success => Icon::CheckCircleFill,
-        Tone::Error => Icon::WarningFill,
-        Tone::Info => Icon::InfoFill,
-    };
+pub fn desktop_card(
+    tone: Option<Tone>,
+    title: impl Fn() -> SharedString + 'static,
+    detail: impl Fn() -> Option<SharedString> + Copy + 'static,
+) -> View {
+    const PADDING: f32 = 10.0;
+    const ICON: f32 = 36.0;
+    const ICON_RADIUS: f32 = 8.0;
+    let mark = tone.map(|tone| {
+        let tint = move || match tone {
+            Tone::Success => tok("success"),
+            Tone::Error => theme().destructive,
+            Tone::Info => tok("code-accent"),
+        };
+        let glyph = match tone {
+            Tone::Success => Icon::CheckCircleFill,
+            Tone::Error => Icon::WarningFill,
+            Tone::Info => Icon::InfoFill,
+        };
+        view()
+            .absolute()
+            .right(px(-4.0))
+            .bottom(px(-4.0))
+            .size(px(18.0))
+            .rounded_full()
+            .items_center()
+            .justify_center()
+            .bg(move || tok("glass"))
+            .child(crate::icons::symbol_weight(glyph, 14.0, 0.3, tint))
+    });
     view()
-        .flex_1()
         .flex_row()
         .items_center()
-        .justify_center()
-        .gap(px(10.0))
-        .px(px(15.0))
-        .rounded_full()
+        .gap(px(12.0))
+        .h(px(CARD_HEIGHT))
+        .pl(px(PADDING))
+        .pr(px(18.0))
+        .rounded(px(ICON_RADIUS + PADDING))
         .font_family("system-ui")
         .bg(move || tok("glass"))
-        .border_1()
+        .border(px(0.5))
         .border_color(move || tok("glass-border"))
-        .child(view().size(px(22.0)).items_center().justify_center().child(crate::icons::symbol_weight(glyph, 17.0, 0.3, tint)))
+        .child(view().size(px(ICON)).child(app_icon(ICON).rounded(px(ICON_RADIUS))).children(mark))
         .child(
-            text(text_value)
-                .number_of_lines(2)
-                .text_center()
-                .text_size(px(13.0))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(move || theme().foreground),
+            view()
+                .flex_shrink(1.0)
+                .min_w(px(0.0))
+                .gap(px(2.0))
+                .child(
+                    text(title)
+                        .number_of_lines(1)
+                        .text_size(px(14.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(move || theme().foreground),
+                )
+                .child(when(
+                    move || detail().is_some(),
+                    move || {
+                        text(move || detail().unwrap_or_default())
+                            .number_of_lines(1)
+                            .text_size(px(12.0))
+                            .text_color(move || theme().muted_foreground)
+                    },
+                )),
         )
 }
 

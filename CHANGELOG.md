@@ -5,6 +5,14 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+### Changed
+
+- **Select on Screen**: Safay's own selection replaces the system's screenshot crosshair. It finds the 2FA QR codes on
+  every display and outlines each with its account's name, so one click adds it; dragging still selects any area, and
+  Esc or Cancel cancels. Codes the vault already has are marked "Already in Safay".
+- **Desktop notices** use a card with Safay's icon at the top of the screen.
+- **Add Account** marks scanned accounts the vault already has.
+
 ### Fixed
 
 - Capturing a QR code the vault already has from the shortcut or the menu bar now says it already exists instead of

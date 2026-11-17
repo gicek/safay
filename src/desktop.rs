@@ -30,9 +30,11 @@ pub const PANEL_WIDTH: f32 = 310.0;
 pub const PANEL_RADIUS: f32 = 18.0;
 const PANEL_GAP: f32 = 5.0;
 const PANEL_EDGE: f32 = 8.0;
-/// The desktop notice: a 430×58 capsule, 44 pt under the top of the screen's visible area, for 2.6 seconds.
-const TOAST_SIZE: (f32, f32) = (430.0, 58.0);
-const TOAST_TOP: f32 = 44.0;
+/// The desktop notice: Safay's glass card (`components::desktop_card`) centered in a 520 pt wide window, 44 pt under the
+/// top of the visible area of the display under the pointer, for 2.6 seconds.
+const TOAST_SIZE: (f32, f32) = (520.0, crate::components::CARD_HEIGHT + 4.0);
+/// How far under the top of a display's visible area the desktop notice (and the selection's instructions) sit.
+pub const NOTICE_TOP: f32 = 44.0;
 const TOAST_SHOWN: Duration = Duration::from_millis(2600);
 const TOAST_FADE: Duration = Duration::from_millis(250);
 /// The main window's least content size.
@@ -64,6 +66,15 @@ thread_local! {
 
 fn desktop() -> Option<Desktop> {
     DESKTOP.with(Cell::get)
+}
+
+/// Runs `f` under the root's owner, so windows it opens outlive the view that asked for them (as it is without the
+/// desktop integration).
+pub fn in_root(f: impl FnOnce()) {
+    match desktop() {
+        Some(d) => d.owner.get().run(f),
+        None => f(),
+    }
 }
 
 /// Whether this engine's root set up the desktop integration: the app's own launcher does, NSH's test and preview
@@ -336,12 +347,16 @@ pub fn notice(tone: Tone, text: String) {
                 .default_position(WindowPosition::At(notice_origin()))
                 .attributes(attributes)
                 .content(move || {
+                    let (tone, text) = message.clone();
+                    let text: SharedString = text.into();
                     view()
                         .flex_1()
+                        .items_center()
+                        .justify_center()
                         .opacity(move || if shown.get() { 1.0_f32 } else { 0.0 })
                         .transition_opacity()
                         .duration(TOAST_FADE.as_millis() as f32)
-                        .child(crate::components::desktop_toast(Some(message.clone())))
+                        .child(crate::components::desktop_card(Some(tone), move || text.clone(), || None).max_w(px(TOAST_SIZE.0)))
                 }),
         );
         TOAST.with(|t| *t.borrow_mut() = opened);
@@ -372,8 +387,8 @@ fn notice_origin() -> Point<Points> {
     match under.or(primary) {
         Some(display) => {
             let area = display.visible_bounds;
-            point(area.origin.x + (area.size.width - px(TOAST_SIZE.0)) / 2.0, area.origin.y + px(TOAST_TOP))
+            point(area.origin.x + (area.size.width - px(TOAST_SIZE.0)) / 2.0, area.origin.y + px(NOTICE_TOP))
         }
-        None => point(px(0.0), px(TOAST_TOP)),
+        None => point(px(0.0), px(NOTICE_TOP)),
     }
 }

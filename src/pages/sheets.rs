@@ -411,9 +411,15 @@ fn text_panel(s: Store) -> impl IntoElement {
 /// A row of the parsed lines, and how many show before the rest scroll.
 const PARSED_ROW: f32 = 36.0;
 const PARSED_SHOWN: usize = 6;
-/// Each recognized line with "Parsed" or the reason it failed. Issuer and account only, never secrets.
+/// Each recognized line with "Parsed", "Already in Safay" or the reason it failed. Issuer and account only, never
+/// secrets.
 fn parsed_list(s: Store, source: impl Fn() -> Zeroizing<String> + Copy + 'static) -> impl IntoElement {
+    // Which of the valid accounts the vault already has, asked again whenever the lines change.
+    let known = signal(Vec::<bool>::new());
+    effect(move || s.check_known(source(), known));
     let items = move || {
+        let known = known.get();
+        let mut valid = 0;
         parsed(&source())
             .into_iter()
             .map(|p| {
@@ -423,7 +429,9 @@ fn parsed_list(s: Store, source: impl Fn() -> Zeroizing<String> + Copy + 'static
                 } else {
                     s.label(p.failure.map(|e| e.l10n_key()).unwrap_or("Unable to parse")).to_string()
                 };
-                (title, ok)
+                let exists = ok && known.get(valid).copied().unwrap_or(false);
+                valid += usize::from(ok);
+                (title, (ok, exists))
             })
             .collect::<Vec<_>>()
     };
@@ -437,10 +445,11 @@ fn parsed_list(s: Store, source: impl Fn() -> Zeroizing<String> + Copy + 'static
         move || {
             scroll().h(height).rounded(px(8.0)).bg(move || tok("hover").opacity(0.5)).child(each(
                 move || items().into_iter().enumerate().collect::<Vec<_>>(),
-                |(i, (t, _))| format!("{i}:{t}"),
+                |(i, (t, (_, exists)))| format!("{i}:{t}:{exists}"),
                 move |item, _| {
                     let i = move || item.with(|x| x.0);
-                    let ok = move || item.with(|x| x.1.1);
+                    let ok = move || item.with(|x| x.1.1.0);
+                    let exists = move || item.with(|x| x.1.1.1);
                     view().child(when(move || i() > 0, divider)).child(
                         view()
                             .flex_row()
@@ -450,10 +459,26 @@ fn parsed_list(s: Store, source: impl Fn() -> Zeroizing<String> + Copy + 'static
                             .px(px(8.0))
                             .child(text(move || item.with(|x| x.1.0.clone())).flex_1().number_of_lines(1).text_size(px(12.5)))
                             .child(
-                                text(move || s.label(if ok() { "Parsed" } else { "Unable to parse" }))
-                                    .text_size(px(11.0))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(move || if ok() { tok("success") } else { theme().destructive }),
+                                text(move || {
+                                    s.label(if exists() {
+                                        "Already in Safay"
+                                    } else if ok() {
+                                        "Parsed"
+                                    } else {
+                                        "Unable to parse"
+                                    })
+                                })
+                                .text_size(px(11.0))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(move || {
+                                    if exists() {
+                                        theme().muted_foreground
+                                    } else if ok() {
+                                        tok("success")
+                                    } else {
+                                        theme().destructive
+                                    }
+                                }),
                             ),
                     )
                 },

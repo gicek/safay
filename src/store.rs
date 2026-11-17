@@ -853,12 +853,19 @@ impl Store {
         self.status.set(None);
         let epoch = self.controller.get().epoch();
         self.task(async move {
-            match platform::screen_capture::capture().await {
+            match crate::scan::select(self.language.get_untracked(), self.known_accounts()).await {
                 Ok(Some(bytes)) if self.controller.get().epoch() == epoch => self.add_images(vec![bytes]).await,
                 Ok(_) => {}
                 Err(_) => self.error.set(Some(Error::Import)),
             }
         });
+    }
+    /// Which of a QR code's accounts the vault already has, for the on-screen selection to mark (never stores anything).
+    #[cfg(target_os = "macos")]
+    fn known_accounts(self) -> crate::scan::Known {
+        let controller = self.controller.get();
+        let epoch = controller.epoch();
+        Arc::new(move |text: &str| controller.run(epoch, |s| s.known_accounts(text)).unwrap_or_default())
     }
     /// The capture shortcut and the panel's button: select a QR code on screen and import it at once.
     #[cfg(target_os = "macos")]
@@ -882,7 +889,7 @@ impl Store {
         }
         let epoch = self.controller.get().epoch();
         self.task(async move {
-            let Ok(Some(bytes)) = platform::screen_capture::capture().await else { return };
+            let Ok(Some(bytes)) = crate::scan::select(self.language.get_untracked(), self.known_accounts()).await else { return };
             if self.controller.get().epoch() != epoch {
                 return;
             }
@@ -926,6 +933,29 @@ impl Store {
                 return;
             }
             self.add_images(files.into_iter().map(|(_, b)| b).collect()).await;
+        });
+    }
+    /// Sets `into` to which valid accounts in `text` the vault already has (none for fixtures and empty text). Only the
+    /// newest question's answer lands.
+    pub fn check_known(self, text: Zeroizing<String>, into: Signal<Vec<bool>>) {
+        thread_local! {
+            static ASKED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+        }
+        let turn = ASKED.with(|a| {
+            a.set(a.get() + 1);
+            a.get()
+        });
+        if self.fixture || text.trim().is_empty() {
+            into.set(Vec::new());
+            return;
+        }
+        let controller = self.controller.get();
+        let epoch = controller.epoch();
+        self.task(async move {
+            let flags = blocking(move || controller.run(epoch, |s| s.known_accounts(&text)).unwrap_or_default()).await.unwrap_or_default();
+            if ASKED.with(|a| a.get()) == turn {
+                into.set(flags);
+            }
         });
     }
     /// Adds recognized QR text to the scanned list, once per line (images, the screen and the camera share it).

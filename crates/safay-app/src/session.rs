@@ -1013,6 +1013,40 @@ impl Session {
             .collect();
         self.merge(&Sensitive(VaultContents { accounts, ..Default::default() }).0)
     }
+    /// For each valid account in `text` (otpauth lines and migration codes, in [`otpauth::parse_lines`] order): whether
+    /// the vault already has it, by the same rule the import skips duplicates with. Nothing is stored or changed.
+    pub fn known_accounts(&mut self, text: &str) -> Result<Vec<bool>, Error> {
+        self.guard()?;
+        if text.len() as u64 > MAX_FILE_BYTES {
+            return Err(Error::TooLarge);
+        }
+        let placeholders = placeholders();
+        let contents = self.contents.as_ref().ok_or(Error::Locked)?;
+        let mut keys: std::collections::HashSet<String> =
+            contents.0.accounts.iter().map(|a| dedup::account_deduplication_key(a, &placeholders)).collect();
+        let known = otpauth::parse_lines(text, &placeholders)
+            .into_iter()
+            .filter(|p| p.is_valid())
+            .map(|mut p| {
+                let key = Zeroizing::new(dedup::deduplication_key(
+                    &p.issuer,
+                    &p.account,
+                    &p.secret,
+                    p.algorithm,
+                    p.digits,
+                    p.period,
+                    &placeholders,
+                ));
+                p.secret.zeroize();
+                keys.contains(key.as_str())
+            })
+            .collect();
+        // The keys hold the secrets.
+        for mut key in keys.drain() {
+            key.zeroize();
+        }
+        Ok(known)
+    }
     fn merge(&mut self, imported: &VaultContents) -> Result<usize, Error> {
         let mut next = Sensitive(self.contents.as_ref().ok_or(Error::Locked)?.0.clone());
         let candidates: Vec<_> = imported

@@ -11,6 +11,8 @@
   "minutes.other": "{} minutes",
   "recognized.one": "Recognized {} account",
   "recognized.other": "Recognized {} accounts",
+  "scan_found.one": "Safay found a 2FA QR code",
+  "scan_found.other": "Safay found {} QR codes for 2FA",
   "wait.one": "Too many attempts. Try again in {} second",
   "wait.other": "Too many attempts. Try again in {} seconds",
   "otp.err.bad_base32": "The secret key is invalid",
