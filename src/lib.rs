@@ -23,6 +23,12 @@ use store::{Store, Surface};
 /// The development build number, from nsh.json.
 pub const BUILD: &str = "7";
 static CONTROLLER: OnceLock<(Arc<Controller>, bool)> = OnceLock::new();
+/// Debug builds: the demo vault with `total` accounts (at least its eight samples), for `--preview` with
+/// `SAFAY_PREVIEW_DEMO=<total>`.
+#[cfg(debug_assertions)]
+pub fn demo_controller(total: usize) -> Arc<Controller> {
+    demo::controller_with(false, total)
+}
 /// Running under the app's own launcher, not an NSH test or preview runner.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(crate) fn hosted() -> bool {

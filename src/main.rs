@@ -49,7 +49,12 @@ fn main() -> impl std::process::Termination {
             }
         }
     };
-    let controller = match Controller::new(repo, Arc::new(SystemClock::default())) {
+    // Debug builds: `--preview` with `SAFAY_PREVIEW_DEMO=<accounts>` opens the synthetic demo vault, unlocked, in memory.
+    #[cfg(debug_assertions)]
+    let demo = std::env::var("SAFAY_PREVIEW_DEMO").ok().filter(|_| preview).map(|n| safay::demo_controller(n.parse().unwrap_or(8)));
+    #[cfg(not(debug_assertions))]
+    let demo: Option<Arc<Controller>> = None;
+    let controller = match demo.map(Ok).unwrap_or_else(|| Controller::new(repo, Arc::new(SystemClock::default()))) {
         Ok(c) => c,
         Err(_) => {
             eprintln!("Cannot read Safay storage safely.");

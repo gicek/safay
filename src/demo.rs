@@ -30,6 +30,10 @@ impl Clock for DemoClock {
 }
 
 pub fn controller(locked: bool) -> Arc<Controller> {
+    controller_with(locked, 8)
+}
+/// The demo vault with made-up accounts after the eight samples, up to `total`: for measuring large vaults.
+pub fn controller_with(locked: bool, total: usize) -> Arc<Controller> {
     let clock = Arc::new(DemoClock(AtomicU64::new(FROZEN - 86_400 * 12)));
     let c = Controller::new(Box::new(MemoryRepository::default()), clock.clone()).expect("memory demo");
     c.run(c.epoch(), |s| {
@@ -71,6 +75,22 @@ pub fn controller(locked: bool) -> Arc<Controller> {
             for m in members {
                 s.membership(cat, id(m), true)?;
             }
+        }
+        // More made-up accounts, each with its own synthetic secret, for measuring large vaults.
+        const BASE32: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+        for n in accounts.len()..total {
+            let mut seed = (n as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            let secret: String = (0..32)
+                .map(|_| {
+                    seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+                    BASE32[(seed >> 59) as usize] as char
+                })
+                .collect();
+            let mut d = Draft::default();
+            d.issuer = format!("Service {:03}", n + 1);
+            d.username = format!("user{}@example.com", n + 1);
+            d.secret = secret;
+            s.save_account(&d)?;
         }
         // Captures for dark mode: `SAFAY_DEMO_APPEARANCE=dark`.
         if let Ok(mode) = std::env::var("SAFAY_DEMO_APPEARANCE") {

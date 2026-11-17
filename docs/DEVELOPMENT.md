@@ -74,6 +74,9 @@ authentication and signed distribution are checked by hand.
 - `make preview` starts with an empty in-memory vault. The debug-only `previews/Demo*.tsx` entry points load a synthetic
   demo vault; `SAFAY_DEMO_APPEARANCE=light|dark` and `SAFAY_DEMO_SCENE=<page>` (see `src/demo.rs`) choose the
   appearance and the page to open.
+- A development package started with `SAFAY_PREVIEW_DEMO=<accounts>` and `--preview` opens the demo vault, unlocked
+  and in memory, with made-up accounts after its eight samples up to that number: for checking memory and scrolling
+  with a large vault (`build/debug/Safay.app/Contents/MacOS/Safay --preview`).
 
 ### Screenshots
 
