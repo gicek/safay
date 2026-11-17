@@ -47,7 +47,7 @@ framework's text and image buffers and the system clipboard cannot be guaranteed
 - From the fifth consecutive failure, the next attempt waits 30 seconds, doubling with each further failure up to 300. The wait is measured on a
   monotonic clock that keeps counting through sleep and restarts in full after a relaunch. Turning the delay off
   requires the master password.
-- Auto-lock after 1, 5 or 30 minutes without input to Safay (no "never"); locking also happens on sleep, screen lock,
+- Auto-lock after 1, 5, 15 or 30 minutes without input to Safay (no "never"); locking also happens on sleep, screen lock,
   screensaver and user switching. Locking advances an epoch first: every window hides sensitive content at once, and a
   key derivation or file operation that finishes later cannot revive the session.
 - Showing a secret or a QR code, exporting, changing the password, resetting, turning off the attempt delay, and
@@ -130,7 +130,7 @@ or device information. Automatic checks start only after the user agrees on the 
 Alfred, Raycast and Tinycast talk to Safay only through two AppleScript commands, so macOS Automation (TCC) decides,
 per app, who may send them. There is no local socket, port or other channel.
 
-- The **Third-Party Plugin Interface** setting is off by default and turned off by a reset. While off, both commands are
+- The **Launcher Access** setting is off by default and turned off by a reset. While off, both commands are
   refused and the search index is cleared.
 - `find accounts` returns at most 50 matches with service names and masked account names (`al***@example.com`), never
   a secret or a code. To search a locked Safay, the account IDs and names stay in memory after locking; they are

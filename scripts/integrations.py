@@ -23,7 +23,7 @@ LANGUAGES = {"en": "en.json", "zh-Hans": "zh-Hans.json", "zh-Hant": "zh-Hant.jso
 # Every text a launcher shows; each is a key of Safay's own tables.
 KEYS = {
     "search": "Search accounts",
-    "disabledTitle": "Third-party plugin interface is off",
+    "disabledTitle": "Launcher access is off",
     "disabledSubtitle": "Turn it on in Safay’s Settings → Advanced",
     "permissionTitle": "Safay automation access is off",
     "permissionSubtitle": "Allow this app to control Safay in System Settings → Automation",
@@ -77,7 +77,7 @@ def alfred_info() -> dict:
         "readme": (
             "Type `sf` and a service or account name. Enter asks Safay to copy that account's code: Safay asks for Touch ID "
             "or your master password every time, puts the code on the clipboard and shows a notice.\n\n"
-            "Needs Safay's Settings → Advanced → Enable Third-Party Plugin Interface, and Alfred allowed to control Safay "
+            "Needs Safay's Settings → Advanced → Launcher Access, and Alfred allowed to control Safay "
             "(System Settings → Privacy & Security → Automation)."
         ),
         "webaddress": "",

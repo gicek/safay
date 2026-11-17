@@ -2,7 +2,7 @@
 <!DOCTYPE dictionary SYSTEM "file://localhost/System/Library/DTDs/sdef.dtd">
 <dictionary title="Safay Terminology">
     <suite name="Safay Launcher Suite" code="SaFy"
-        description="For launchers such as Alfred, Raycast and Tinycast. Off unless Settings → Advanced → Enable Third-Party Plugin Interface is on. macOS Automation decides which apps may send these commands.">
+        description="For launchers such as Alfred, Raycast and Tinycast. Off unless Settings → Advanced → Launcher Access is on. macOS Automation decides which apps may send these commands.">
 
         <command name="find accounts" code="SaFyfacc"
             description="Matches accounts by service name and account name, as Safay's own search does. Returns JSON: {&quot;enabled&quot;: bool, &quot;ready&quot;: bool, &quot;accounts&quot;: [{&quot;id&quot;, &quot;issuer&quot;, &quot;username&quot;}]}, at most 50 accounts, account names masked. Never a secret or a code. `ready` is false until Safay has been unlocked once since it started.">

@@ -54,11 +54,22 @@ pub fn choice(
                     view().text_color(move || theme().muted_foreground).child(icon(Icon::ChevronUpDown).size(px(12.0))).into_element()
                 }),
         )
-        .popup_style(|style| {
-            style.p_1().rounded(px(8.0)).border_1().border_color(move || tok("separator")).bg(move || theme().popover).shadow_lg()
+        // The list is as wide as its widest choice, each on one line, as a macOS pop-up menu is. NSH makes it as wide as
+        // the button unless the style sets a width, and its rows (a virtual list) have no width of their own to size
+        // it by: the titles are measured, in the selected rows' medium 14px, plus the rows' and the list's padding.
+        .popup_style(move |style| {
+            let widest = items().iter().map(|i| measure_text("500 14px system-ui", &i.title).0).fold(0.0_f32, f32::max);
+            style
+                .w(px(widest.ceil() + 24.0 + 8.0 + 2.0 + 4.0))
+                .p_1()
+                .rounded(px(8.0))
+                .border_1()
+                .border_color(move || tok("separator"))
+                .bg(move || theme().popover)
+                .shadow_lg()
         })
         .item_class("px-3 py-1.5 rounded-md text-sm focus:bg-primary focus:text-primary-foreground selected:font-medium")
-        .render_item(|item: &nsh_base::SelectEntry| text(item.title.clone()))
+        .render_item(|item: &nsh_base::SelectEntry| text(item.title.clone()).number_of_lines(1))
         .on_change({
             // `Select` reports the choice before it closes its list: apply it on the next turn, so the list closes at once
             // and the work it causes (theme, language, preferences) never holds it open.
@@ -288,7 +299,10 @@ fn general(s: Store) -> impl IntoElement {
                 .child(row(
                     s,
                     "Menu Bar Accounts",
-                    None,
+                    help(
+                        s,
+                        if look() == Look::Mac { "Which accounts the menu bar panel shows" } else { "Which accounts the tray panel shows" },
+                    ),
                     choice(
                         s,
                         "Menu Bar Accounts",
@@ -315,6 +329,29 @@ fn general(s: Store) -> impl IntoElement {
                 ))
                 .into_element(),
         ];
+    // Starting without the main window needs the icon to get back to Safay: dimmed, and saying so, while it is hidden.
+    if look() == Look::Mac && crate::platform::supports::LOGIN_ITEM {
+        integration.push(
+            row(
+                s,
+                "Start in Menu Bar",
+                Some(Box::new(move || {
+                    s.label(if s.preferences.with(|p| p.tray_icon) {
+                        "When Safay starts, only the menu bar icon appears"
+                    } else {
+                        "Needs the menu bar icon"
+                    })
+                })),
+                switch_control(
+                    move || s.label("Start in Menu Bar"),
+                    move || s.preferences.get().background_launch,
+                    move || s.busy.get() || !s.preferences.get().tray_icon,
+                    move |v| s.update_preferences(move |p| p.background_launch = v),
+                ),
+            )
+            .into_element(),
+        );
+    }
     if look() == Look::Mac {
         integration.push(
             row(
@@ -364,7 +401,7 @@ fn general(s: Store) -> impl IntoElement {
             row(
                 s,
                 "Show Site Icons",
-                help(s, "When you add an account or change its website, Safay gets the icon directly from that website. No other service is involved."),
+                help(s, "Gets each account’s icon from its own website"),
                 switch_control(
                     move || s.label("Show Site Icons"),
                     move || s.preferences.get().site_icons,
@@ -409,25 +446,13 @@ fn login_section(s: Store) -> impl IntoElement {
             ),
         )
         .into_element(),
-        row(
-            s,
-            "Background Launch Only",
-            help(s, "Don’t open the main window at launch; run only in the menu bar"),
-            switch_control(
-                move || s.label("Background Launch Only"),
-                move || s.preferences.get().background_launch,
-                move || s.busy.get() || !s.preferences.get().tray_icon,
-                move |v| s.update_preferences(move |p| p.background_launch = v),
-            ),
-        )
-        .into_element(),
     ])
 }
 fn shortcuts(s: Store) -> impl IntoElement {
     section(vec![
-        row(s, "Open Menu Bar", help(s, "Open the menu bar code panel"), recorder(s, 0)).into_element(),
-        row(s, "Open Main App", help(s, "Bring up the Safay main window"), recorder(s, 1)).into_element(),
-        row(s, "Capture QR Code", help(s, "Select an on-screen QR code and import the account"), recorder(s, 2)).into_element(),
+        row(s, "Show Menu Bar Panel", help(s, "Your codes, from anywhere"), recorder(s, 0)).into_element(),
+        row(s, "Show Main Window", help(s, "Brings Safay’s main window forward"), recorder(s, 1)).into_element(),
+        row(s, "Select QR Code on Screen", help(s, "Adds the account from a 2FA QR code on your screen"), recorder(s, 2)).into_element(),
     ])
 }
 /// The shortcut recorder: shows the combination, records the next one on press, ✕ clears it.
@@ -539,7 +564,7 @@ fn security(s: Store) -> impl IntoElement {
         let auto_lock = choice(
             s,
             "Auto-Lock",
-            move || [1, 5, 30].into_iter().map(|m| SelectItem::new(m.to_string(), s.count("minutes", m))).collect(),
+            move || [1, 5, 15, 30].into_iter().map(|m| SelectItem::new(m.to_string(), s.count("minutes", m))).collect(),
             move || s.preferences.get().auto_lock_minutes.to_string().into(),
             move |v| {
                 if let Ok(m) = v.parse::<u64>() {
@@ -557,7 +582,7 @@ fn security(s: Store) -> impl IntoElement {
                     "Unlock with Touch ID",
                     Some(Box::new(move || {
                         s.label(if s.biometrics.get() {
-                            "Fall back to master password if it fails or is unavailable"
+                            "You can always use your master password instead"
                         } else {
                             "Touch ID is unavailable or not enrolled on this Mac"
                         })
@@ -576,7 +601,7 @@ fn security(s: Store) -> impl IntoElement {
             row(
                 s,
                 "Delay After Failed Attempts",
-                help(s, "After 5 wrong master password attempts, wait times increase"),
+                help(s, "After 5 wrong attempts, each try waits longer, up to 5 minutes"),
                 switch_control(
                     move || s.label("Delay After Failed Attempts"),
                     move || s.preferences.get().failure_delay,
@@ -595,22 +620,29 @@ fn security(s: Store) -> impl IntoElement {
             )
             .into_element(),
         );
-        view().gap(px(22.0)).child(section(unlocking)).child(section(vec![
-            row(
-                s,
-                "Auto-Lock",
-                help(s, "Locks after the selected time without activity, and immediately when the device locks or sleeps"),
-                auto_lock,
-            )
-            .into_element(),
-            row(
-                s,
-                "Change Master Password",
-                help(s, "Re-encrypt local account data"),
-                push_button(move || s.label("Change"), Kind::Standard, false).on_press(move || open_main_sheet(s, Sheet::ChangePassword)),
-            )
-            .into_element(),
-        ]))
+        // Unlocking, locking, then the master password itself.
+        view()
+            .gap(px(22.0))
+            .child(section(unlocking))
+            .child(section(vec![
+                row(
+                    s,
+                    "Auto-Lock",
+                    help(s, "Locks after the selected time without activity, and immediately when the device locks or sleeps"),
+                    auto_lock,
+                )
+                .into_element(),
+            ]))
+            .child(section(vec![
+                row(
+                    s,
+                    "Change Master Password",
+                    help(s, "Unlocks Safay and encrypts your vault and backups"),
+                    push_button(move || s.label("Change"), Kind::Standard, false)
+                        .on_press(move || open_main_sheet(s, Sheet::ChangePassword)),
+                )
+                .into_element(),
+            ]))
     })
 }
 /// Sheets that need the vault open in the main window (the Settings window has a store of its own).
@@ -631,7 +663,7 @@ fn advanced(s: Store) -> impl IntoElement {
             row(
                 s,
                 "Local Data Location",
-                Some(Box::new(move || s.fmt("{} (encrypted)", &[&shown]))),
+                Some(Box::new(move || shown.clone().into())),
                 push_button(move || s.label("Open Location"), Kind::Standard, false)
                     .disabled(move || location.is_none() || s.fixture)
                     .on_press({
@@ -645,6 +677,8 @@ fn advanced(s: Store) -> impl IntoElement {
             )
             .into_element(),
         ]))
+        // Locked, the protected groups below are hidden: say why, as Security does.
+        .child(when(move || !s.unlocked(), move || locked_section(s)))
         // Launchers (Alfred, Raycast, Tinycast): changed only while unlocked, like the rest of the protected settings.
         .child(when(
             move || crate::platform::supports::AUTOMATION && s.unlocked(),
@@ -652,10 +686,10 @@ fn advanced(s: Store) -> impl IntoElement {
                 section(vec![
                     row(
                         s,
-                        "Enable Third-Party Plugin Interface",
+                        "Launcher Access",
                         help(s, "Alfred, Raycast and Tinycast can search your accounts. Every code they copy needs Touch ID or your master password."),
                         switch_control(
-                            move || s.label("Enable Third-Party Plugin Interface"),
+                            move || s.label("Launcher Access"),
                             move || s.preferences.get().launcher,
                             move || s.busy.get(),
                             move |v| s.update_preferences(move |p| p.launcher = v),
@@ -665,9 +699,18 @@ fn advanced(s: Store) -> impl IntoElement {
                     row(
                         s,
                         "Install Alfred Workflow",
-                        help(s, "Import the Alfred workflow to search accounts and copy codes with a keyword"),
+                        Some(Box::new(move || {
+                            s.label(if s.preferences.with(|p| p.launcher) {
+                                "Import the Alfred workflow to search accounts and copy codes with a keyword"
+                            } else {
+                                "Needs launcher access"
+                            })
+                        })),
+                        // The workflow needs launcher access to do anything.
                         push_button(move || s.label("Install to Alfred"), Kind::Standard, false)
-                            .disabled(move || crate::platform::alfred_workflow().is_none() || s.fixture)
+                            .disabled(move || {
+                                !s.preferences.with(|p| p.launcher) || crate::platform::alfred_workflow().is_none() || s.fixture
+                            })
                             .on_press(move || {
                                 if let Some(path) = crate::platform::alfred_workflow() {
                                     drop(open_path(path));
@@ -700,10 +743,10 @@ fn advanced(s: Store) -> impl IntoElement {
                     row(
                         s,
                         "Reset App",
-                        help(s, "Erases local data; exported backups aren’t affected"),
+                        help(s, "Erases Safay’s data on this computer. Exported files and backups aren’t affected."),
                         push_button(move || s.label("Reset"), Kind::Danger, false).on_press(move || {
                             let chosen = crate::alert::alert(s.label("Reset Safay?"))
-                                .description(s.label("Erases local data; exported backups aren’t affected"))
+                                .description(s.label("Erases Safay’s data on this computer. Exported files and backups aren’t affected."))
                                 .cancel("cancel", s.label("Cancel"))
                                 .destructive("erase", s.label("Erase Local Data"))
                                 .show();

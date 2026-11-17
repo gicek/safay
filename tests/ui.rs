@@ -261,9 +261,9 @@ fn settings_show_default_global_shortcuts_and_login_options() {
     let mut app = open();
     create(&mut app);
     app.press("role:button[Settings]").unwrap();
-    app.wait_for("Background Launch Only").unwrap();
+    app.wait_for("Start in Menu Bar").unwrap();
     app.press("role:button[Shortcuts]").unwrap();
-    app.wait_for("Open Menu Bar").unwrap();
+    app.wait_for("Show Menu Bar Panel").unwrap();
     app.wait_for("⌥⌘Z").unwrap();
     app.wait_for("⌥⌘X").unwrap();
 }

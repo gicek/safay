@@ -4,7 +4,7 @@ export const BRIDGE = "-- Safay's launcher bridge, shared by the Alfred workflow
 
 export const TEXT = {
   "search": "Search accounts",
-  "disabledTitle": "Third-party plugin interface is off",
+  "disabledTitle": "Launcher access is off",
   "disabledSubtitle": "Turn it on in Safay\u2019s Settings \u2192 Advanced",
   "permissionTitle": "Safay automation access is off",
   "permissionSubtitle": "Allow this app to control Safay in System Settings \u2192 Automation",

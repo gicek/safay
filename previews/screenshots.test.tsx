@@ -185,6 +185,12 @@ test("Settings window", async () => {
     await app.press(`role:button[${page}]`);
     await shot(app, `settings-${name}`);
   }
+  // A pop-up list: as wide as its button, and never narrower than one line of a choice.
+  await app.press("role:button[Security]");
+  await app.press("role:combobox[Auto-Lock]");
+  await app.waitFor("15 minutes");
+  await shot(app, "settings-auto-lock");
+  await app.keyboard.press("Escape");
   await app.press("role:button[General]");
   await app.setColorScheme("dark");
   await shot(app, "settings-dark");

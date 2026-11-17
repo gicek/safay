@@ -16,7 +16,7 @@ extension is English; the Alfred workflow follows Safay's language.
 
 ## Setup
 
-Every launcher needs Safay → Settings → Advanced → **Enable Third-Party Plugin Interface**, and permission to control
+Every launcher needs Safay → Settings → Advanced → **Launcher Access**, and permission to control
 Safay, which macOS asks for on first use (System Settings → Privacy & Security → Automation).
 
 - **Alfred** (Powerpack): Safay → Settings → Advanced → **Install to Alfred**. Keyword `sf`.

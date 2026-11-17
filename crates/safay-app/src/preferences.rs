@@ -101,7 +101,7 @@ impl Default for Preferences {
 impl Preferences {
     /// Out-of-range values fall back to defaults; the tray and the Dock icon are never both hidden.
     pub fn validated(self) -> Self {
-        let mut next = if [1, 5, 30].contains(&self.auto_lock_minutes) { self } else { Self { auto_lock_minutes: 5, ..self } };
+        let mut next = if [1, 5, 15, 30].contains(&self.auto_lock_minutes) { self } else { Self { auto_lock_minutes: 5, ..self } };
         if !next.tray_icon && next.dock_icon == DockIcon::Never {
             next.dock_icon = DockIcon::MainWindow;
         }
@@ -166,5 +166,12 @@ mod update_tests {
         assert!(!p.update_downloads);
         let p = Preferences { update_checks: Some(true), update_downloads: true, ..Default::default() }.validated();
         assert!(p.update_downloads);
+    }
+    #[test]
+    fn auto_lock_takes_the_offered_times_only() {
+        for minutes in [1, 5, 15, 30] {
+            assert_eq!(Preferences { auto_lock_minutes: minutes, ..Default::default() }.validated().auto_lock_minutes, minutes);
+        }
+        assert_eq!(Preferences { auto_lock_minutes: 60, ..Default::default() }.validated().auto_lock_minutes, 5);
     }
 }

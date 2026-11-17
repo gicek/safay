@@ -9,6 +9,14 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 - **Recently Deleted**: deleted accounts wait in the sidebar's "Recently Deleted" for 30 days, where you can recover them or delete them for good.
 
+### Changed
+
+- **Settings**: clearer names and descriptions, "Start in Menu Bar" next to the menu bar icon, and a 15-minute auto-lock.
+
+### Fixed
+
+- Recording a new keyboard shortcut in Settings no longer quits Safay.
+
 ## [1.1.0] - 2026-11-17
 
 Safay takes on the indigo of its icon, and new versions open in an update window with their notes.

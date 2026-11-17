@@ -198,7 +198,7 @@ pub fn apply(preferences: Preferences, language: Language) {
         d.preferences.set(Some(preferences));
     }
     platform::macos::apply_preferences(preferences);
-    // "Background Launch Only": at launch the main window goes away and only the menu bar icon remains.
+    // "Start in Menu Bar": at launch the main window goes away and only the menu bar icon remains.
     if !LAUNCHED.replace(true) && preferences.background_launch && preferences.tray_icon {
         main_window().hide();
         platform::macos::apply_dock(false);

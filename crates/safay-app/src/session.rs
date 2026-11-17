@@ -423,7 +423,7 @@ impl Session {
         Ok(())
     }
     pub fn set_auto_lock(&mut self, minutes: u64) -> Result<(), Error> {
-        if ![1, 5, 30].contains(&minutes) {
+        if ![1, 5, 15, 30].contains(&minutes) {
             return Err(Error::Fields);
         }
         self.set_preferences(crate::preferences::Preferences { auto_lock_minutes: minutes, ..self.preferences })

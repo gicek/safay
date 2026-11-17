@@ -6,7 +6,7 @@ opening it.
 ## Setup
 
 1. Install Safay and set up your vault.
-2. In Safay, open **Settings → Advanced** and turn on **Enable Third-Party Plugin Interface**.
+2. In Safay, open **Settings → Advanced** and turn on **Launcher Access**.
 3. Run **Search Accounts**. The first time, macOS asks whether Raycast may control Safay: choose **Allow**. If you
    declined, turn it on in **System Settings → Privacy & Security → Automation → Raycast → Safay**.
 
