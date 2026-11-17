@@ -312,6 +312,7 @@ fn account_from_raw(
         added_by: provenance::IMPORTED.to_owned(),
         website: None,
         icon: None,
+        deleted_at: None,
     };
     Ok(Some((account, bool_value(item.get("pinned")))))
 }
@@ -532,6 +533,7 @@ mod tests {
             added_by: provenance::MANUAL.into(),
             website: None,
             icon: None,
+            deleted_at: None,
         };
         let export = vault::export(&[account], &[], "export-pw", SystemTime::UNIX_EPOCH).unwrap();
         assert_eq!(import_file(&export, "", SystemTime::UNIX_EPOCH, &p).unwrap_err(), ImportError::PasswordRequired);

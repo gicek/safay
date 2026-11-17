@@ -8,8 +8,11 @@
 //!
 //! Differences in order alone do not count, nor do differences in the icon alone (it follows the website); a merge fills
 //! a missing icon from the other side when the websites match. A merge keeps every account from both sides, and for accounts changed on
-//! both sides the caller picks which version to keep, one by one. There are no deletion records, so an account deleted on
-//! one side comes back.
+//! both sides the caller picks which version to keep, one by one.
+//!
+//! Deleted accounts ([`crate::trash`]) are not differences: they pair by ID only, and a merge keeps the deletion of an
+//! account deleted on either side (the earlier time, so it is not kept longer), since it can still be recovered. Once
+//! removed for good it has no record, and an account still on the other side comes back.
 
 use std::collections::{HashMap, HashSet};
 
@@ -76,10 +79,10 @@ fn pair_accounts(local: &VaultContents, remote: &VaultContents, placeholders: &P
         remote.accounts.iter().filter(|account| local_ids.contains(&account.id)).map(|account| (account.id, account.id)).collect();
     let paired_local: HashSet<Uuid> = pairs.values().copied().collect();
     let mut by_key: HashMap<String, Uuid> = HashMap::new();
-    for account in local.accounts.iter().filter(|account| !paired_local.contains(&account.id)) {
+    for account in local.accounts.iter().filter(|account| !paired_local.contains(&account.id) && !account.is_deleted()) {
         by_key.entry(account_deduplication_key(account, placeholders)).or_insert(account.id);
     }
-    for account in remote.accounts.iter().filter(|account| !local_ids.contains(&account.id)) {
+    for account in remote.accounts.iter().filter(|account| !local_ids.contains(&account.id) && !account.is_deleted()) {
         if let Some(local_id) = by_key.remove(&account_deduplication_key(account, placeholders)) {
             pairs.insert(account.id, local_id);
         }
@@ -146,12 +149,20 @@ pub fn diff(local: &VaultContents, remote: &VaultContents, placeholders: &Placeh
         remote.accounts.iter().filter_map(|account| account_pairs.get(&account.id).map(|local_id| (*local_id, account))).collect();
 
     let mut result = VaultDiff {
-        only_local: local.accounts.iter().filter(|account| !paired_local.contains(&account.id)).cloned().collect(),
-        only_remote: remote.accounts.iter().filter(|account| !account_pairs.contains_key(&account.id)).cloned().collect(),
+        only_local: local.accounts.iter().filter(|account| !paired_local.contains(&account.id) && !account.is_deleted()).cloned().collect(),
+        only_remote: remote
+            .accounts
+            .iter()
+            .filter(|account| !account_pairs.contains_key(&account.id) && !account.is_deleted())
+            .cloned()
+            .collect(),
         ..VaultDiff::default()
     };
     for local_account in &local.accounts {
-        if let Some(remote_account) = remote_by_local.get(&local_account.id) {
+        if let Some(remote_account) = remote_by_local.get(&local_account.id)
+            && !local_account.is_deleted()
+            && !remote_account.is_deleted()
+        {
             let changes = changes_between(local_account, remote_account, &local.categories, &remote.categories);
             if !changes.is_empty() {
                 result.changed.push(ChangedAccount { local: local_account.clone(), remote: (*remote_account).clone(), changes });
@@ -193,6 +204,14 @@ fn with_icon_from(mut kept: Account, other: &Account) -> Account {
     kept
 }
 
+/// The earlier of two deletion times, or the one there is.
+fn earlier(a: Option<std::time::SystemTime>, b: Option<std::time::SystemTime>) -> Option<std::time::SystemTime> {
+    match (a, b) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (a, b) => a.or(b),
+    }
+}
+
 /// Merges two sets of contents. `prefer_remote` holds the accounts changed on both sides for which the backup version wins
 /// (as local account IDs); all others keep the local version.
 ///
@@ -209,10 +228,14 @@ pub fn merge(local: &VaultContents, remote: &VaultContents, prefer_remote: &Hash
         .accounts
         .iter()
         .map(|account| match remote_by_local.get(&account.id) {
-            Some(remote_account) if prefer_remote.contains(&account.id) => {
-                with_icon_from(Account { id: account.id, ..(*remote_account).clone() }, account)
-            }
-            Some(remote_account) => with_icon_from(account.clone(), remote_account),
+            Some(remote_account) if prefer_remote.contains(&account.id) => Account {
+                deleted_at: earlier(account.deleted_at, remote_account.deleted_at),
+                ..with_icon_from(Account { id: account.id, ..(*remote_account).clone() }, account)
+            },
+            Some(remote_account) => Account {
+                deleted_at: earlier(account.deleted_at, remote_account.deleted_at),
+                ..with_icon_from(account.clone(), remote_account)
+            },
             None => account.clone(),
         })
         .collect();
@@ -281,6 +304,7 @@ mod tests {
             added_by: "manual".into(),
             website: None,
             icon: None,
+            deleted_at: None,
         }
     }
 
@@ -290,6 +314,46 @@ mod tests {
 
     fn contents(accounts: Vec<Account>, categories: Vec<Category>) -> VaultContents {
         VaultContents { accounts, categories, pinned_ids: Vec::new() }
+    }
+
+    fn deleted(mut account: Account, secs: u64) -> Account {
+        account.deleted_at = Some(UNIX_EPOCH + std::time::Duration::from_secs(secs));
+        account
+    }
+
+    #[test]
+    fn a_deletion_on_either_side_is_kept_and_is_no_difference() {
+        let local = contents(vec![deleted(account(1, "GitHub", "AAAA"), 200), account(2, "Google", "BBBB")], vec![]);
+        let remote = contents(
+            vec![account(1, "GitHub renamed", "AAAA"), deleted(account(2, "Google", "BBBB"), 100), deleted(account(3, "Old", "CCCC"), 50)],
+            vec![],
+        );
+        let d = diff(&local, &remote, &placeholders());
+        assert!(d.is_empty(), "{d:?}");
+        let merged = merge(&local, &remote, &HashSet::new(), &placeholders());
+        let deletion = |n: u128| merged.accounts.iter().find(|a| a.id == id(n)).map(|a| a.deleted_at);
+        assert_eq!(deletion(1), Some(Some(UNIX_EPOCH + std::time::Duration::from_secs(200))));
+        assert_eq!(deletion(2), Some(Some(UNIX_EPOCH + std::time::Duration::from_secs(100))));
+        assert_eq!(deletion(3), Some(Some(UNIX_EPOCH + std::time::Duration::from_secs(50))));
+        // Both deleted: the earlier time, whichever side wins the fields.
+        let both = merge(
+            &contents(vec![deleted(account(1, "GitHub", "AAAA"), 300)], vec![]),
+            &contents(vec![deleted(account(1, "GitHub", "AAAA"), 100)], vec![]),
+            &HashSet::from([id(1)]),
+            &placeholders(),
+        );
+        assert_eq!(both.accounts[0].deleted_at, Some(UNIX_EPOCH + std::time::Duration::from_secs(100)));
+    }
+
+    #[test]
+    fn a_deleted_account_does_not_pair_with_one_added_again_elsewhere() {
+        // Deleted here; added again on the other device under a new ID: the new one stays in use.
+        let local = contents(vec![deleted(account(1, "GitHub", "AAAA"), 100)], vec![]);
+        let remote = contents(vec![account(9, "GitHub", "AAAA")], vec![]);
+        let merged = merge(&local, &remote, &HashSet::new(), &placeholders());
+        assert_eq!(merged.accounts.len(), 2);
+        assert!(merged.accounts.iter().any(|a| a.id == id(9) && !a.is_deleted()));
+        assert_eq!(diff(&local, &remote, &placeholders()).only_remote.len(), 1);
     }
 
     #[test]

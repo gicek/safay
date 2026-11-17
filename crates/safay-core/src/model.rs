@@ -49,6 +49,16 @@ pub struct Account {
     pub website: Option<String>,
     /// PNG site icon ([`crate::site_icon::is_valid_icon`]); only present together with `website`.
     pub icon: Option<Vec<u8>>,
+    /// When the user deleted it: it waits in Recently Deleted until [`crate::trash::RETENTION`] has passed
+    /// ([`crate::trash`]); `None` for an account in use.
+    pub deleted_at: Option<SystemTime>,
+}
+
+impl Account {
+    /// Deleted and waiting in Recently Deleted.
+    pub fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
 }
 
 /// Stands in for the secret in hand-written `Debug` impls of types that hold a TOTP secret, so `{:?}` never leaks it
@@ -72,6 +82,7 @@ impl std::fmt::Debug for Account {
             .field("added_by", &self.added_by)
             .field("website", &self.website)
             .field("icon", &self.icon.as_ref().map(Vec::len))
+            .field("deleted_at", &self.deleted_at)
             .finish()
     }
 }

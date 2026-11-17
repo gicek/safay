@@ -23,5 +23,9 @@
   "otp.err.not_otpauth": "Not an otpauth:// URL",
   "otp.err.not_totp": "Only TOTP is supported",
   "otp.err.period": "Invalid refresh interval",
-  "otp.err.unsupported_algorithm": "This OTP algorithm is not supported"
+  "otp.err.unsupported_algorithm": "This OTP algorithm is not supported",
+  "deleted-for-good.one": "{} account will be deleted for good. You can’t undo this action.",
+  "deleted-for-good.other": "{} accounts will be deleted for good. You can’t undo this action.",
+  "days-left.one": "{} day",
+  "days-left.other": "{} days"
 }

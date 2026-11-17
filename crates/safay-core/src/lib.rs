@@ -23,6 +23,7 @@ pub mod search;
 pub mod site_icon;
 pub mod sync;
 pub mod totp;
+pub mod trash;
 pub mod vault;
 
 pub use model::{Account, Placeholders, TotpAlgorithm};

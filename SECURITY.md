@@ -33,7 +33,10 @@ framework's text and image buffers and the system clipboard cannot be guaranteed
   the file last read, so a change made outside the session is detected. The previous authenticated vault is kept as a
   last-good copy that can be restored. A lock file keeps two Safay processes from writing at once. On Unix the data
   directory is `0700` and its files `0600`.
-- TOTP secrets, account names, websites, site icons and categories live only inside the encrypted payload. The
+- TOTP secrets, account names, websites, site icons and categories live only inside the encrypted payload.
+- A deleted account stays in the encrypted vault, secret included, for 30 days in Recently Deleted, so it can be
+  recovered; then, or at once when the user deletes it from there, it is removed and its secret wiped from memory.
+  Backups written meanwhile still hold it, encrypted. The
   preferences file holds non-secret settings only; the failed-attempt file holds only a count.
 
 ## Master password and unlocking

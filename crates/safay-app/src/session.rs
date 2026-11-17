@@ -1,7 +1,7 @@
 //! Single-owner vault state. All operations run off the UI thread and commit before publishing changes.
 use crate::storage::{MAX_FILE_BYTES, Repository, StorageError};
 use safay_core::{
-    Account, Placeholders, TotpAlgorithm, authenticator, canonical, category, dedup, otpauth, password, search, site_icon, totp,
+    Account, Placeholders, TotpAlgorithm, authenticator, canonical, category, dedup, otpauth, password, search, site_icon, totp, trash,
     vault::{self, VaultContents, VaultError, VaultKey},
 };
 use std::{
@@ -213,6 +213,17 @@ pub struct Choice {
     pub issuer: String,
     pub username: String,
 }
+/// An account in Recently Deleted: what its row shows, never a code.
+#[derive(Clone, PartialEq, Eq)]
+pub struct DeletedRow {
+    pub id: Uuid,
+    pub issuer: String,
+    pub username: String,
+    /// Whole days before it is removed for good.
+    pub days_left: u32,
+    pub website: Option<String>,
+    pub icon: Option<std::sync::Arc<[u8]>>,
+}
 #[derive(Clone, PartialEq, Eq)]
 pub struct CategoryRow {
     pub id: Uuid,
@@ -227,6 +238,10 @@ pub struct Projection {
     pub unlocked: bool,
     pub rows: Vec<Row>,
     pub categories: Vec<CategoryRow>,
+    /// Recently Deleted, most recently deleted first (narrowed by the search, as the rows are).
+    pub deleted: Vec<DeletedRow>,
+    /// How many accounts are in Recently Deleted, whatever the search.
+    pub deleted_count: usize,
     pub waiting: u64,
     pub has_snapshot: bool,
     pub sync: SyncSummary,
@@ -357,14 +372,23 @@ impl Session {
     /// Brings the launchers' index up to date while unlocked; a locked session leaves it as it was.
     fn index_for_launchers(&self) {
         if let Some(contents) = self.contents.as_ref() {
-            self.launcher.rebuild(contents.0.accounts.iter().map(|a| (a.id, a.issuer.as_str(), a.username.as_str())));
+            self.launcher
+                .rebuild(contents.0.accounts.iter().filter(|a| !a.is_deleted()).map(|a| (a.id, a.issuer.as_str(), a.username.as_str())));
         }
     }
     /// A launcher's copy, after the user proved it is them now (Touch ID or the master password): the account's code, how
     /// long it stays on the clipboard, and its service name for the notice.
     pub fn launcher_code(&mut self, id: Uuid) -> Result<(Zeroizing<String>, Duration, String), Error> {
         self.guard()?;
-        let a = self.contents.as_ref().ok_or(Error::Locked)?.0.accounts.iter().find(|a| a.id == id).ok_or(Error::NotFound)?;
+        let a = self
+            .contents
+            .as_ref()
+            .ok_or(Error::Locked)?
+            .0
+            .accounts
+            .iter()
+            .find(|a| a.id == id && !a.is_deleted())
+            .ok_or(Error::NotFound)?;
         let result = (Zeroizing::new(totp::account_code(a, self.clock.wall())), Duration::from_secs(u64::from(a.period)), a.issuer.clone());
         self.activity();
         Ok(result)
@@ -658,9 +682,14 @@ impl Session {
         };
         self.index_for_launchers();
         p.unlocked = true;
-        p.account_count = contents.0.accounts.len();
-        p.categories =
-            contents.0.categories.iter().map(|c| CategoryRow { id: c.id, name: c.name.clone(), count: c.account_ids.len() }).collect();
+        let active = |id: &Uuid| contents.0.accounts.iter().any(|a| a.id == *id && !a.is_deleted());
+        p.account_count = contents.0.accounts.iter().filter(|a| !a.is_deleted()).count();
+        p.categories = contents
+            .0
+            .categories
+            .iter()
+            .map(|c| CategoryRow { id: c.id, name: c.name.clone(), count: c.account_ids.iter().filter(|id| active(id)).count() })
+            .collect();
         let accounts: Vec<&Account> = match category {
             Some(id) => {
                 let cat = contents.0.categories.iter().find(|c| c.id == id).ok_or(Error::NotFound)?;
@@ -670,12 +699,29 @@ impl Session {
         };
         let now = self.clock.wall();
         let cats = &contents.0.categories;
+        let found = |a: &&Account| {
+            search::matches_search(&a.issuer, &a.username, query)
+                || a.website.as_deref().is_some_and(|w| search::matches_search(w, "", query))
+        };
+        let mut deleted: Vec<&Account> = contents.0.accounts.iter().filter(|a| a.is_deleted()).collect();
+        p.deleted_count = deleted.len();
+        deleted.sort_by_key(|a| std::cmp::Reverse(a.deleted_at));
+        p.deleted = deleted
+            .into_iter()
+            .filter(found)
+            .map(|a| DeletedRow {
+                id: a.id,
+                issuer: a.issuer.clone(),
+                username: a.username.clone(),
+                days_left: a.deleted_at.map_or(0, |at| trash::days_left(at, now)),
+                website: a.website.clone(),
+                icon: a.icon.as_deref().map(std::sync::Arc::from),
+            })
+            .collect();
         p.rows = accounts
             .into_iter()
-            .filter(|a| {
-                search::matches_search(&a.issuer, &a.username, query)
-                    || a.website.as_deref().is_some_and(|w| search::matches_search(w, "", query))
-            })
+            .filter(|a| !a.is_deleted())
+            .filter(found)
             .map(|a| Row {
                 id: a.id,
                 issuer: a.issuer.clone(),
@@ -710,7 +756,7 @@ impl Session {
             if draft.website.trim().is_empty() { None } else { Some(site_icon::normalized_website(&draft.website).ok_or(Error::Fields)?) };
         let wanted =
             dedup::deduplication_key(&fields.issuer, &fields.username, &fields.secret, fields.algorithm, fields.digits, fields.period, &ph);
-        if next.0.accounts.iter().any(|a| Some(a.id) != draft.id && dedup::account_deduplication_key(a, &ph) == wanted) {
+        if next.0.accounts.iter().any(|a| Some(a.id) != draft.id && !a.is_deleted() && dedup::account_deduplication_key(a, &ph) == wanted) {
             return Err(Error::Duplicate);
         }
         if let Some(id) = draft.id {
@@ -742,6 +788,7 @@ impl Session {
                     added_by: "manual".into(),
                     website,
                     icon: None,
+                    deleted_at: None,
                 },
             );
             if let Some(cat) = draft.category {
@@ -752,7 +799,15 @@ impl Session {
     }
     pub fn detail(&mut self, id: Uuid) -> Result<Detail, Error> {
         self.guard()?;
-        let a = self.contents.as_ref().ok_or(Error::Locked)?.0.accounts.iter().find(|a| a.id == id).ok_or(Error::NotFound)?;
+        let a = self
+            .contents
+            .as_ref()
+            .ok_or(Error::Locked)?
+            .0
+            .accounts
+            .iter()
+            .find(|a| a.id == id && !a.is_deleted())
+            .ok_or(Error::NotFound)?;
         Ok(Detail {
             id,
             issuer: a.issuer.clone(),
@@ -799,7 +854,7 @@ impl Session {
             .0
             .accounts
             .iter()
-            .filter(|a| a.icon.is_none())
+            .filter(|a| a.icon.is_none() && !a.is_deleted())
             .filter_map(|a| a.website.clone().map(|w| (a.id, w)))
             .collect())
     }
@@ -812,12 +867,21 @@ impl Session {
             .0
             .accounts
             .iter()
+            .filter(|a| !a.is_deleted())
             .map(|a| Choice { id: a.id, issuer: a.issuer.clone(), username: a.username.clone() })
             .collect())
     }
     pub fn edit_draft(&mut self, id: Uuid) -> Result<Draft, Error> {
         self.guard()?;
-        let a = self.contents.as_ref().ok_or(Error::Locked)?.0.accounts.iter().find(|a| a.id == id).ok_or(Error::NotFound)?;
+        let a = self
+            .contents
+            .as_ref()
+            .ok_or(Error::Locked)?
+            .0
+            .accounts
+            .iter()
+            .find(|a| a.id == id && !a.is_deleted())
+            .ok_or(Error::NotFound)?;
         Ok(Draft {
             id: Some(id),
             issuer: a.issuer.clone(),
@@ -830,20 +894,46 @@ impl Session {
             ..Default::default()
         })
     }
+    /// Moves an account to Recently Deleted: it keeps its secret, place and categories until it is recovered or removed.
     pub fn delete_account(&mut self, id: Uuid) -> Result<(), Error> {
         self.guard()?;
         let mut next = Sensitive(self.contents.as_ref().ok_or(Error::Locked)?.0.clone());
-        if !next.0.accounts.iter().any(|a| a.id == id) {
+        let now = self.clock.wall();
+        let a = next.0.accounts.iter_mut().find(|a| a.id == id && !a.is_deleted()).ok_or(Error::NotFound)?;
+        a.deleted_at = Some(now);
+        self.persist(next)
+    }
+    /// Puts an account from Recently Deleted back where it was.
+    pub fn recover_account(&mut self, id: Uuid) -> Result<(), Error> {
+        self.guard()?;
+        let mut next = Sensitive(self.contents.as_ref().ok_or(Error::Locked)?.0.clone());
+        let a = next.0.accounts.iter_mut().find(|a| a.id == id && a.is_deleted()).ok_or(Error::NotFound)?;
+        a.deleted_at = None;
+        self.persist(next)
+    }
+    /// Removes accounts from Recently Deleted for good (all of them when `ids` is `None`): their secrets are wiped.
+    pub fn remove_deleted(&mut self, ids: Option<&[Uuid]>) -> Result<(), Error> {
+        self.guard()?;
+        let contents = &self.contents.as_ref().ok_or(Error::Locked)?.0;
+        let gone: Vec<Uuid> =
+            contents.accounts.iter().filter(|a| a.is_deleted() && ids.is_none_or(|ids| ids.contains(&a.id))).map(|a| a.id).collect();
+        if gone.is_empty() {
             return Err(Error::NotFound);
         }
-        for a in &mut next.0.accounts {
-            if a.id == id {
-                a.secret.zeroize();
-            }
-        }
-        next.0.accounts.retain(|a| a.id != id);
-        next.0.categories = category::removing_accounts(&next.0.categories, &[id]);
+        let next = Sensitive(trash::removing(contents, &gone));
         self.persist(next)
+    }
+    /// Removes the accounts that have been in Recently Deleted for [`trash::RETENTION`]; `false` when none were due.
+    pub fn purge_deleted(&mut self) -> Result<bool, Error> {
+        self.guard()?;
+        let contents = &self.contents.as_ref().ok_or(Error::Locked)?.0;
+        let due = trash::expired(&contents.accounts, self.clock.wall());
+        if due.is_empty() {
+            return Ok(false);
+        }
+        let next = Sensitive(trash::removing(contents, &due));
+        self.persist(next)?;
+        Ok(true)
     }
     pub fn category(&mut self, id: Option<Uuid>, name: &str) -> Result<(), Error> {
         self.guard()?;
@@ -903,18 +993,42 @@ impl Session {
     }
     pub fn reveal(&mut self, id: Uuid, password: &str, uri: bool) -> Result<Zeroizing<String>, Error> {
         self.verify(password)?;
-        let a = self.contents.as_ref().ok_or(Error::Locked)?.0.accounts.iter().find(|a| a.id == id).ok_or(Error::NotFound)?;
+        let a = self
+            .contents
+            .as_ref()
+            .ok_or(Error::Locked)?
+            .0
+            .accounts
+            .iter()
+            .find(|a| a.id == id && !a.is_deleted())
+            .ok_or(Error::NotFound)?;
         Ok(Zeroizing::new(if uri { canonical::otpauth_url(a, &placeholders()) } else { a.secret.clone() }))
     }
     /// One password challenge protects both views of the same account.
     pub fn reveal_pair(&mut self, id: Uuid, password: &str) -> Result<(Zeroizing<String>, Zeroizing<String>), Error> {
         self.verify(password)?;
-        let account = self.contents.as_ref().ok_or(Error::Locked)?.0.accounts.iter().find(|a| a.id == id).ok_or(Error::NotFound)?;
+        let account = self
+            .contents
+            .as_ref()
+            .ok_or(Error::Locked)?
+            .0
+            .accounts
+            .iter()
+            .find(|a| a.id == id && !a.is_deleted())
+            .ok_or(Error::NotFound)?;
         Ok((Zeroizing::new(account.secret.clone()), Zeroizing::new(canonical::otpauth_url(account, &placeholders()))))
     }
     pub fn copy_code(&mut self, id: Uuid) -> Result<(Zeroizing<String>, Duration), Error> {
         self.guard()?;
-        let a = self.contents.as_ref().ok_or(Error::Locked)?.0.accounts.iter().find(|a| a.id == id).ok_or(Error::NotFound)?;
+        let a = self
+            .contents
+            .as_ref()
+            .ok_or(Error::Locked)?
+            .0
+            .accounts
+            .iter()
+            .find(|a| a.id == id && !a.is_deleted())
+            .ok_or(Error::NotFound)?;
         let result = (Zeroizing::new(totp::account_code(a, self.clock.wall())), Duration::from_secs(u64::from(a.period)));
         self.activity();
         Ok(result)
@@ -942,17 +1056,16 @@ impl Session {
         Self::acceptable(password, confirmed)?;
         self.verify(current)?;
         let contents = &self.contents.as_ref().ok_or(Error::Locked)?.0;
-        let Some(ids) = ids else {
-            return Ok(vault::export(&contents.accounts, &contents.categories, password, self.clock.wall())?);
-        };
-        if ids.is_empty() {
+        if ids.is_some_and(<[Uuid]>::is_empty) {
             return Err(Error::Fields);
         }
+        // Accounts in Recently Deleted are never exported.
+        let wanted = |a: &Account| !a.is_deleted() && ids.is_none_or(|ids| ids.contains(&a.id));
         let chosen = Sensitive(VaultContents {
-            accounts: contents.accounts.iter().filter(|a| ids.contains(&a.id)).cloned().collect(),
+            accounts: contents.accounts.iter().filter(|a| wanted(a)).cloned().collect(),
             categories: category::removing_accounts(
                 &contents.categories,
-                &contents.accounts.iter().filter(|a| !ids.contains(&a.id)).map(|a| a.id).collect::<Vec<_>>(),
+                &contents.accounts.iter().filter(|a| !wanted(a)).map(|a| a.id).collect::<Vec<_>>(),
             ),
             ..Default::default()
         });
@@ -1009,6 +1122,7 @@ impl Session {
                 added_by: "import".into(),
                 website: None,
                 icon: None,
+                deleted_at: None,
             })
             .collect();
         self.merge(&Sensitive(VaultContents { accounts, ..Default::default() }).0)
@@ -1023,7 +1137,7 @@ impl Session {
         let placeholders = placeholders();
         let contents = self.contents.as_ref().ok_or(Error::Locked)?;
         let mut keys: std::collections::HashSet<String> =
-            contents.0.accounts.iter().map(|a| dedup::account_deduplication_key(a, &placeholders)).collect();
+            contents.0.accounts.iter().filter(|a| !a.is_deleted()).map(|a| dedup::account_deduplication_key(a, &placeholders)).collect();
         let known = otpauth::parse_lines(text, &placeholders)
             .into_iter()
             .filter(|p| p.is_valid())

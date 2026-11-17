@@ -52,6 +52,23 @@ pub mod date {
     }
 }
 
+/// An optional ISO-8601 date (`skip_serializing_if = "Option::is_none"` leaves it out when absent).
+pub mod optional_date {
+    use super::*;
+
+    pub fn serialize<S: Serializer>(date: &Option<SystemTime>, serializer: S) -> Result<S::Ok, S::Error> {
+        match date {
+            Some(date) => serializer.serialize_str(&format_date(*date)),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<SystemTime>, D::Error> {
+        let value = Option::<String>::deserialize(deserializer)?;
+        value.map(|value| parse_date(&value).ok_or_else(|| serde::de::Error::custom("invalid ISO-8601 date"))).transpose()
+    }
+}
+
 pub mod bytes {
     use super::*;
 

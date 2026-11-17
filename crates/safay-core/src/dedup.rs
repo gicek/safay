@@ -92,7 +92,9 @@ pub fn insert_accounts(
     now: SystemTime,
     placeholders: &Placeholders,
 ) -> Result<InsertResult, VaultError> {
-    let mut keys: HashSet<String> = existing.iter().map(|account| account_deduplication_key(account, placeholders)).collect();
+    // Accounts in Recently Deleted are not compared: adding one again makes a new account.
+    let mut keys: HashSet<String> =
+        existing.iter().filter(|account| !account.is_deleted()).map(|account| account_deduplication_key(account, placeholders)).collect();
     let mut accounts = existing.to_vec();
     let mut categories = categories.to_vec();
     let mut inserted_ids = Vec::new();
@@ -138,6 +140,7 @@ pub fn insert_accounts(
             added_by: added_by.to_owned(),
             website,
             icon,
+            deleted_at: None,
         };
         for name in &candidate.category_names {
             categories = category::adding_to_named(&categories, name, &[account.id], vault::random_uuid)?;
@@ -285,6 +288,7 @@ mod tests {
             added_by: "manual".into(),
             website: None,
             icon: None,
+            deleted_at: None,
         };
         let imported = VaultContents {
             accounts: vec![account(1), account(2)],

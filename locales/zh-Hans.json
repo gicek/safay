@@ -91,7 +91,6 @@
   "Delete Account": "删除账户",
   "Delete Category": "删除分类",
   "Delete the category “{}”?": "删除分类「{}」？",
-  "Delete “{}”?": "删除“{}”？",
   "Deselect All": "取消全选",
   "Details": "详情",
   "Different on both sides ({})": "两边不同（{}）",
@@ -501,5 +500,19 @@
   "This account is no longer in Safay": "该账户已不在 Safay 中",
   "Install Alfred Workflow": "安装 Alfred 工作流",
   "Import the Alfred workflow to search accounts and copy codes with a keyword": "导入 Alfred 工作流，使用关键词搜索账户并复制验证码",
-  "Install to Alfred": "安装到 Alfred"
+  "Install to Alfred": "安装到 Alfred",
+  "Recently Deleted": "最近删除",
+  "Moved “{}” to Recently Deleted": "已将“{}”移到最近删除",
+  "Recovered “{}”": "已恢复“{}”",
+  "Delete “{}” now?": "要立即删除“{}”吗？",
+  "You can’t undo this action.": "此操作无法撤销。",
+  "Delete all accounts in Recently Deleted?": "要删除“最近删除”中的所有账户吗？",
+  "Delete All": "全部删除",
+  "Accounts are deleted for good 30 days after you delete them.": "账户删除 30 天后将被永久清除。",
+  "Recover": "恢复",
+  "Delete Now": "立即删除",
+  "deleted-for-good.one": "{} 个账户将被永久删除。此操作无法撤销。",
+  "deleted-for-good.other": "{} 个账户将被永久删除。此操作无法撤销。",
+  "days-left.one": "{} 天",
+  "days-left.other": "{} 天"
 }

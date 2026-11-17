@@ -71,6 +71,17 @@ directory; `CloudBackend` drives `cloudset`; the iCloud backend uses CloudKit. T
 local vault, the remote copy and the last synced state and returns upload, download, conflict or "cannot open". Saves
 are debounced into one sync after two seconds; unlocking and linking sync at once. Only the main window runs syncs.
 
+On a conflict the user reviews the differences and merges (`safay_core::merge`). A deleted account is never a
+difference: a merge keeps the deletion of an account deleted on either side, so it reaches the other devices.
+
+## Recently Deleted
+
+Deleting an account sets its `deletedAt` (`safay_core::trash`); it keeps its secret, place and categories, and is left
+out of every list, count, search, export, launcher index and duplicate check. Recovering clears the field. Thirty days
+after deletion — checked when the vault opens and hourly — or when the user deletes it from Recently Deleted or empties
+it, the account is removed and its secret wiped. Versions 1.1 and earlier ignore the field: they show such an account as in
+use, and drop the deletion if they save the vault.
+
 ## Networking
 
 Requests are built by the core and executed by `src/platform/http.rs` (`ureq` + rustls with the platform verifier),

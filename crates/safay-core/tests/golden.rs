@@ -171,6 +171,7 @@ fn canonical_matches_mac() {
             added_by: provenance::MANUAL.into(),
             website: None,
             icon: None,
+            deleted_at: None,
         };
         assert_eq!(canonical::otpauth_url(&account, &p), text(&case["url"]), "{case}");
     }

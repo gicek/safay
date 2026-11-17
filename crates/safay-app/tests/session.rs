@@ -458,3 +458,59 @@ fn a_released_key_unlocks_and_proves_identity_once_and_goes_stale_with_a_new_pas
     assert_eq!(s.unlock_with_key(&key), Err(Error::StaleKey));
     assert!(!s.projection("", None).unwrap().unlocked);
 }
+#[test]
+fn deleted_accounts_wait_in_recently_deleted_then_go() {
+    let (mut s, _, time, _) = setup();
+    s.create(PASSWORD, false).unwrap();
+    s.save_account(&draft()).unwrap();
+    let mut other = draft();
+    other.issuer = "Other".into();
+    other.secret = "GEZDGNBVGY3TQOJQ".into();
+    s.save_account(&other).unwrap();
+    s.category(None, "Work").unwrap();
+    let p = s.projection("", None).unwrap();
+    let (work, sample) = (p.categories[0].id, p.rows.iter().find(|r| r.issuer == "RFC sample").unwrap().id);
+    s.membership(work, sample, true).unwrap();
+
+    // Deleting moves it out of every list, count and duplicate check, keeping its category for recovery.
+    s.delete_account(sample).unwrap();
+    let p = s.projection("", None).unwrap();
+    assert_eq!((p.account_count, p.rows.len(), p.deleted_count), (1, 1, 1));
+    assert_eq!((p.deleted[0].issuer.as_str(), p.deleted[0].days_left), ("RFC sample", 30));
+    assert_eq!(p.categories[0].count, 0);
+    assert!(s.projection("", Some(work)).unwrap().rows.is_empty());
+    assert_eq!(s.projection("rfc", None).unwrap().deleted.len(), 1);
+    assert_eq!(s.projection("nothing", None).unwrap().deleted.len(), 0);
+    assert_eq!(s.copy_code(sample).unwrap_err(), Error::NotFound);
+    assert_eq!(s.delete_account(sample), Err(Error::NotFound));
+    assert_eq!(s.choices().unwrap().len(), 1);
+
+    // It survives locking, and comes back where it was.
+    s.lock();
+    s.unlock(PASSWORD).unwrap();
+    assert_eq!(s.projection("", None).unwrap().deleted_count, 1);
+    s.recover_account(sample).unwrap();
+    let p = s.projection("", None).unwrap();
+    assert_eq!((p.account_count, p.deleted_count, p.categories[0].count), (2, 0, 1));
+
+    // Removing it for good, one or all.
+    s.delete_account(sample).unwrap();
+    s.remove_deleted(Some(&[sample])).unwrap();
+    assert_eq!(s.projection("", None).unwrap().deleted_count, 0);
+    assert_eq!(s.remove_deleted(None), Err(Error::NotFound));
+
+    // A re-added account is new while the deleted one waits; after thirty days the deleted one goes on its own.
+    s.save_account(&draft()).unwrap();
+    let again = s.projection("", None).unwrap().rows.iter().find(|r| r.issuer == "RFC sample").unwrap().id;
+    s.delete_account(again).unwrap();
+    s.save_account(&draft()).unwrap();
+    assert_eq!(s.projection("", None).unwrap().account_count, 2);
+    assert!(!s.purge_deleted().unwrap());
+    time.advance(30 * 24 * 60 * 60);
+    // Thirty days later auto-lock has long passed.
+    s.lock();
+    s.unlock(PASSWORD).unwrap();
+    assert!(s.purge_deleted().unwrap());
+    let p = s.projection("", None).unwrap();
+    assert_eq!((p.account_count, p.deleted_count), (2, 0));
+}

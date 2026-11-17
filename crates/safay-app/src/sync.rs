@@ -458,8 +458,8 @@ impl Session {
         let diff = merge::diff(&local.0, &theirs.0, &placeholders());
         let pair = |a: &safay_core::Account| (a.issuer.clone(), a.username.clone());
         Ok(Review {
-            local_count: local.0.accounts.len(),
-            remote_count: theirs.0.accounts.len(),
+            local_count: local.0.accounts.iter().filter(|a| !a.is_deleted()).count(),
+            remote_count: theirs.0.accounts.iter().filter(|a| !a.is_deleted()).count(),
             remote_device: remote.device.clone(),
             only_local: diff.only_local.iter().map(pair).collect(),
             only_remote: diff.only_remote.iter().map(pair).collect(),

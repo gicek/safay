@@ -156,6 +156,9 @@ pub enum Payload {
     Imported(usize),
     /// One account added by hand: its service name, for the toast.
     Added(String),
+    /// An account moved to Recently Deleted (its service name; `true` from its details sheet), or back from it.
+    Deleted(String, bool),
+    Recovered(String),
     Export(Vec<u8>, usize),
     Detail(Detail),
     Choices(Vec<Choice>),
@@ -192,6 +195,8 @@ pub struct Store {
     pub toast: Signal<Option<Status>>,
     pub query: Signal<String>,
     pub category: Signal<Option<Uuid>>,
+    /// Recently Deleted is shown instead of All or a category.
+    pub trash: Signal<bool>,
     pub sheet: Signal<Option<Sheet>>,
     pub auth: Signal<Option<Auth>>,
     pub auth_password: Signal<Zeroizing<String>>,
@@ -313,6 +318,7 @@ impl Store {
             toast: signal(None),
             query: signal(String::new()),
             category: signal(None),
+            trash: signal(false),
             sheet: signal(None),
             auth: signal(None),
             auth_password: signal(Zeroizing::new(String::new())),
@@ -638,6 +644,13 @@ impl Store {
                     self.show_toast(Tone::Success, text);
                 }
             }
+            Payload::Deleted(issuer, in_sheet) => {
+                if in_sheet {
+                    self.close_sheet();
+                }
+                self.show_toast(Tone::Info, self.fmt("Moved “{}” to Recently Deleted", &[&issuer]));
+            }
+            Payload::Recovered(issuer) => self.show_toast(Tone::Success, self.fmt("Recovered “{}”", &[&issuer])),
             Payload::Added(issuer) => {
                 self.close_sheet();
                 self.show_toast(Tone::Success, self.fmt("Added {}", &[&issuer]));
@@ -1226,24 +1239,62 @@ impl Store {
             Ok(Payload::Restored)
         });
     }
+    /// Moves an account to Recently Deleted, at once: it can be recovered there for thirty days.
     pub fn delete_account(self, id: Uuid) {
         let issuer = self
             .projection
             .with(|p| p.rows.iter().find(|r| r.id == id).map(|r| r.issuer.clone()))
             .unwrap_or_else(|| self.detail.with(|d| d.as_ref().map(|d| d.issuer.clone())).unwrap_or_default());
-        let chosen = crate::alert::alert(self.fmt("Delete “{}”?", &[&issuer]))
-            .cancel("cancel", self.label("Cancel"))
-            .destructive("delete", self.label("Delete"))
-            .show();
+        let in_sheet = self.sheet.get().is_some();
+        self.dispatch(true, move |s| {
+            s.delete_account(id)?;
+            Ok(Payload::Deleted(issuer, in_sheet))
+        });
+    }
+    /// Puts an account from Recently Deleted back.
+    pub fn recover_account(self, id: Uuid) {
+        let issuer = self.deleted_issuer(id);
+        self.dispatch(true, move |s| {
+            s.recover_account(id)?;
+            Ok(Payload::Recovered(issuer))
+        });
+    }
+    fn deleted_issuer(self, id: Uuid) -> String {
+        self.projection.with(|p| p.deleted.iter().find(|r| r.id == id).map(|r| r.issuer.clone())).unwrap_or_default()
+    }
+    /// Deletes accounts in Recently Deleted for good (one, or all of them), after the user confirms.
+    pub fn remove_deleted(self, id: Option<Uuid>) {
+        let count = self.projection.with(|p| p.deleted_count);
+        let dialog = match id {
+            Some(id) => crate::alert::alert(self.fmt("Delete “{}” now?", &[&self.deleted_issuer(id)]))
+                .description(self.label("You can’t undo this action."))
+                .destructive("delete", self.label("Delete")),
+            None => crate::alert::alert(self.label("Delete all accounts in Recently Deleted?"))
+                .description(self.count("deleted-for-good", count))
+                .destructive("delete", self.label("Delete All")),
+        };
+        let chosen = dialog.cancel("cancel", self.label("Cancel")).show();
         let epoch = self.controller.get().epoch();
         self.task(async move {
             if chosen.await == Some("delete") && self.controller.get().epoch() == epoch {
-                let in_sheet = self.sheet.get().is_some();
                 self.dispatch(true, move |s| {
-                    s.delete_account(id)?;
-                    Ok(if in_sheet { Payload::Saved } else { Payload::Silent })
+                    match id {
+                        Some(id) => s.remove_deleted(Some(&[id]))?,
+                        None => s.remove_deleted(None)?,
+                    }
+                    Ok(Payload::Silent)
                 });
             }
+        });
+    }
+    /// Removes what has been in Recently Deleted for thirty days (the main window: on unlocking, then hourly).
+    fn purge_deleted(self) {
+        if self.surface != Surface::Main || !self.unlocked() {
+            return;
+        }
+        self.dispatch(false, |s| {
+            s.purge_deleted()?;
+            Ok(Payload::Silent)
         });
     }
     pub fn membership(self, category: Uuid, account: Uuid, add: bool) {
@@ -1440,6 +1491,24 @@ impl Store {
         });
         self.refresh_updates();
         self.schedule_updates();
+        // Recently Deleted: what has waited thirty days goes when the vault opens, then hourly; once it is empty, the
+        // main window goes back to All.
+        let was_unlocked = signal(false);
+        effect(move || {
+            let unlocked = self.unlocked();
+            if untracked(|| was_unlocked.get()) != unlocked {
+                was_unlocked.set(unlocked);
+                if unlocked {
+                    untracked(|| self.purge_deleted());
+                }
+            }
+        });
+        set_interval(Duration::from_secs(60 * 60), move || self.purge_deleted());
+        effect(move || {
+            if self.trash.get() && self.ready.get() && self.projection.with(|p| p.unlocked && p.deleted_count == 0) {
+                self.trash.set(false);
+            }
+        });
     }
     /// Mirrors the updater's phase (one updater per process; the main window and Settings both show it).
     pub fn refresh_updates(self) {

@@ -199,6 +199,36 @@ fn category_inline_create_and_delete_confirmation_keeps_accounts() {
     app.wait_for("No accounts in “Work” yet").unwrap();
 }
 #[test]
+fn deleted_accounts_wait_in_recently_deleted() {
+    use nsh_testing::DialogAnswer;
+    let mut app = open();
+    create(&mut app);
+    paste(&mut app, SAMPLE);
+    app.wait_for("Fixture").unwrap();
+    // Deleting asks nothing: the account moves to Recently Deleted, which the sidebar then shows.
+    app.press("role:button[Details]").unwrap();
+    app.press("role:button[Delete Account]").unwrap();
+    app.wait_for("Moved “Fixture” to Recently Deleted").unwrap();
+    app.wait_for("No 2FA accounts yet").unwrap();
+    app.press("role:button[Recently Deleted]").unwrap();
+    app.wait_for("30 days").unwrap();
+    assert!(app.screen().texts().contains(&"Fixture"));
+    app.press("role:button[Recover]").unwrap();
+    app.wait_for("Recovered “Fixture”").unwrap();
+    // Emptied, Recently Deleted goes away and All shows again.
+    app.wait_for("role:button[Details]").unwrap();
+    app.press("role:button[Details]").unwrap();
+    app.wait_for("Account Details").unwrap();
+    app.press("role:button[Delete Account]").unwrap();
+    app.wait_for("role:button[Recently Deleted]").unwrap();
+    app.press("role:button[Recently Deleted]").unwrap();
+    app.wait_for("30 days").unwrap();
+    app.on_dialog(|_| DialogAnswer::Press("Delete All".into()));
+    app.press("role:button[Delete All]").unwrap();
+    app.wait_for("No 2FA accounts yet").unwrap();
+    app.wait_for_gone("Recently Deleted", Duration::from_secs(5)).unwrap();
+}
+#[test]
 fn duplicate_import_is_reported_in_the_sheet() {
     let mut app = open();
     create(&mut app);

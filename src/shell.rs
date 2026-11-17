@@ -344,6 +344,9 @@ fn toolbar(s: Store) -> impl IntoElement {
         .child(
             heading(
                 move || {
+                    if s.trash.get() {
+                        return s.label("Recently Deleted");
+                    }
                     s.category
                         .get()
                         .and_then(|id| {
@@ -358,7 +361,8 @@ fn toolbar(s: Store) -> impl IntoElement {
         )
         .child(spacer())
         .child(tool_button(move || s.label("Lock"), Icon::Lock).on_press(move || s.lock()))
-        .child(view_picker(s))
+        // Recently Deleted is a plain list.
+        .child(when(move || !s.trash.get(), move || view_picker(s)))
         .child(search_field(s))
         .child(add_button(s))
 }

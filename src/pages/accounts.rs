@@ -89,7 +89,7 @@ fn sidebar_row(
 }
 
 pub fn sidebar(s: Store) -> impl IntoElement {
-    let all_active = move || s.category.get().is_none();
+    let all_active = move || s.category.get().is_none() && !s.trash.get();
     let r = Reorder::new(s, reorder::Kind::Categories);
     view()
         .child(escape_cancels(r))
@@ -121,12 +121,34 @@ pub fn sidebar(s: Store) -> impl IntoElement {
                                 all_active,
                             )
                             .on_press(move || {
+                                s.trash.set(false);
                                 s.category.set(None);
                                 s.refresh();
                             }),
                         )
                         .child(categories(s, r))
-                        .child(when(move || s.editing.with(|e| e.as_ref().is_some_and(|e| e.id.is_none())), move || category_editor(s))),
+                        .child(when(move || s.editing.with(|e| e.as_ref().is_some_and(|e| e.id.is_none())), move || category_editor(s)))
+                        // Shown while it holds something, after the categories, as in Notes.
+                        .child(when(
+                            move || s.projection.with(|p| p.deleted_count > 0),
+                            move || {
+                                view().pt(px(8.0)).child(
+                                    sidebar_row(
+                                        s,
+                                        Icon::Trash,
+                                        move || s.label("Recently Deleted"),
+                                        move || Some(s.projection.with(|p| p.deleted_count)),
+                                        move || s.trash.get(),
+                                    )
+                                    .on_press(move || {
+                                        s.trash.set(true);
+                                        s.category.set(None);
+                                        s.query.set(String::new());
+                                        s.refresh();
+                                    }),
+                                )
+                            },
+                        )),
                 ),
         )
         .child(view().px(px(6.0)).pb(px(6.0)).child(divider()))
@@ -228,6 +250,7 @@ fn category_row(s: Store, r: Reorder, cat: ReadSignal<safay_app::session::Catego
             .child(
                 sidebar_row(s, Icon::Folder, move || cat.with(|c| c.name.clone()).into(), move || Some(cat.with(|c| c.count)), active)
                     .on_press(move || {
+                        s.trash.set(false);
                         s.category.set(Some(id()));
                         s.refresh();
                     }),
@@ -315,6 +338,9 @@ fn category_editor(s: Store) -> impl IntoElement {
 // ---------------------------------------------------------------- accounts
 
 pub fn page(s: Store) -> impl IntoElement {
+    when(move || s.trash.get(), move || super::trash::page(s)).otherwise(move || accounts_page(s))
+}
+fn accounts_page(s: Store) -> impl IntoElement {
     let r = Reorder::new(s, reorder::Kind::Accounts);
     view().flex_1().child(escape_cancels(r)).child(
         when(move || s.projection.with(|p| p.rows.is_empty()), move || empty_state(s)).otherwise(move || {

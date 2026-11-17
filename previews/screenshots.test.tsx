@@ -62,6 +62,20 @@ test("main window: accounts, layouts and categories", async () => {
   await app.press("role:button[Copy code for GitHub]");
   await app.waitFor("Copied");
   await shot(app, "copied");
+  // Deleting moves accounts to Recently Deleted, which the sidebar then lists.
+  for (const name of ["GitHub", "Google"]) {
+    await app.press("role:button[Details] >> nth=0");
+    await app.waitFor("Account Details");
+    await app.press("role:button[Delete Account]");
+    await app.waitFor(`Moved “${name}” to Recently Deleted`);
+  }
+  await shot(app, "deleted");
+  await app.press("role:button[Recently Deleted]");
+  await app.waitFor("30 days");
+  await shot(app, "recently-deleted");
+  await app.setColorScheme("dark");
+  await shot(app, "recently-deleted-dark");
+  await app.setColorScheme("light");
 }, 2 * minute);
 
 test("main window: sheets", async () => {

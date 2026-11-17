@@ -5,5 +5,6 @@ pub mod quick;
 pub mod reorder;
 pub mod settings;
 pub mod sheets;
+pub mod trash;
 pub mod unlock;
 pub mod update;

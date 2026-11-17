@@ -138,6 +138,9 @@ struct PersistedAccount {
     /// Base64 PNG.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     icon: Option<String>,
+    /// Set while the account is in Recently Deleted.
+    #[serde(rename = "deletedAt", default, skip_serializing_if = "Option::is_none", with = "json::optional_date")]
+    deleted_at: Option<SystemTime>,
 }
 
 impl PersistedAccount {
@@ -154,6 +157,7 @@ impl PersistedAccount {
             added_by: account.added_by.clone(),
             website: account.website.clone(),
             icon: account.icon.as_ref().map(|icon| base64::engine::general_purpose::STANDARD.encode(icon)),
+            deleted_at: account.deleted_at,
         }
     }
 
@@ -178,6 +182,7 @@ impl PersistedAccount {
             added_by: self.added_by,
             website,
             icon,
+            deleted_at: self.deleted_at,
         })
     }
 }
@@ -576,6 +581,7 @@ mod tests {
             added_by: provenance::MANUAL.into(),
             website: None,
             icon: None,
+            deleted_at: None,
         }]
     }
 
@@ -606,6 +612,19 @@ mod tests {
         assert_eq!(unlock(&data, "wrong").unwrap_err(), VaultError::InvalidPassword);
         assert_eq!(unlock(&data, "   ").unwrap_err(), VaultError::EmptyPassword);
         assert_eq!(unlock(b"{}", "x").unwrap_err(), VaultError::CorruptVault);
+    }
+
+    #[test]
+    fn deletion_time_round_trips_and_is_absent_for_accounts_in_use() {
+        let mut accounts = sample_accounts();
+        let in_use = accounts[0].clone();
+        accounts[0].deleted_at = Some(UNIX_EPOCH + Duration::from_secs(1_750_000_000));
+        accounts.push(Account { id: Uuid::from_u128(7), ..in_use });
+        let contents = VaultContents { accounts: accounts.clone(), ..Default::default() };
+        let (data, key) = create("correct horse", &contents, now()).unwrap();
+        assert_eq!(open(&data, &key).unwrap().accounts, accounts);
+        let plaintext = String::from_utf8(payload_json(&accounts, &[], now()).to_vec()).unwrap();
+        assert_eq!(plaintext.matches("\"deletedAt\"").count(), 1);
     }
 
     #[test]

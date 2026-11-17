@@ -36,6 +36,9 @@ appearance only — never capabilities.
   to the toolbar's add button and to "Import / Export".
 - **Account actions** use native context menus: copy, add to or remove from categories, details, QR code, move up/down,
   delete. Cards and rows can be dragged to reorder; categories too.
+- **Recently Deleted**: deleting asks nothing and moves the account to Recently Deleted, which the sidebar lists after
+  the categories while it holds something. It is a plain list without codes: each row shows the days left, recovers
+  from its "Recover" button or menu, or is deleted now from its menu; "Delete All" empties it. Both ask first.
 - **Sheets**: Add Account 620 pt (scan, key, links), Details 540, QR code 420, Import/Export 660, Change Password 460,
   Backup & Sync 640. A 56 pt header, 22 × 18 pt content padding, a footer with the actions and the only error line.
 - **Lock screen**: the app icon, a 220 pt capsule password field, Return to unlock; with Touch ID, a fingerprint button
