@@ -3,6 +3,22 @@
 Each version's section translates the one in CHANGELOG.md, item for item. The update window shows it to people who use
 Safay in Traditional Chinese.
 
+## [1.1.1] - 2026-11-17
+
+刪除的帳號會在「最近刪除」裡保留 30 天，隨時可以找回。
+
+### 新增
+
+- **最近刪除**：刪除的帳號會在側邊欄的「最近刪除」裡保留 30 天，可以復原，也可以立即永久刪除。
+
+### 變更
+
+- **設定**：名稱和說明更清楚，「在選單列中啟動」移到選單列圖示旁邊，自動鎖定新增 15 分鐘。
+
+### 修正
+
+- 在設定裡錄製新的鍵盤快速鍵不會再讓 Safay 結束。
+
 ## [1.1.0] - 2026-11-17
 
 Safay 換上了取自圖示的靛藍色，新版本會在更新視窗裡附上更新說明。

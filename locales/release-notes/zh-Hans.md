@@ -3,6 +3,22 @@
 Each version's section translates the one in CHANGELOG.md, item for item. The update window shows it to people who use
 Safay in Simplified Chinese.
 
+## [1.1.1] - 2026-11-17
+
+删除的账户会在“最近删除”里保留 30 天，随时可以找回。
+
+### 新增
+
+- **最近删除**：删除的账户会在侧边栏的“最近删除”里保留 30 天，可以恢复，也可以立即彻底删除。
+
+### 变更
+
+- **设置**：名称和说明更清楚，“在菜单栏中启动”移到菜单栏图标旁边，自动锁定新增 15 分钟。
+
+### 修复
+
+- 在设置里录制新的键盘快捷键不会再让 Safay 退出。
+
 ## [1.1.0] - 2026-11-17
 
 Safay 换上了取自图标的靛蓝色，新版本会在更新窗口里附上更新说明。

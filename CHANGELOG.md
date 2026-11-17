@@ -5,6 +5,10 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-17
+
+Deleted accounts wait in Recently Deleted for 30 days, so you can bring them back.
+
 ### Added
 
 - **Recently Deleted**: deleted accounts wait in the sidebar's "Recently Deleted" for 30 days, where you can recover them or delete them for good.
