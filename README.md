@@ -6,13 +6,18 @@ shows the current codes, and backs the vault up to a location you choose — wit
 The interface is written in Rust with [NSH](https://github.com/longbridge/nsh), a native UI framework, so one code base
 renders native windows on macOS, Windows and Linux.
 
-> **Status: early development.** macOS (Apple silicon, macOS 14 or later) is the primary platform. Windows and Linux
-> build from the same code but have not yet been run end to end; see [Platforms](docs/PLATFORMS.md).
-
-**Download**: the signed and notarized DMG for macOS is on the
-[latest release](https://github.com/gicek/safay/releases/latest). Safay updates itself after you agree.
-
 ![Accounts](docs/img/accounts-light.png)
+
+## Download
+
+| Platform | Get it |
+|---|---|
+| **macOS** 14 or later, Apple silicon | `Safay-<version>.dmg` from the [latest release](https://github.com/gicek/safay/releases/latest): open it and drag Safay to Applications. Signed and notarized. |
+| **Windows**, **Linux** | Not published yet. They build from the same code but have not been run end to end; see [Platforms](docs/PLATFORMS.md) and [Getting started](#getting-started). |
+
+On its second launch Safay asks whether to check for updates once a day; each new version then opens in its update
+window, or downloads and installs on its own if you choose. The other files on each release — the zip, the `.tar.gz` update archive and `latest.json` — are for the
+updater and for scripts; you don't need them to install. Each release's notes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Features
 

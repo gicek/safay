@@ -84,8 +84,12 @@ authentication and signed distribution are checked by hand.
 python3 scripts/nsh.py test previews/screenshots.test.tsx --target macos --foreground
 ```
 
-Check every image after a UI change, and copy the ones the README shows into `docs/img`. `--foreground` gives the
-window focus so selected rows and segments show their active colours.
+Check every image after a UI change. `--foreground` gives the window focus so selected rows and segments show their
+active colors. Run it with the screen unlocked: where the window server gives no picture, NSH draws the window in
+process, without its title bar buttons.
+
+`python3 scripts/readme_images.py` (needs Pillow) copies the pictures the README shows into `docs/img`, with the
+window's rounded corners at all four corners and transparency outside them.
 
 ## Packaging (macOS)
 
