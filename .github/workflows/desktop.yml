@@ -54,6 +54,8 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: NSH features
+        run: make nsh-features
       - name: Launcher integrations are current
         run: python3 scripts/integrations.py --check
       - name: Rust and headless UI tests

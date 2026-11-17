@@ -29,7 +29,7 @@ else
   HOST_TRIPLE := x86_64-pc-windows-msvc
 endif
 
-.PHONY: help all ci build build-release run preview fmt fmt-check lint raycast check test test-ui test-native screenshots \
+.PHONY: help all ci build build-release run preview fmt fmt-check lint nsh-features raycast check test test-ui test-native screenshots \
 	package package-adhoc package-release open icloud-check release update-keygen nsh-ready nsh-install nsh-update audit clean clean-all
 
 help: ## List the targets
@@ -64,9 +64,15 @@ fmt: ## Format the code
 fmt-check: ## Check formatting only
 	$(CARGO) fmt --all -- --check
 
-lint: ## clippy, warnings as errors; the launcher integrations' generated text and script are current
+lint: nsh-features ## clippy, warnings as errors; the launcher integrations' generated text and script are current
 	$(CARGO) clippy --workspace --all-targets --locked -- -D warnings
 	python3 scripts/integrations.py --check
+
+# The UI tests' hosts and `cargo test` (through dev-dependencies) always have NSH's `svg`; only the app's own build
+# shows whether the platform crate turns it on. Without it every icon and the countdown ring draw nothing.
+nsh-features: ## the app's build links the NSH features it needs (svg)
+	@$(CARGO) tree --locked -e normal,features -i nsh-core --prefix none | grep -q 'nsh-core feature "svg"' \
+		|| { echo "NSH is built without svg: add it to the nsh-platform-* features in Cargo.toml" >&2; exit 1; }
 
 raycast: ## build and lint the Raycast / Tinycast extension (integrations/raycast; needs Node)
 	python3 scripts/integrations.py

@@ -48,7 +48,7 @@ NSH's agent skills (`nsh`, `nsh-design-guides`) are not vendored. Coding agents 
 | `make run` | Run with the real local vault (development app ID, so release data is untouched) |
 | `make ci` | Formatting, clippy, `cargo test`, `nsh check`, headless and native UI tests — the CI sequence (CI runs it on macOS) |
 | `make all` | `make ci`, then the development package |
-| `make lint` | Clippy with warnings as errors; checks generated launcher files are current |
+| `make lint` | Clippy with warnings as errors; checks generated launcher files are current and that the app links NSH's `svg` feature |
 | `make test` / `test-ui` / `test-native` | Rust tests; NSH headless UI tests; NSH tests on this host's native backend |
 | `make screenshots` | Capture every page into `docs/screenshots` (macOS; takes the foreground, the screen must be unlocked) |
 | `make package` | Development app bundle (macOS) |

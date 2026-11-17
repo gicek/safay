@@ -41,7 +41,8 @@ dispatch2 = "=0.3.1"
 libc = "=0.2.189"
 block2 = "=0.6.2"
 objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSData", "NSDictionary", "NSValue", "NSString", "NSError", "NSObject", "NSGeometry", "NSBundle", "NSURL", "NSArray", "NSDate", "NSNotification", "NSDistributedNotificationCenter", "NSScriptCommand", "NSAppleEventDescriptor"] }
-nsh-platform-macos = { git = "https://github.com/longbridge/nsh", branch = "main", default-features = false }
+# Only the platform features the app uses: `svg` draws the SVG icons and the countdown ring.
+nsh-platform-macos = { git = "https://github.com/longbridge/nsh", branch = "main", default-features = false, features = ["svg"] }
 tempfile = "=3.27.0"
 keyring = { version = "=3.6.3", default-features = false, features = ["apple-native"] }
 objc2-authentication-services = { version = "=0.3.2", default-features = false, features = ["std", "ASWebAuthenticationSession", "ASFoundation", "block2"] }
@@ -53,10 +54,10 @@ objc2-core-video = { version = "=0.3.2", default-features = false, features = ["
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "=3.6.3", default-features = false, features = ["windows-native"] }
 windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Controls", "Win32_System_RemoteDesktop", "Win32_System_LibraryLoader"] }
-nsh-platform-windows = { git = "https://github.com/longbridge/nsh", branch = "main", default-features = false }
+nsh-platform-windows = { git = "https://github.com/longbridge/nsh", branch = "main", default-features = false, features = ["svg"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-nsh-platform-linux = { git = "https://github.com/longbridge/nsh", branch = "main", default-features = false }
+nsh-platform-linux = { git = "https://github.com/longbridge/nsh", branch = "main", default-features = false, features = ["svg"] }
 
 [dev-dependencies]
 ed25519-dalek = "=2.2.0"
