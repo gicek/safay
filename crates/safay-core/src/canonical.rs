@@ -148,7 +148,8 @@ const QUERY_VALUE_ENCODE_SET: &AsciiSet = &NON_ALPHANUMERIC
     .remove(b'/')
     .remove(b'?');
 
-/// Standard otpauth URI for single-account QR code export.
+/// Standard otpauth URI for single-account QR code export. `algorithm`, `digits` and `period` appear only when they
+/// differ from the Key URI format's defaults (SHA1, 6, 30), so a common account's QR code stays small.
 pub fn otpauth_url(account: &Account, placeholders: &Placeholders) -> String {
     let fields =
         fields(&account.issuer, &account.username, &account.secret, account.algorithm, account.digits, account.period, placeholders)
@@ -164,14 +165,17 @@ pub fn otpauth_url(account: &Account, placeholders: &Placeholders) -> String {
     let label =
         format!("{}:{}", utf8_percent_encode(&fields.issuer, LABEL_ENCODE_SET), utf8_percent_encode(&fields.username, LABEL_ENCODE_SET));
     let query = |value: &str| utf8_percent_encode(value, QUERY_VALUE_ENCODE_SET).to_string();
-    format!(
-        "otpauth://totp/{label}?secret={}&issuer={}&algorithm={}&digits={}&period={}",
-        query(&fields.secret),
-        query(&fields.issuer),
-        fields.algorithm.raw_value(),
-        fields.digits,
-        fields.period
-    )
+    let mut url = format!("otpauth://totp/{label}?secret={}&issuer={}", query(&fields.secret), query(&fields.issuer));
+    if fields.algorithm != TotpAlgorithm::Sha1 {
+        url.push_str(&format!("&algorithm={}", fields.algorithm.raw_value()));
+    }
+    if fields.digits != 6 {
+        url.push_str(&format!("&digits={}", fields.digits));
+    }
+    if fields.period != 30 {
+        url.push_str(&format!("&period={}", fields.period));
+    }
+    url
 }
 
 #[cfg(test)]
@@ -197,6 +201,30 @@ mod tests {
         assert_eq!(stripping_issuer_prefix("GitHub%3Aalex", "GitHub"), "alex");
         assert_eq!(stripping_issuer_prefix("GitHub:", "GitHub"), "GitHub:");
         assert_eq!(stripping_issuer_prefix("alex", ""), "alex");
+    }
+
+    #[test]
+    fn otpauth_url_leaves_out_default_parameters() {
+        let mut account = Account {
+            issuer: "GitHub".into(),
+            username: "alex@example.com".into(),
+            secret: "mzxw 6ytb-oi".into(),
+            algorithm: TotpAlgorithm::Sha1,
+            digits: 6,
+            period: 30,
+            id: uuid::Uuid::nil(),
+            created_at: std::time::UNIX_EPOCH,
+            added_by: String::new(),
+            website: None,
+            icon: None,
+            deleted_at: None,
+        };
+        assert_eq!(otpauth_url(&account, &placeholders()), "otpauth://totp/GitHub:alex%40example.com?secret=MZXW6YTBOI&issuer=GitHub");
+        account.digits = 8;
+        assert_eq!(
+            otpauth_url(&account, &placeholders()),
+            "otpauth://totp/GitHub:alex%40example.com?secret=MZXW6YTBOI&issuer=GitHub&digits=8"
+        );
     }
 
     #[test]
