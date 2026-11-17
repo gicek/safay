@@ -147,7 +147,10 @@ pub fn scene(s: crate::store::Store) {
                 s.open_sheet(Sheet::Add);
                 s.add_tab.set(if scene == "add-key" { AddTab::Key } else { AddTab::Text });
             }
-            "export" => s.open_sheet(Sheet::ExportImport),
+            "export" => {
+                s.open_sheet(Sheet::ExportImport);
+                s.import_tab.set(false);
+            }
             "import" => {
                 s.open_sheet(Sheet::ExportImport);
                 s.import_tab.set(true);

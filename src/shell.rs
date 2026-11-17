@@ -164,7 +164,7 @@ fn app_menu(s: Store, unlocked: bool) {
     let file = vec![
         MenuItem::new(l("Add Account")).shortcut("mod+n").disabled(!unlocked).on_select(move || s.open_sheet(Sheet::Add)),
         MenuItem::separator(),
-        MenuItem::new(l("Export / Import")).disabled(!unlocked).on_select(move || s.open_sheet(Sheet::ExportImport)),
+        MenuItem::new(l("Import / Export")).disabled(!unlocked).on_select(move || s.open_sheet(Sheet::ExportImport)),
         MenuItem::new(l("Backup & Sync")).disabled(!unlocked).on_select(move || s.open_sheet(Sheet::Backup)),
         MenuItem::new(l("Lock")).shortcut("mod+l").disabled(!unlocked).on_select(move || s.lock()),
         MenuItem::separator(),

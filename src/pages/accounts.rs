@@ -134,7 +134,7 @@ pub fn sidebar(s: Store) -> impl IntoElement {
             view()
                 .gap(px(2.0))
                 .child(
-                    sidebar_row(s, Icon::ExportImport, move || s.label("Export / Import"), || None, || false)
+                    sidebar_row(s, Icon::ExportImport, move || s.label("Import / Export"), || None, || false)
                         .on_press(move || s.open_sheet(Sheet::ExportImport)),
                 )
                 .child(
@@ -376,11 +376,78 @@ fn standin(s: Store, r: Reorder) -> impl IntoElement {
         .child(when(move || s.cards.get(), move || card(s, r, row, true)).otherwise(move || list_row(s, r, row, 0, true)))
 }
 
-/// The empty vault: the accent shield in its tile over two faint concentric round halos, the title and what happens to the
-/// codes, then the two ways to begin (add one, or import a backup or export). It fades in and rises 8pt when it
-/// appears (240 ms ease-out), still with Reduce Motion. A category or a search with nothing in it shows a quieter
-/// glyph and line.
+/// The empty vault: the accent shield in its tile over two faint concentric round halos and the title; two hand-drawn
+/// arrows point to the ways to begin, the toolbar's add button and the sidebar's "Import / Export". It fades in and
+/// rises 8pt when it appears (240 ms ease-out), still with Reduce Motion. A category or a search with nothing in it
+/// shows a quieter glyph and line.
 fn empty_state(s: Store) -> impl IntoElement {
+    let vault_empty = move || s.projection.with(|p| p.account_count == 0);
+    view()
+        .flex_1()
+        .relative()
+        .child(empty_message(s))
+        .child(when(vault_empty, move || add_hint(s)))
+        .child(when(move || vault_empty() && sidebar_shown(s), move || import_hint(s)))
+}
+/// Whether the sidebar is beside the content (`shell::main_window` hides it below 640pt).
+fn sidebar_shown(s: Store) -> bool {
+    s.sidebar.get() && window().width.0 >= 640.0
+}
+/// The coach marks' notes: the system font, light, quieter than the text around them.
+fn coach_text(label: impl Fn() -> SharedString + 'static) -> impl IntoElement + Styled {
+    text(label).text_size(px(14.0)).line_height(px(19.0)).font_weight(FontWeight::LIGHT).text_color(move || theme().muted_foreground)
+}
+/// A hand-drawn arrow: `path` in a `w` × `h` box, stroked in the accent color.
+fn hand_arrow(w: f32, h: f32, path: &str) -> impl IntoElement + Styled {
+    svg(nsh_core::element::ImageSrc::svg_markup(&format!(
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 {w} {h}' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>{path}</svg>"
+    )))
+    .w(px(w))
+    .h(px(h))
+    .text_color(move || tok("code-accent").opacity(0.75))
+}
+/// The empty vault's first step: a curve from a note up to the toolbar's add button, in the content's top right corner.
+fn add_hint(s: Store) -> impl IntoElement {
+    // The add button's center is about 26pt from the content's right edge (`shell::toolbar`); the arrow ends under it.
+    view()
+        .absolute()
+        .top(px(4.0))
+        .right(px(4.0))
+        .w(px(400.0))
+        .h(px(120.0))
+        .pointer_events(nsh_core::PointerEvents::None)
+        .accessibility_elements_hidden(true)
+        .child(
+            hand_arrow(150.0, 104.0, "<path d='M14 90 C 58 98, 112 84, 122 12'/><path d='M113.5 22 L 122.5 10 L 129 23.5'/>")
+                .absolute()
+                .top(px(0.0))
+                .right(px(0.0)),
+        )
+        .child(coach_text(move || s.label("Add a 2FA account")).absolute().top(px(80.0)).right(px(142.0)).w(px(240.0)).text_right())
+}
+/// And the other way in: a curve from a note down to the sidebar's "Import / Export", in the content's bottom left.
+fn import_hint(s: Store) -> impl IntoElement {
+    // The row's center above the window's bottom: the sidebar's padding and the two rows below it. The arrow's tip is
+    // 40pt above the box's bottom.
+    let row = move || chrome::sidebar_row_height() * font_scale();
+    let center = move || chrome::sidebar_inset() + 10.0 + 2.0 * (row() + 2.0) + row() / 2.0;
+    view()
+        .absolute()
+        .left(px(0.0))
+        .bottom(move || px(center() - 40.0))
+        .w(px(440.0))
+        .h(px(110.0))
+        .pointer_events(nsh_core::PointerEvents::None)
+        .accessibility_elements_hidden(true)
+        .child(
+            hand_arrow(140.0, 110.0, "<path d='M122 24 C 104 72, 60 76, 9 70'/><path d='M20 61.5 L 8 70 L 19.5 79'/>")
+                .absolute()
+                .top(px(0.0))
+                .left(px(0.0)),
+        )
+        .child(coach_text(move || s.label("Import existing accounts")).absolute().top(px(2.0)).left(px(132.0)).w(px(300.0)))
+}
+fn empty_message(s: Store) -> impl IntoElement {
     let vault_empty = move || s.projection.with(|p| p.account_count == 0);
     let in_category = move || s.category.get().is_some() && s.query.with(|q| q.is_empty());
     let arrived = signal(reduce_motion());
@@ -447,39 +514,29 @@ fn empty_state(s: Store) -> impl IntoElement {
             .font_weight(FontWeight::SEMIBOLD)
             .text_color(move || if vault_empty() { theme().foreground } else { theme().muted_foreground }),
         )
-        .child(
-            text(move || {
-                if vault_empty() {
-                    s.label("After you add accounts, your codes are encrypted on this device and shown only after unlock.")
-                } else if in_category() {
-                    s.label("In the main window, right-click an account and choose Add to.")
-                } else {
-                    "".into()
-                }
-            })
-            .max_w(px(360.0))
-            .text_center()
-            .text_size(px(13.0))
-            .line_height(px(19.0))
-            .text_color(move || theme().muted_foreground),
-        )
-        .child(when(vault_empty, move || {
-            view()
-                .pt(px(10.0))
-                .flex_row()
-                .gap(px(10.0))
-                .child(
-                    push_button_with_icon(move || s.label("Add Account"), Kind::Primary, true, Icon::Plus)
-                        .on_press(move || s.open_sheet(Sheet::Add)),
-                )
+        // An empty category says how accounts get into it; the empty vault's arrows say the rest.
+        .child(when(
+            move || !vault_empty() && in_category(),
+            move || {
+                text(move || s.label("In the main window, right-click an account and choose Add to."))
+                    .max_w(px(360.0))
+                    .text_center()
+                    .text_size(px(13.0))
+                    .line_height(px(19.0))
+                    .text_color(move || theme().muted_foreground)
+            },
+        ))
+        // With the sidebar hidden the import hint has nothing to point at: a link takes its place.
+        .child(when(
+            move || vault_empty() && !sidebar_shown(s),
+            move || {
                 // Nothing to export yet: straight to the import tab.
-                .child(push_button_with_icon(move || s.label("Import Accounts"), Kind::Standard, true, Icon::Download).on_press(
-                    move || {
-                        s.open_sheet(Sheet::ExportImport);
-                        s.import_tab.set(true);
-                    },
-                ))
-        }))
+                push_button(move || s.label("Import Accounts"), Kind::Link, false).on_press(move || {
+                    s.open_sheet(Sheet::ExportImport);
+                    s.import_tab.set(true);
+                })
+            },
+        ))
 }
 
 /// The account context menu, identical for cards and rows.

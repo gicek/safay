@@ -30,11 +30,12 @@ appearance only — never capabilities.
 
 - **Main window**: sidebar and toolbar (title, lock, list/cards, search, add); a card grid (minimum 210 pt, 12 pt
   gaps) or a 58 pt list. Minimum size 880 × 620. The sidebar is one list without section titles: All, then the
-  categories, with "New Category" (a folder with a plus) left of the sidebar toggle in its title bar; Export/Import, Backup & Sync and Settings
-  sit at its foot.
+  categories, with "New Category" (a folder with a plus) left of the sidebar toggle in its title bar; Import/Export,
+  Backup & Sync and Settings sit at its foot. An empty vault shows no buttons: hand-drawn arrows point from short notes
+  to the toolbar's add button and to "Import / Export".
 - **Account actions** use native context menus: copy, add to or remove from categories, details, QR code, move up/down,
   delete. Cards and rows can be dragged to reorder; categories too.
-- **Sheets**: Add Account 620 pt (scan, key, links), Details 540, QR code 420, Export/Import 660, Change Password 460,
+- **Sheets**: Add Account 620 pt (scan, key, links), Details 540, QR code 420, Import/Export 660, Change Password 460,
   Backup & Sync 640. A 56 pt header, 22 × 18 pt content padding, a footer with the actions and the only error line.
 - **Lock screen**: the app icon, a 220 pt capsule password field, Return to unlock; with Touch ID, a fingerprint button
   and an automatic prompt on first launch.

@@ -85,11 +85,11 @@ test("main window: sheets", async () => {
   await app.keyboard.press("Escape");
   await app.wait(200);
   await app.keyboard.press("Escape");
-  await app.press("role:button[Export / Import]");
-  await app.waitFor("Encrypted Export");
-  await shot(app, "export");
-  await app.press("role:button[Batch Import]");
+  await app.press("role:button[Import / Export]");
+  await app.waitFor("Batch Import");
   await shot(app, "import");
+  await app.press("role:button[Encrypted Export]");
+  await shot(app, "export");
   await app.press("role:button[Cancel]");
   await app.press("role:button[Backup & Sync]");
   await app.waitFor("Backup is off");

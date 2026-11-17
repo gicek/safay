@@ -1,4 +1,4 @@
-//! The sheets: Add Account (620), Account Details (540), QR Code (420), Export / Import (660),
+//! The sheets: Add Account (620), Account Details (540), QR Code (420), Import / Export (660),
 //! Change Master Password (460), plus the master-password prompt that stands in for Touch ID.
 use super::unlock::{check_box, drop_zone, field_label, new_password_fields, new_password_ok};
 use crate::{
@@ -1220,11 +1220,11 @@ fn export_import_sheet(s: Store) -> impl IntoElement {
         s,
         660.0,
         300.0,
-        move || s.label("Export / Import"),
+        move || s.label("Import / Export"),
         segmented(
             vec![
-                (false, Box::new(move || s.label("Encrypted Export")) as Box<dyn Fn() -> SharedString>),
-                (true, Box::new(move || s.label("Batch Import"))),
+                (true, Box::new(move || s.label("Batch Import")) as Box<dyn Fn() -> SharedString>),
+                (false, Box::new(move || s.label("Encrypted Export"))),
             ],
             move || s.import_tab.get(),
             move |v| {

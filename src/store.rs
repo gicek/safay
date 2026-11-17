@@ -320,7 +320,7 @@ impl Store {
             capture_waiting: signal(None),
             stage: signal(Stage::Welcome),
             add_tab: signal(AddTab::Scan),
-            import_tab: signal(false),
+            import_tab: signal(true),
             settings_page: signal(SettingsPage::General),
             backup_page: signal(BackupPage::Overview),
             cloud_form: signal(CloudForm::default()),

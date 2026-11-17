@@ -24,18 +24,6 @@ pub enum Kind {
 
 /// A push button: 30pt (36 large) with platform radii and press feedback.
 pub fn push_button(label: impl Fn() -> SharedString + 'static, kind: Kind, large: bool) -> nsh_base::ButtonElement {
-    labeled_push_button(label, kind, large, None)
-}
-/// A [`push_button`] with a glyph before its label.
-pub fn push_button_with_icon(label: impl Fn() -> SharedString + 'static, kind: Kind, large: bool, glyph: Icon) -> nsh_base::ButtonElement {
-    labeled_push_button(label, kind, large, Some(glyph))
-}
-fn labeled_push_button(
-    label: impl Fn() -> SharedString + 'static,
-    kind: Kind,
-    large: bool,
-    glyph: Option<Icon>,
-) -> nsh_base::ButtonElement {
     let h = chrome::control_height(large);
     let r = chrome::control_radius(large);
     button()
@@ -96,10 +84,6 @@ fn labeled_push_button(
                 _ => s.opacity(0.45),
             }
         })
-        .child(when(
-            move || glyph.is_some(),
-            move || crate::icons::icon_bold(glyph.unwrap_or(Icon::Plus)).size(px(if large { 14.0 } else { 13.0 })),
-        ))
         .child(
             text(label).text_size(px(if large { 13.5 } else { 13.0 })).line_height(px(17.0)).font_weight(if large && kind != Kind::Link {
                 FontWeight::SEMIBOLD
