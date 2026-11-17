@@ -1,0 +1,20 @@
+# Release notes: Traditional Chinese
+
+Each version's section translates the one in CHANGELOG.md, item for item. The update window shows it to people who use
+Safay in Traditional Chinese.
+
+## [1.1.0] - 2026-11-17
+
+Safay 換上了取自圖示的靛藍色，新版本會在更新視窗裡附上更新說明。
+
+### 變更
+
+- **更新視窗**：每個新版本都會顯示更新說明和下載進度，也可以選擇略過。
+- **檢查更新**：選單列圖示的選單裡也能檢查更新了。
+- **新外觀**：取自 Safay 圖示的靛藍強調色，淺色和深色模式都適用。
+- **側邊欄**：「全部」和各個分類合成一個列表；還沒有帳號時，箭頭會告訴你從哪裡開始。
+- **提示**：操作結果顯示在視窗右下角。
+
+### 修正
+
+- 密碼欄位裡的小眼睛在顯示明文時會變成劃掉的樣式。

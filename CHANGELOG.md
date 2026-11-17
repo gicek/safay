@@ -5,17 +5,21 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-17
+
+Safay takes on the indigo of its icon, and new versions open in an update window with their notes.
+
 ### Changed
 
-- **Update window**: new versions open in their own window with formatted release notes, "Skip This Version" and "Remind Me Later", and the download's progress.
-- **Check for Updates**: the menu bar icon's menu can check for a new version; results show as a notice at the top of the screen.
-- **New look**: an indigo accent taken from the Safay icon, in light and dark mode, on every platform.
-- **Sidebar**: "All" and your categories form one list, import comes first, and an empty Safay points you to "+" and "Import / Export".
-- **Notices**: confirmations appear in the window's bottom right corner, and adding an account by hand names it.
+- **Update window**: each new version shows its notes and the download's progress, and you can skip it.
+- **Check for Updates**: now also in the menu bar icon's menu.
+- **New look**: an indigo accent taken from the Safay icon, in light and dark mode.
+- **Sidebar**: "All" and your categories form one list; with no accounts yet, arrows show where to start.
+- **Notices**: confirmations appear in the window's bottom right corner.
 
 ### Fixed
 
-- The eye in password and secret fields is crossed out while the text is shown, so you can tell which state you are in.
+- The eye in password fields is crossed out while the text is shown.
 
 ## [1.0.0] - 2026-11-17
 
