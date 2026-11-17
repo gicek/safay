@@ -57,6 +57,9 @@ fn main() -> impl std::process::Termination {
         }
     };
     safay::platform::install_network(preview);
+    // AppKit's traffic-light size, read here on the main thread for the title bar the engine thread sets up.
+    #[cfg(target_os = "macos")]
+    safay::platform::macos::traffic_light_height();
     #[cfg(target_os = "macos")]
     let _observers = safay::platform::macos::observe(controller.clone());
     #[cfg(target_os = "macos")]

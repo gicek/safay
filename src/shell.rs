@@ -16,11 +16,13 @@ use nsh_core::{
 use safay_app::controller::Controller;
 use std::sync::Arc;
 
-/// The main window draws its own title bar, `height` tall (the platform's own height without it).
-pub(crate) fn hide_title_bar(height: Option<Points>) {
+/// The main window draws its own title bar, `height` tall (the platform's own height without it); `controls` puts the
+/// macOS traffic lights' top-left corner there (AppKit's place without it).
+pub(crate) fn hide_title_bar(height: Option<Points>, controls: Option<Point<Points>>) {
     let mut bar = TitleBarOptions::default();
     bar.style = TitleBarStyle::Hidden;
     bar.height = height;
+    bar.controls_offset = controls;
     let mut attributes = WindowAttributes::default();
     attributes.title_bar = Some(bar);
     native_window().set(attributes);
@@ -38,10 +40,16 @@ pub fn main_window(controller: Arc<Controller>, fixture: bool) -> impl IntoEleme
     effect(move || {
         let locked = s.ready.get() && !s.unlocked() && s.projection.with(|p| p.exists);
         let system = locked && look() == Look::Mac;
-        hide_title_bar(if system { None } else { Some(px(chrome::toolbar_height())) });
-        // NSH centers the buttons in the row; their left edge is the app's (`chrome::traffic_lights_x`).
+        let height = (!system).then(chrome::toolbar_height);
+        // The traffic lights sit centered in the toolbar row, their left edge at `chrome::traffic_lights_x`.
         #[cfg(target_os = "macos")]
-        crate::platform::macos::place_traffic_lights((look() == Look::Mac && !system).then(chrome::traffic_lights_x));
+        let controls = height.filter(|_| look() == Look::Mac).map(|h| {
+            let y = ((f64::from(h) - crate::platform::macos::traffic_light_height()) / 2.0).round();
+            point(px(chrome::traffic_lights_x() as f32), px(y as f32))
+        });
+        #[cfg(not(target_os = "macos"))]
+        let controls = None;
+        hide_title_bar(height.map(px), controls);
     });
     // iCloud backup changes arrive as silent pushes while iCloud is the location (subscribed once it is, removed when it
     // stops being it).

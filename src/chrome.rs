@@ -27,7 +27,7 @@ pub fn toolbar_height() -> f32 {
 /// The sidebar floats as an inset panel on macOS 26; elsewhere it is flush with the window edge.
 /// The left edge of the macOS traffic lights' close button in the main window's toolbar row, from the window's left
 /// edge: 19 pt, where a system sidebar window has it on macOS 26 (11 pt inside
-/// the floating sidebar) and on macOS 27 (Finder); NSH centers them in the 52 pt row. Set explicitly because AppKit's
+/// the floating sidebar) and on macOS 27 (Finder); centered in the 52 pt row. Set explicitly because AppKit's
 /// own place for a toolbar-less window's buttons depends on the release: macOS 27 puts them 9 pt from the edge.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn traffic_lights_x() -> f64 {

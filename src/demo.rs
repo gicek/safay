@@ -116,7 +116,7 @@ pub fn DemoSettingsApp() -> impl IntoElement {
     effect(move || untracked(|| s.start()));
     // As the Settings window: content under a transparent title bar, over the sidebar material.
     effect(move || {
-        crate::shell::hide_title_bar(None);
+        crate::shell::hide_title_bar(None, None);
         let mut attributes = nsh_core::desktop::WindowAttributes::default();
         attributes.backdrop = Some(nsh_core::desktop::Backdrop::Sidebar);
         nsh_core::element::desktop::main_window().set(attributes);

@@ -127,102 +127,20 @@ pub fn unwatch_outside_clicks() {
         }
     });
 }
-/// The main window's traffic lights, moved sideways only (NSH places them vertically, centered in the app's bar).
-struct TrafficLights {
-    window: Retained<nsh_platform_macos::objc2_app_kit::NSWindow>,
-    /// AppKit's own left edge of the close button and the step between the buttons, read before anything moved them.
-    system_x: f64,
-    spacing: f64,
-    /// Frame-change observers of the three buttons (tokens of the default center), kept for the process.
-    _observers: Vec<Retained<ProtocolObject<dyn NSObjectProtocol>>>,
-}
-thread_local! {
-    /// Main thread: the main window's buttons once found, the close button's wanted left edge (`None`: AppKit's) and
-    /// whether a placement is running (moving a button posts its frame change at once).
-    static LIGHTS: std::cell::RefCell<Option<TrafficLights>> = const { std::cell::RefCell::new(None) };
-    static LIGHTS_X: std::cell::Cell<Option<f64>> = const { std::cell::Cell::new(None) };
-    static PLACING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-/// Puts the main window's close button's left edge at `x` points from the window's left edge, the other two after it
-/// at AppKit's spacing; `None` gives them back AppKit's place. NSH's `controlsOffset` would do this, but on macOS 27 it
-/// measures the buttons against a close button it already moved, and stacks the close and minimize buttons. AppKit
-/// lays the buttons out again on resizes and when the title bar changes height: each button's frame change places them
-/// again at once, before anything is drawn, as NSH does for their height. Any thread.
-pub fn place_traffic_lights(x: Option<f64>) {
-    dispatch2::DispatchQueue::main().exec_async(move || {
-        LIGHTS_X.with(|wanted| wanted.set(x));
-        install_lights(20);
-        place_lights();
-    });
-}
-/// Finds the main window (the first window with a close button that is not a panel) and watches its buttons;
-/// `tries` more times later while it is not there yet.
-fn install_lights(tries: u32) {
-    use nsh_platform_macos::{
-        objc2::{ClassType, MainThreadMarker, Message},
-        objc2_app_kit::{NSApplication, NSPanel, NSViewFrameDidChangeNotification, NSWindowButton},
-    };
-    if LIGHTS.with(|l| l.borrow().is_some()) {
-        return;
-    }
-    let Some(mtm) = MainThreadMarker::new() else { return };
-    let window = NSApplication::sharedApplication(mtm)
-        .windows()
-        .to_vec()
-        .into_iter()
-        .find(|w| !w.isKindOfClass(NSPanel::class()) && w.standardWindowButton(NSWindowButton::CloseButton).is_some());
-    let Some(window) = window else {
-        if tries > 0 {
-            let when = dispatch2::DispatchTime::NOW.time(100_000_000);
-            let _ = dispatch2::DispatchQueue::main().after(when, move || {
-                install_lights(tries - 1);
-                place_lights();
-            });
-        }
-        return;
-    };
-    let buttons = [NSWindowButton::CloseButton, NSWindowButton::MiniaturizeButton, NSWindowButton::ZoomButton]
-        .map(|b| window.standardWindowButton(b));
-    let [Some(close), Some(minimize), _] = &buttons else { return };
-    let (system_x, spacing) = (close.frame().origin.x, minimize.frame().origin.x - close.frame().origin.x);
-    let block = block2::RcBlock::new(|_: std::ptr::NonNull<NSNotification>| place_lights());
-    let center = NSNotificationCenter::defaultCenter();
-    let observers = buttons
-        .iter()
-        .flatten()
-        .map(|button| {
-            button.setPostsFrameChangedNotifications(true);
-            // SAFETY: AppKit posts it on the main thread, where the block runs (no queue: at once, inside the layout
-            // that moved the button); the observers live as long as the process.
-            unsafe {
-                center.addObserverForName_object_queue_usingBlock(Some(NSViewFrameDidChangeNotification), Some(&**button), None, &block)
-            }
-        })
-        .collect();
-    let window = window.retain();
-    LIGHTS.with(|l| *l.borrow_mut() = Some(TrafficLights { window, system_x, spacing, _observers: observers }));
-}
-fn place_lights() {
-    use nsh_platform_macos::{objc2_app_kit::NSWindowButton, objc2_foundation::NSPoint};
-    if PLACING.with(|p| p.replace(true)) {
-        return;
-    }
-    LIGHTS.with(|l| {
-        let l = l.borrow();
-        let Some(lights) = l.as_ref() else { return };
-        let x = LIGHTS_X.with(|wanted| wanted.get()).unwrap_or(lights.system_x);
-        let buttons = [NSWindowButton::CloseButton, NSWindowButton::MiniaturizeButton, NSWindowButton::ZoomButton];
-        for (i, kind) in buttons.into_iter().enumerate() {
-            if let Some(button) = lights.window.standardWindowButton(kind) {
-                let frame = button.frame();
-                let left = x + lights.spacing * i as f64;
-                if frame.origin.x != left {
-                    button.setFrameOrigin(NSPoint::new(left, frame.origin.y));
-                }
-            }
-        }
-    });
-    PLACING.with(|p| p.set(false));
+static LIGHT_HEIGHT: std::sync::OnceLock<f64> = std::sync::OnceLock::new();
+/// The height of a window's traffic lights, as AppKit sizes them on this release. NSH places them by their top-left
+/// corner (`TitleBarOptions::controls_offset`), so the app centers them in its bar with this. Read on the main thread
+/// first (`main` calls it before the runner starts); any thread after that. 14 pt when it can't be read.
+pub fn traffic_light_height() -> f64 {
+    *LIGHT_HEIGHT.get_or_init(|| {
+        use nsh_platform_macos::{
+            objc2::MainThreadMarker,
+            objc2_app_kit::{NSWindow, NSWindowButton, NSWindowStyleMask},
+        };
+        let Some(mtm) = MainThreadMarker::new() else { return 14.0 };
+        let mask = NSWindowStyleMask::Titled | NSWindowStyleMask::Closable;
+        NSWindow::standardWindowButton_forStyleMask(NSWindowButton::CloseButton, mask, mtm).map_or(14.0, |b| b.frame().size.height)
+    })
 }
 static ICLOUD_CHANGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static PUSH_INSTALLED: std::sync::Once = std::sync::Once::new();
