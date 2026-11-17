@@ -2,11 +2,12 @@
 targets = ["aarch64-apple-darwin", "x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"]
 
 [advisories]
-# Unmaintained notices with no upgrade, reached only through NSH's SVG renderer (nsh-core -> resvg -> usvg). Remove
-# each entry when NSH stops depending on the crate; cargo-deny reports an ignore that no longer matches.
+# Unmaintained notices with no upgrade, reached only through NSH (its SVG renderer nsh-core -> resvg -> usvg, and
+# nsh-base). Remove each entry when NSH stops depending on the crate; cargo-deny reports an ignore that no longer matches.
 ignore = [
     { id = "RUSTSEC-2026-0192", reason = "ttf-parser is unmaintained, only via NSH's resvg/usvg; no upgrade available" },
     { id = "RUSTSEC-2026-0206", reason = "rustybuzz is unmaintained, only via NSH's resvg/usvg; no upgrade available" },
+    { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained, only via NSH's nsh-base; no upgrade available" },
 ]
 
 [licenses]
