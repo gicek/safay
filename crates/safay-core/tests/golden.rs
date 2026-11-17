@@ -6,7 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use safay_core::model::{Account, Placeholders, TotpAlgorithm, provenance};
+use safay_core::model::{Account, OtpType, Placeholders, TotpAlgorithm, provenance};
 use safay_core::otpauth::{self, ParsedOtpAuth};
 use safay_core::vault;
 use safay_core::{authenticator, base32, canonical, dedup, password, search, totp};
@@ -43,6 +43,19 @@ fn algorithm(value: &Value) -> TotpAlgorithm {
     TotpAlgorithm::from_raw_value(text(value)).unwrap()
 }
 
+/// A case's `type`; missing means TOTP.
+fn otp_type(case: &Value) -> OtpType {
+    case.get("type").and_then(Value::as_str).map_or(OtpType::Totp, |value| OtpType::from_raw_value(value).unwrap())
+}
+
+/// Adds `type` to a JSON object unless it is TOTP, the way the golden files leave it out.
+fn with_type(mut value: Value, otp_type: OtpType) -> Value {
+    if otp_type != OtpType::Totp {
+        value.as_object_mut().unwrap().insert("type".into(), otp_type.raw_value().into());
+    }
+    value
+}
+
 fn placeholders(file: &Value) -> Placeholders {
     Placeholders {
         unknown_issuer: text(&file["placeholders"]["unknownIssuer"]).to_owned(),
@@ -63,12 +76,15 @@ fn seconds(date: SystemTime) -> i64 {
 }
 
 fn account_json(account: &Account) -> Value {
-    json!({
-        "id": account.id.hyphenated().encode_upper(&mut Uuid::encode_buffer()).to_owned(),
-        "issuer": account.issuer, "username": account.username, "secret": account.secret,
-        "algorithm": account.algorithm.raw_value(), "digits": account.digits, "period": account.period,
-        "createdAt": seconds(account.created_at), "addedBy": account.added_by,
-    })
+    with_type(
+        json!({
+            "id": account.id.hyphenated().encode_upper(&mut Uuid::encode_buffer()).to_owned(),
+            "issuer": account.issuer, "username": account.username, "secret": account.secret,
+            "algorithm": account.algorithm.raw_value(), "digits": account.digits, "period": account.period,
+            "createdAt": seconds(account.created_at), "addedBy": account.added_by,
+        }),
+        account.otp_type,
+    )
 }
 
 fn imported_json(account: &Account) -> Value {
@@ -80,12 +96,15 @@ fn imported_json(account: &Account) -> Value {
 }
 
 fn parsed_json(parsed: &ParsedOtpAuth) -> Value {
-    json!({
-        "valid": parsed.is_valid(),
-        "reason": parsed.failure.map(|failure| failure.l10n_key()),
-        "issuer": parsed.issuer, "account": parsed.account, "secret": parsed.secret,
-        "algorithm": parsed.algorithm.raw_value(), "digits": parsed.digits, "period": parsed.period,
-    })
+    with_type(
+        json!({
+            "valid": parsed.is_valid(),
+            "reason": parsed.failure.map(|failure| failure.l10n_key()),
+            "issuer": parsed.issuer, "account": parsed.account, "secret": parsed.secret,
+            "algorithm": parsed.algorithm.raw_value(), "digits": parsed.digits, "period": parsed.period,
+        }),
+        parsed.otp_type,
+    )
 }
 
 #[test]
@@ -108,7 +127,7 @@ fn totp_matches_mac() {
     for case in cases {
         let date = UNIX_EPOCH + Duration::from_secs_f64(case["time"].as_f64().unwrap());
         let (digits, period) = (number(&case["digits"]), number(&case["period"]));
-        let code = totp::code(text(&case["secret"]), algorithm(&case["algorithm"]), digits, period, date);
+        let code = totp::code(otp_type(case), text(&case["secret"]), algorithm(&case["algorithm"]), digits, period, date);
         assert_eq!(code, text(&case["code"]), "{case}");
         assert_eq!(totp::formatted(&code), text(&case["formatted"]), "{case}");
         assert_eq!(totp::seconds_remaining(period, date), number(&case["secondsRemaining"]), "{case}");
@@ -135,14 +154,19 @@ fn canonical_matches_mac() {
             text(&case["issuer"]),
             text(&case["username"]),
             text(&case["secret"]),
+            otp_type(case),
             algorithm(&case["algorithm"]),
             number(&case["digits"]),
             period,
             &p,
         );
         let actual = result.map(|f| {
-            json!({"issuer": f.issuer, "username": f.username, "secret": f.secret,
-                   "algorithm": f.algorithm.raw_value(), "digits": f.digits, "period": f.period})
+            let otp_type = f.otp_type;
+            with_type(
+                json!({"issuer": f.issuer, "username": f.username, "secret": f.secret,
+                       "algorithm": f.algorithm.raw_value(), "digits": f.digits, "period": f.period}),
+                otp_type,
+            )
         });
         assert_eq!(actual.unwrap_or(Value::Null), case["output"], "{case}");
     }
@@ -164,6 +188,7 @@ fn canonical_matches_mac() {
             issuer: text(&case["issuer"]).into(),
             username: text(&case["username"]).into(),
             secret: text(&case["secret"]).into(),
+            otp_type: otp_type(case),
             algorithm: algorithm(&case["algorithm"]),
             digits: number(&case["digits"]),
             period: number(&case["period"]),

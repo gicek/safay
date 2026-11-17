@@ -1,4 +1,4 @@
-//! Plain text with one `otpauth://` or `otpauth-migration://` link per line: Ente Auth's plain export, link lists
+//! Plain text with one `otpauth://`, `otpauth-migration://`, or `steam://` link per line: Ente Auth's plain export, link lists
 //! exported by other apps, and pasted text saved to a file.
 //!
 //! Ente Auth adds a `codeDisplay` query parameter holding JSON: its `tags` become categories, `pinned` entries are
@@ -15,10 +15,10 @@ fn lines(text: &str) -> impl Iterator<Item = &str> {
 
 fn is_link(line: &str) -> bool {
     let lower = line.get(..20).unwrap_or(line).to_ascii_lowercase();
-    lower.starts_with("otpauth://") || lower.starts_with("otpauth-migration://")
+    lower.starts_with("otpauth://") || lower.starts_with("otpauth-migration://") || lower.starts_with("steam://")
 }
 
-/// At least one line is an `otpauth://` or `otpauth-migration://` link.
+/// At least one line is an `otpauth://`, `otpauth-migration://`, or `steam://` link.
 pub(super) fn is_text(text: &str) -> bool {
     lines(text).any(is_link)
 }

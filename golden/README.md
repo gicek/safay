@@ -5,7 +5,7 @@ Safay's behavior baseline. `crates/safay-core/tests/golden.rs` compares every en
 | File | Contents | Kind |
 |---|---|---|
 | `base32.json` | Encoding and lenient decoding | Deterministic |
-| `totp.json` | 3 algorithms × 4 digit/period pairs × 8 timestamps × 7 secrets (including the RFC 6238 vectors and invalid secrets) | Deterministic |
+| `totp.json` | 3 algorithms × 4 digit/period pairs × 8 timestamps × 7 secrets (including the RFC 6238 vectors and invalid secrets), plus Steam Guard codes computed with an independent Python implementation | Deterministic |
 | `canonical.json` | Text cleanup, secret normalization, `issuer:` prefixes, field normalization, dedup keys, otpauth URI encoding | Deterministic |
 | `otpauth.json` | Parsing single entries, scan results, and multi-line text, including Google migration codes and every failure reason | Deterministic |
 | `search.json` | Search matching, account name masking, initials, color indexes | Deterministic |

@@ -43,9 +43,22 @@
        "Home"
       ],
       "website": null
+     },
+     {
+      "issuer": "Steam",
+      "username": "s",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 5,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null,
+      "type": "steam"
      }
     ],
-    "skipped": 3
+    "skipped": 2
    }
   },
   {
@@ -86,9 +99,22 @@
        "Home"
       ],
       "website": null
+     },
+     {
+      "issuer": "Steam",
+      "username": "s",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 5,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null,
+      "type": "steam"
      }
     ],
-    "skipped": 3
+    "skipped": 2
    }
   },
   {
@@ -162,9 +188,22 @@
        "Code"
       ],
       "website": null
+     },
+     {
+      "issuer": "Steam",
+      "username": "s",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 5,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null,
+      "type": "steam"
      }
     ],
-    "skipped": 2
+    "skipped": 1
    }
   },
   {
@@ -202,9 +241,22 @@
        "Code"
       ],
       "website": null
+     },
+     {
+      "issuer": "Steam",
+      "username": "s",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 5,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null,
+      "type": "steam"
      }
     ],
-    "skipped": 2
+    "skipped": 1
    }
   },
   {
@@ -245,6 +297,19 @@
       "website": null
      },
      {
+      "issuer": "Steam",
+      "username": "s",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 5,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null,
+      "type": "steam"
+     },
+     {
       "issuer": "Mail",
       "username": "me@example.com",
       "secret": "KRSXG5CTMVRXEZLUKN2XAZLSKNSWG4TFOQ",
@@ -259,7 +324,7 @@
       "website": null
      }
     ],
-    "skipped": 3
+    "skipped": 2
    }
   },
   {
@@ -288,6 +353,19 @@
       "website": null
      },
      {
+      "issuer": "Steam",
+      "username": "s",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 5,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null,
+      "type": "steam"
+     },
+     {
       "issuer": "Mail",
       "username": "me@example.com",
       "secret": "KRSXG5CTMVRXEZLUKN2XAZLSKNSWG4TFOQ",
@@ -302,7 +380,7 @@
       "website": null
      }
     ],
-    "skipped": 3
+    "skipped": 2
    }
   },
   {
@@ -778,9 +856,22 @@
       "pinned": false,
       "categories": [],
       "website": null
+     },
+     {
+      "issuer": "Steam",
+      "username": "Steam",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 5,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null,
+      "type": "steam"
      }
     ],
-    "skipped": 1
+    "skipped": 0
    }
   },
   {
@@ -816,9 +907,22 @@
       "pinned": false,
       "categories": [],
       "website": null
+     },
+     {
+      "issuer": "Steam",
+      "username": "Steam",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 5,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null,
+      "type": "steam"
      }
     ],
-    "skipped": 1
+    "skipped": 0
    }
   },
   {
@@ -868,9 +972,22 @@
       "pinned": false,
       "categories": [],
       "website": null
+     },
+     {
+      "issuer": "Steam",
+      "username": "No account",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 5,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null,
+      "type": "steam"
      }
     ],
-    "skipped": 1
+    "skipped": 0
    }
   },
   {
@@ -1019,6 +1136,59 @@
       "pinned": false,
       "categories": [],
       "website": null
+     }
+    ],
+    "skipped": 1
+   }
+  },
+  {
+   "name": "steam links",
+   "file": "steam://JBSWY3DPEHPK3PXP\notpauth://totp/Steam:gamer?secret=MZXW6YTBOI&issuer=Steam&encoder=steam\notpauth://steam/Valve:dev?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Valve&algorithm=SHA512&digits=8&period=60\notpauth://totp/Five:x?secret=KRSXG5CTMVRXEZLUKN2XAZLSKNSWG4TFOQ&issuer=Five&digits=5\n",
+   "password": "",
+   "detect": {
+    "format": "text",
+    "encrypted": false
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Steam",
+      "username": "No account",
+      "secret": "JBSWY3DPEHPK3PXP",
+      "algorithm": "SHA1",
+      "digits": 5,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null,
+      "type": "steam"
+     },
+     {
+      "issuer": "Steam",
+      "username": "gamer",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 5,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null,
+      "type": "steam"
+     },
+     {
+      "issuer": "Valve",
+      "username": "dev",
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "algorithm": "SHA1",
+      "digits": 5,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null,
+      "type": "steam"
      }
     ],
     "skipped": 1

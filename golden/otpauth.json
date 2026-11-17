@@ -1362,6 +1362,101 @@
         "valid" : false
       },
       "input" : "otpauth-migration://offline?data="
+    },
+    {
+      "account" : {
+        "account" : "gamer",
+        "algorithm" : "SHA1",
+        "digits" : 5,
+        "issuer" : "Steam",
+        "period" : 30,
+        "reason" : null,
+        "secret" : "JRZCL47CMXVOQMNPZR2F7J4RGI",
+        "type" : "steam",
+        "valid" : true
+      },
+      "input" : "otpauth://steam/Steam:gamer?secret=JRZCL47CMXVOQMNPZR2F7J4RGI&issuer=Steam&algorithm=SHA1&digits=5&period=30"
+    },
+    {
+      "account" : {
+        "account" : "dev",
+        "algorithm" : "SHA1",
+        "digits" : 5,
+        "issuer" : "Valve",
+        "period" : 30,
+        "reason" : null,
+        "secret" : "MZXW6YTBOI",
+        "type" : "steam",
+        "valid" : true
+      },
+      "input" : "otpauth://steam/Valve:dev?secret=mzxw6ytboi&algorithm=SHA512&digits=8&period=60"
+    },
+    {
+      "account" : {
+        "account" : "gamer",
+        "algorithm" : "SHA1",
+        "digits" : 5,
+        "issuer" : "Steam",
+        "period" : 30,
+        "reason" : null,
+        "secret" : "MZXW6YTBOI",
+        "type" : "steam",
+        "valid" : true
+      },
+      "input" : "otpauth://totp/Steam:gamer?secret=MZXW6YTBOI&issuer=Steam&encoder=steam"
+    },
+    {
+      "account" : {
+        "account" : "No account",
+        "algorithm" : "SHA1",
+        "digits" : 5,
+        "issuer" : "Steam",
+        "period" : 30,
+        "reason" : null,
+        "secret" : "JRZCL47CMXVOQMNPZR2F7J4RGI",
+        "type" : "steam",
+        "valid" : true
+      },
+      "input" : "steam://JRZCL47CMXVOQMNPZR2F7J4RGI"
+    },
+    {
+      "account" : {
+        "account" : "",
+        "algorithm" : "SHA1",
+        "digits" : 6,
+        "issuer" : "",
+        "period" : 30,
+        "reason" : "otp.err.missing_secret",
+        "secret" : "",
+        "valid" : false
+      },
+      "input" : "steam://"
+    },
+    {
+      "account" : {
+        "account" : "",
+        "algorithm" : "SHA1",
+        "digits" : 6,
+        "issuer" : "",
+        "period" : 30,
+        "reason" : "otp.err.bad_base32",
+        "secret" : "",
+        "valid" : false
+      },
+      "input" : "steam://not-base32!"
+    },
+    {
+      "account" : {
+        "account" : "",
+        "algorithm" : "SHA1",
+        "digits" : 6,
+        "issuer" : "",
+        "period" : 30,
+        "reason" : "otp.err.digits",
+        "secret" : "",
+        "valid" : false
+      },
+      "input" : "otpauth://totp/Five:x?secret=MZXW6YTBOI&issuer=Five&digits=5"
     }
   ]
 }

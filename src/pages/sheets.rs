@@ -11,7 +11,7 @@ use nsh_core::prelude::*;
 use safay_app::{
     Uuid, Zeroizing,
     core::import::FileKind,
-    core::{otpauth, site_icon, totp},
+    core::{OtpType, otpauth, site_icon, totp},
     session::placeholders,
 };
 
@@ -350,12 +350,39 @@ fn advanced(s: Store) -> impl IntoElement {
                 .child(text(move || s.label("Advanced Options")).text_size(px(12.5)).font_weight(FontWeight::SEMIBOLD)),
         )
         .child(when(open, move || {
+            // Steam Guard and Battle.net have fixed parameters: only Time Based shows them.
+            let time_based = move || s.form.with(|f| f.otp_type == 0);
             view()
-                .flex_row()
-                .gap(px(18.0))
-                .child(picker(s, "Algorithm", &[(0, "SHA1"), (1, "SHA256"), (2, "SHA512")], |f| f.algorithm, |f, v| f.algorithm = v))
-                .child(picker(s, "Digits", &[(6, "6"), (8, "8")], |f| f.digits, |f, v| f.digits = v))
-                .child(picker(s, "Refresh Interval", &[(30, "30 seconds"), (60, "60 seconds")], |f| f.period, |f, v| f.period = v))
+                .gap(px(12.0))
+                .child(
+                    view()
+                        .flex_row()
+                        .gap(px(18.0))
+                        .child(picker(
+                            s,
+                            "Type",
+                            &[(0, "Time Based"), (2, "Battle.net"), (1, "Steam")],
+                            |f| f.otp_type,
+                            |f, v| f.otp_type = v,
+                        ))
+                        // Keeps Type as wide as each picker below.
+                        .child(view().flex_1())
+                        .child(view().flex_1()),
+                )
+                .child(when(time_based, move || {
+                    view()
+                        .flex_row()
+                        .gap(px(18.0))
+                        .child(picker(
+                            s,
+                            "Algorithm",
+                            &[(0, "SHA1"), (1, "SHA256"), (2, "SHA512")],
+                            |f| f.algorithm,
+                            |f, v| f.algorithm = v,
+                        ))
+                        .child(picker(s, "Digits", &[(6, "6"), (8, "8")], |f| f.digits, |f, v| f.digits = v))
+                        .child(picker(s, "Refresh Interval", &[(30, "30 seconds"), (60, "60 seconds")], |f| f.period, |f, v| f.period = v))
+                }))
         }))
 }
 fn text_panel(s: Store) -> impl IntoElement {
@@ -1016,6 +1043,11 @@ fn info_section(s: Store, row: impl Fn() -> Option<safay_app::session::Row> + Co
                 s.detail.with(|d| {
                     d.as_ref()
                         .map(|d| {
+                            match d.otp_type {
+                                OtpType::Steam => return s.label("Steam"),
+                                OtpType::BattleNet => return s.label("Battle.net"),
+                                OtpType::Totp => {}
+                            }
                             let alg = match d.algorithm {
                                 safay_app::core::TotpAlgorithm::Sha1 => "SHA1",
                                 safay_app::core::TotpAlgorithm::Sha256 => "SHA256",

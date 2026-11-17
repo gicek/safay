@@ -11,6 +11,8 @@
 //! - The KDF parameters in the envelope come from the file and may be corrupt or malicious: they are rejected above the
 //!   `MAX_*` limits when read, so a single unlock or import cannot run for hours or exhaust memory. The limits leave
 //!   room to raise the parameters later; the worst case costs about 20 times the current parameters.
+//! - Accounts may carry `type` ([`OtpType`]: `steam` or `battle`; missing means TOTP, and an unknown value is
+//!   `CorruptVault`).
 //! - Accounts may carry `website` (a normalized host) and `icon` (a base64 PNG within the site icon limits). Either one
 //!   missing reads as none; an invalid value is dropped on read, never treated as corruption.
 //! - The payload's `categories` are user categories; missing means empty. Accounts carry no favorite flag, and
@@ -33,7 +35,7 @@ use zeroize::Zeroizing;
 use std::collections::HashSet;
 
 use crate::category::{self, Category};
-use crate::model::{Account, TotpAlgorithm};
+use crate::model::{Account, OtpType, TotpAlgorithm};
 use crate::{json, password, site_icon};
 use base64::Engine;
 
@@ -126,6 +128,9 @@ struct PersistedAccount {
     issuer: String,
     username: String,
     secret: String,
+    /// [`OtpType`]'s persisted value; missing means TOTP, which is never written.
+    #[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
+    otp_type: Option<String>,
     algorithm: String,
     digits: i64,
     period: i64,
@@ -150,6 +155,7 @@ impl PersistedAccount {
             issuer: account.issuer.clone(),
             username: account.username.clone(),
             secret: account.secret.clone(),
+            otp_type: (account.otp_type != OtpType::Totp).then(|| account.otp_type.raw_value().to_owned()),
             algorithm: account.algorithm.raw_value().to_owned(),
             digits: i64::from(account.digits),
             period: i64::from(account.period),
@@ -175,6 +181,10 @@ impl PersistedAccount {
             issuer: self.issuer,
             username: self.username,
             secret: self.secret,
+            otp_type: match self.otp_type {
+                Some(value) => OtpType::from_raw_value(&value)?,
+                None => OtpType::Totp,
+            },
             algorithm: TotpAlgorithm::from_raw_value(&self.algorithm)?,
             digits: u32::try_from(self.digits).ok()?,
             period: u32::try_from(self.period).ok()?,
@@ -574,6 +584,7 @@ mod tests {
             issuer: "GitHub".into(),
             username: "alex@example.com".into(),
             secret: "MZXW6YTBOI".into(),
+            otp_type: crate::model::OtpType::Totp,
             algorithm: TotpAlgorithm::Sha256,
             digits: 8,
             period: 60,
@@ -625,6 +636,33 @@ mod tests {
         assert_eq!(open(&data, &key).unwrap().accounts, accounts);
         let plaintext = String::from_utf8(payload_json(&accounts, &[], now()).to_vec()).unwrap();
         assert_eq!(plaintext.matches("\"deletedAt\"").count(), 1);
+    }
+
+    #[test]
+    fn type_round_trips_and_is_absent_for_totp() {
+        use crate::model::OtpType;
+        let mut accounts = sample_accounts();
+        let totp = accounts[0].clone();
+        accounts[0].otp_type = OtpType::Steam;
+        accounts.push(Account { id: Uuid::from_u128(7), otp_type: OtpType::BattleNet, ..totp.clone() });
+        accounts.push(Account { id: Uuid::from_u128(8), ..totp });
+        let contents = VaultContents { accounts: accounts.clone(), ..Default::default() };
+        let (data, key) = create("pw", &contents, now()).unwrap();
+        assert_eq!(open(&data, &key).unwrap().accounts, accounts);
+        let plaintext = String::from_utf8(payload_json(&accounts, &[], now()).to_vec()).unwrap();
+        assert_eq!(plaintext.matches("\"type\"").count(), 2);
+
+        let read = |field: &str| {
+            let text = format!(
+                r#"{{"id":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F","issuer":"Steam","username":"","secret":"MZXW6YTBOI",
+                "algorithm":"SHA1","digits":5,"period":30,"createdAt":"2026-01-01T00:00:00Z","addedBy":"manual"{field}}}"#
+            );
+            serde_json::from_str::<PersistedAccount>(&text).unwrap().into_account().map(|account| account.otp_type)
+        };
+        assert_eq!(read(""), Some(OtpType::Totp));
+        assert_eq!(read(r#","type":"steam""#), Some(OtpType::Steam));
+        assert_eq!(read(r#","type":"battle""#), Some(OtpType::BattleNet));
+        assert_eq!(read(r#","type":"hotp""#), None, "an unknown type is not read as TOTP");
     }
 
     #[test]

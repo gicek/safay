@@ -1,20 +1,28 @@
-//! RFC 6238 TOTP. HMAC uses RustCrypto `hmac` + `sha1` / `sha2`.
+//! RFC 6238 TOTP, plus Steam Guard codes. HMAC uses RustCrypto `hmac` + `sha1` / `sha2`.
+//!
+//! Steam Guard has no published specification: it is TOTP whose 31-bit truncated value is written as five characters
+//! from [`STEAM_ALPHABET`], least significant first, instead of decimal digits.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use hmac::{Hmac, KeyInit, Mac};
 
 use crate::base32;
-use crate::model::{Account, TotpAlgorithm};
+use crate::model::{Account, OtpType, TotpAlgorithm};
+
+/// Length of a Steam Guard code.
+const STEAM_LENGTH: u32 = 5;
+/// The characters of a Steam Guard code: digits and consonants without the easily confused ones.
+const STEAM_ALPHABET: &[u8; 26] = b"23456789BCDFGHJKMNPQRTVWXY";
 
 /// The HOTP truncated value has only 31 bits, so at most 10 decimal digits. The digit count comes from files or callers;
 /// anything larger is treated as 10 so an abnormal value cannot turn the zero-padding width and placeholder length into
 /// a huge allocation (real accounts use 6 or 8 digits).
 const MAX_DIGITS: u32 = 10;
 
-/// Placeholder shown when the secret cannot be decoded (matches Mac: at least 6 dashes).
-fn placeholder(digits: u32) -> String {
-    "—".repeat(digits.max(6) as usize)
+/// Placeholder shown when the secret cannot be decoded: at least 6 dashes, or 5 for a Steam Guard code.
+fn placeholder(otp_type: OtpType, digits: u32) -> String {
+    "—".repeat(if otp_type == OtpType::Steam { STEAM_LENGTH } else { digits.max(6) } as usize)
 }
 
 fn unix_seconds(date: SystemTime) -> f64 {
@@ -24,26 +32,43 @@ fn unix_seconds(date: SystemTime) -> f64 {
     }
 }
 
-pub fn code(secret: &str, algorithm: TotpAlgorithm, digits: u32, period: u32, date: SystemTime) -> String {
+/// The code at `date`. Steam Guard and Battle.net use their fixed parameters ([`OtpType::fixed_parameters`]) whatever is
+/// passed.
+pub fn code(otp_type: OtpType, secret: &str, algorithm: TotpAlgorithm, digits: u32, period: u32, date: SystemTime) -> String {
+    let (algorithm, digits, period) = otp_type.fixed_parameters().unwrap_or((algorithm, digits, period));
     let digits = digits.min(MAX_DIGITS);
     let period = period.max(1);
     let Some(key) = base32::decode(secret) else {
-        return placeholder(digits);
+        return placeholder(otp_type, digits);
     };
     let counter = (unix_seconds(date) / f64::from(period)).floor().max(0.0) as u64;
     let value = hotp(&key, counter, algorithm);
+    if otp_type == OtpType::Steam {
+        return steam(value);
+    }
     let modulus = 10u64.pow(digits);
     format!("{:0width$}", u64::from(value) % modulus, width = digits as usize)
 }
 
 pub fn account_code(account: &Account, date: SystemTime) -> String {
-    code(&account.secret, account.algorithm, account.digits, account.period, date)
+    code(account.otp_type, &account.secret, account.algorithm, account.digits, account.period, date)
 }
 
-/// Inserts a space in the middle when longer than 4 digits (`123 456`, `1234 5678`).
+fn steam(mut value: u32) -> String {
+    (0..STEAM_LENGTH)
+        .map(|_| {
+            let character = char::from(STEAM_ALPHABET[(value % 26) as usize]);
+            value /= 26;
+            character
+        })
+        .collect()
+}
+
+/// Inserts a space in the middle of codes of 6 or more characters (`123 456`, `1234 5678`); shorter ones, such as
+/// Steam Guard codes, stay whole.
 pub fn formatted(code: &str) -> String {
     let characters: Vec<char> = code.chars().collect();
-    if characters.len() <= 4 {
+    if characters.len() <= 5 {
         return code.to_owned();
     }
     let split = characters.len() / 2;
@@ -113,23 +138,34 @@ mod tests {
             (20_000_000_000, "65353130", "77737706", "47863826"),
         ];
         for (time, expected1, expected256, expected512) in cases {
-            assert_eq!(code(&sha1, TotpAlgorithm::Sha1, 8, 30, at(time)), expected1);
-            assert_eq!(code(&sha256, TotpAlgorithm::Sha256, 8, 30, at(time)), expected256);
-            assert_eq!(code(&sha512, TotpAlgorithm::Sha512, 8, 30, at(time)), expected512);
+            assert_eq!(code(OtpType::Totp, &sha1, TotpAlgorithm::Sha1, 8, 30, at(time)), expected1);
+            assert_eq!(code(OtpType::Totp, &sha256, TotpAlgorithm::Sha256, 8, 30, at(time)), expected256);
+            assert_eq!(code(OtpType::Totp, &sha512, TotpAlgorithm::Sha512, 8, 30, at(time)), expected512);
         }
     }
 
     #[test]
     fn invalid_secret_shows_placeholder() {
-        assert_eq!(code("not base32!", TotpAlgorithm::Sha1, 6, 30, at(0)), "——————");
-        assert_eq!(code("1", TotpAlgorithm::Sha1, 8, 30, at(0)), "————————");
+        assert_eq!(code(OtpType::Totp, "not base32!", TotpAlgorithm::Sha1, 6, 30, at(0)), "——————");
+        assert_eq!(code(OtpType::Totp, "1", TotpAlgorithm::Sha1, 8, 30, at(0)), "————————");
     }
 
     #[test]
     fn oversized_digits_are_capped() {
         let secret = base32::encode(b"12345678901234567890");
-        assert_eq!(code(&secret, TotpAlgorithm::Sha1, u32::MAX, 30, at(59)).len(), 10);
-        assert_eq!(code("bad!", TotpAlgorithm::Sha1, u32::MAX, 30, at(59)).chars().count(), 10);
+        assert_eq!(code(OtpType::Totp, &secret, TotpAlgorithm::Sha1, u32::MAX, 30, at(59)).len(), 10);
+        assert_eq!(code(OtpType::Totp, "bad!", TotpAlgorithm::Sha1, u32::MAX, 30, at(59)).chars().count(), 10);
+    }
+
+    #[test]
+    fn fixed_types_ignore_the_parameters_passed() {
+        let secret = base32::encode(b"12345678901234567890");
+        let battle = code(OtpType::BattleNet, &secret, TotpAlgorithm::Sha512, 6, 60, at(59));
+        assert_eq!(battle, code(OtpType::Totp, &secret, TotpAlgorithm::Sha1, 8, 30, at(59)));
+        let steam = code(OtpType::Steam, &secret, TotpAlgorithm::Sha512, 8, 60, at(59));
+        assert_eq!(steam, code(OtpType::Steam, &secret, TotpAlgorithm::Sha1, 5, 30, at(59)));
+        assert!(steam.len() == 5 && steam.bytes().all(|c| STEAM_ALPHABET.contains(&c)));
+        assert_eq!(code(OtpType::Steam, "bad!", TotpAlgorithm::Sha1, 5, 30, at(0)), "—————");
     }
 
     #[test]
@@ -137,6 +173,7 @@ mod tests {
         assert_eq!(formatted("123456"), "123 456");
         assert_eq!(formatted("12345678"), "1234 5678");
         assert_eq!(formatted("1234"), "1234");
+        assert_eq!(formatted("8K2RT"), "8K2RT");
         assert_eq!(seconds_remaining(30, at(59)), 1);
         assert_eq!(seconds_remaining(30, at(60)), 30);
         assert!((progress(30, at(45)) - 0.5).abs() < f64::EPSILON);

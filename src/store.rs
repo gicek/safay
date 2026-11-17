@@ -141,6 +141,8 @@ pub struct Form {
     pub website: String,
     pub website_touched: bool,
     pub advanced: bool,
+    /// Index into [`safay_app::core::OtpType::ALL`]: 0 Time Based, 1 Steam, 2 Battle.net.
+    pub otp_type: u32,
     pub algorithm: u32,
     pub digits: u32,
     pub period: u32,
@@ -788,6 +790,7 @@ impl Store {
                 issuer: f.issuer.clone(),
                 username: f.username.clone(),
                 secret: f.secret.to_string(),
+                otp_type: safay_app::core::OtpType::ALL.get(f.otp_type as usize).copied().unwrap_or_default(),
                 algorithm: match f.algorithm {
                     1 => safay_app::core::TotpAlgorithm::Sha256,
                     2 => safay_app::core::TotpAlgorithm::Sha512,

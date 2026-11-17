@@ -64,6 +64,7 @@ mod tests {
             issuer: format!("Service {n}"),
             username: String::new(),
             secret: "JBSWY3DPEHPK3PXP".into(),
+            otp_type: crate::model::OtpType::Totp,
             algorithm: TotpAlgorithm::Sha1,
             digits: 6,
             period: 30,

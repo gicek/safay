@@ -21,7 +21,7 @@ updater and for scripts; you don't need them to install. Each release's notes ar
 
 ## Features
 
-- **Codes**: TOTP with SHA-1/256/512, 6 or 8 digits, 30 or 60 seconds; copy with one click; cards or a list.
+- **Codes**: TOTP with SHA-1/256/512, 6 or 8 digits, 30 or 60 seconds, plus Steam Guard and Battle.net; copy with one click; cards or a list.
 - **Adding accounts**: enter a key, paste `otpauth://` links (including Google Authenticator migration codes), drop QR
   images, select a QR code on screen, or scan one with the camera.
 - **Organizing**: search, categories with multiple membership, drag to reorder, site icons fetched from each account's

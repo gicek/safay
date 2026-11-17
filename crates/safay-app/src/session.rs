@@ -1,7 +1,7 @@
 //! Single-owner vault state. All operations run off the UI thread and commit before publishing changes.
 use crate::storage::{MAX_FILE_BYTES, Repository, StorageError};
 use safay_core::{
-    Account, Placeholders, TotpAlgorithm, canonical, category, dedup, import, otpauth, password, search, site_icon, totp, trash,
+    Account, OtpType, Placeholders, TotpAlgorithm, canonical, category, dedup, import, otpauth, password, search, site_icon, totp, trash,
     vault::{self, VaultContents, VaultError, VaultKey},
 };
 use std::{
@@ -153,6 +153,7 @@ pub struct Draft {
     pub issuer: String,
     pub username: String,
     pub secret: String,
+    pub otp_type: OtpType,
     pub algorithm: TotpAlgorithm,
     pub digits: u32,
     pub period: u32,
@@ -166,6 +167,7 @@ impl Default for Draft {
             issuer: String::new(),
             username: String::new(),
             secret: String::new(),
+            otp_type: OtpType::Totp,
             algorithm: TotpAlgorithm::Sha1,
             digits: 6,
             period: 30,
@@ -207,6 +209,7 @@ pub struct Detail {
     pub issuer: String,
     pub username: String,
     pub website: String,
+    pub otp_type: OtpType,
     pub algorithm: TotpAlgorithm,
     pub digits: u32,
     pub period: u32,
@@ -757,8 +760,9 @@ impl Session {
             return Err(Error::NotFound);
         }
         let secret = if draft.secret.is_empty() { old.map(|a| a.secret.as_str()).unwrap_or("") } else { &draft.secret };
-        let fields = canonical::fields(&draft.issuer, &draft.username, secret, draft.algorithm, draft.digits, draft.period, &ph)
-            .ok_or(Error::Fields)?;
+        let fields =
+            canonical::fields(&draft.issuer, &draft.username, secret, draft.otp_type, draft.algorithm, draft.digits, draft.period, &ph)
+                .ok_or(Error::Fields)?;
         let website =
             if draft.website.trim().is_empty() { None } else { Some(site_icon::normalized_website(&draft.website).ok_or(Error::Fields)?) };
         let wanted =
@@ -772,6 +776,7 @@ impl Session {
             a.issuer = fields.issuer;
             a.username = fields.username;
             a.secret = fields.secret;
+            a.otp_type = fields.otp_type;
             a.algorithm = fields.algorithm;
             a.digits = fields.digits;
             a.period = fields.period;
@@ -788,6 +793,7 @@ impl Session {
                     issuer: fields.issuer,
                     username: fields.username,
                     secret: fields.secret,
+                    otp_type: fields.otp_type,
                     algorithm: fields.algorithm,
                     digits: fields.digits,
                     period: fields.period,
@@ -820,6 +826,7 @@ impl Session {
             issuer: a.issuer.clone(),
             username: a.username.clone(),
             website: a.website.clone().unwrap_or_default(),
+            otp_type: a.otp_type,
             algorithm: a.algorithm,
             digits: a.digits,
             period: a.period,
@@ -895,6 +902,7 @@ impl Session {
             username: a.username.clone(),
             website: a.website.clone().unwrap_or_default(),
             secret: String::new(),
+            otp_type: a.otp_type,
             algorithm: a.algorithm,
             digits: a.digits,
             period: a.period,
@@ -1111,6 +1119,7 @@ impl Session {
                 issuer: p.issuer,
                 username: p.account,
                 secret: p.secret,
+                otp_type: p.otp_type,
                 algorithm: p.algorithm,
                 digits: p.digits,
                 period: p.period,
@@ -1166,6 +1175,7 @@ impl Session {
                 issuer: a.issuer.clone(),
                 username: a.username.clone(),
                 secret: a.secret.clone(),
+                otp_type: a.otp_type,
                 algorithm: a.algorithm,
                 digits: a.digits,
                 period: a.period,

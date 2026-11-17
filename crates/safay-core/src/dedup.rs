@@ -7,12 +7,13 @@ use uuid::Uuid;
 
 use crate::canonical::{self, clean_text, standardized_secret};
 use crate::category::{self, Category};
-use crate::model::{Account, Placeholders, TotpAlgorithm, redacted_secret};
+use crate::model::{Account, OtpType, Placeholders, TotpAlgorithm, redacted_secret};
 use crate::site_icon;
 use crate::vault::{self, VaultContents, VaultError};
 
 /// Two accounts are duplicates when issuer, username (both case-insensitive), normalized secret, algorithm, digits, and
-/// period all match.
+/// period all match. The type is not part of the key: a Steam Guard account differs in digits, and a Battle.net account
+/// shows the same codes as eight-digit TOTP with the same secret.
 pub fn deduplication_key(
     issuer: &str,
     username: &str,
@@ -38,6 +39,7 @@ pub struct Candidate {
     pub issuer: String,
     pub username: String,
     pub secret: String,
+    pub otp_type: OtpType,
     pub algorithm: TotpAlgorithm,
     pub digits: u32,
     pub period: u32,
@@ -60,6 +62,7 @@ impl std::fmt::Debug for Candidate {
             .field("issuer", &self.issuer)
             .field("username", &self.username)
             .field("secret", &redacted_secret(&self.secret))
+            .field("otp_type", &self.otp_type)
             .field("algorithm", &self.algorithm)
             .field("digits", &self.digits)
             .field("period", &self.period)
@@ -104,6 +107,7 @@ pub fn insert_accounts(
             &candidate.issuer,
             &candidate.username,
             &candidate.secret,
+            candidate.otp_type,
             candidate.algorithm,
             candidate.digits,
             candidate.period,
@@ -133,6 +137,7 @@ pub fn insert_accounts(
             issuer: fields.issuer,
             username: fields.username,
             secret: fields.secret,
+            otp_type: fields.otp_type,
             algorithm: fields.algorithm,
             digits: fields.digits,
             period: fields.period,
@@ -165,6 +170,7 @@ pub fn candidates_from_import(imported: &VaultContents) -> Vec<Candidate> {
             issuer: account.issuer.clone(),
             username: account.username.clone(),
             secret: account.secret.clone(),
+            otp_type: account.otp_type,
             algorithm: account.algorithm,
             digits: account.digits,
             period: account.period,
@@ -191,6 +197,7 @@ mod tests {
             issuer: issuer.into(),
             username: username.into(),
             secret: secret.into(),
+            otp_type: crate::model::OtpType::Totp,
             algorithm: TotpAlgorithm::Sha1,
             digits: 6,
             period: 30,
@@ -281,6 +288,7 @@ mod tests {
             issuer: format!("S{n}"),
             username: "u".into(),
             secret: "MZXW6YTBOI".into(),
+            otp_type: crate::model::OtpType::Totp,
             algorithm: TotpAlgorithm::Sha1,
             digits: 6,
             period: 30,

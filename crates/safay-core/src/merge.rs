@@ -32,7 +32,7 @@ pub enum AccountChange {
     Username,
     /// Different secrets (the UI only says the secret differs and never shows the value).
     Secret,
-    /// Algorithm, digits, or period.
+    /// Type, algorithm, digits, or period.
     Parameters,
     /// Category membership (compared by category name).
     Categories,
@@ -130,7 +130,7 @@ fn changes_between(local: &Account, remote: &Account, local_categories: &[Catego
     if secret(local) != secret(remote) {
         changes.push(AccountChange::Secret);
     }
-    if (local.algorithm, local.digits, local.period) != (remote.algorithm, remote.digits, remote.period) {
+    if (local.otp_type, local.algorithm, local.digits, local.period) != (remote.otp_type, remote.algorithm, remote.digits, remote.period) {
         changes.push(AccountChange::Parameters);
     }
     if category_names_of(local.id, local_categories) != category_names_of(remote.id, remote_categories) {
@@ -297,6 +297,7 @@ mod tests {
             issuer: issuer.into(),
             username: "alex".into(),
             secret: secret.into(),
+            otp_type: crate::model::OtpType::Totp,
             algorithm: TotpAlgorithm::Sha1,
             digits: 6,
             period: 30,

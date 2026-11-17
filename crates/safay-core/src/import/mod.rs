@@ -3,9 +3,9 @@
 //! a one-time password column), and plain text with one `otpauth://` link per line.
 //!
 //! [`inspect`] tells the format and whether it needs a password from the file's structure alone; [`import_file`] reads it.
-//! Every format goes through one set of rules ([`Collector`]): only TOTP with SHA-1, SHA-256, or SHA-512 and 6 or 8 digits
-//! is imported, and anything else (HOTP, Steam, Yandex, mOTP, other digit counts, entries in a trash) is skipped and
-//! counted instead of failing the file. Groups, tags, and folders become categories, and favorite or pinned entries go
+//! Every format goes through one set of rules ([`Collector`]): only TOTP with SHA-1, SHA-256, or SHA-512 and 6 or 8 digits,
+//! Steam Guard, and Battle.net are imported, and anything else (HOTP, Yandex, mOTP, other digit counts, entries in a trash) is
+//! skipped and counted instead of failing the file. Groups, tags, and folders become categories, and favorite or pinned entries go
 //! into `pinned_ids`.
 //!
 //! Key derivation parameters read from a file are checked against limits before anything is computed, so a malicious or
@@ -28,7 +28,7 @@ use zeroize::Zeroizing;
 use crate::authenticator;
 use crate::canonical::{clean_text, normalized_issuer, normalized_username, standardized_secret};
 use crate::category::{self, Category, MAX_NAME_CHARS};
-use crate::model::{Account, Placeholders, TotpAlgorithm, provenance};
+use crate::model::{Account, OtpType, Placeholders, TotpAlgorithm, provenance};
 use crate::otpauth;
 use crate::site_icon;
 use crate::vault::{self, VaultContents};
@@ -185,7 +185,7 @@ fn utf8(data: &[u8]) -> Result<&str, ImportError> {
 /// One entry's one-time password parameters, as a file states them. Empty or missing values take the otpauth defaults.
 #[derive(Default)]
 pub(crate) struct Fields<'a> {
-    /// `totp` (any case) or empty for TOTP; anything else is skipped.
+    /// `totp` (any case) or empty for TOTP, `steam` for Steam Guard, `battle` for Battle.net; anything else is skipped.
     pub kind: &'a str,
     pub issuer: &'a str,
     pub username: &'a str,
@@ -225,27 +225,41 @@ impl<'a> Collector<'a> {
 
     /// Adds an entry given as separate fields; unsupported ones are skipped.
     pub fn add_fields(&mut self, fields: &Fields<'_>, extras: Extras) -> Result<(), ImportError> {
-        let kind = fields.kind.trim();
-        if !kind.is_empty() && !kind.eq_ignore_ascii_case("totp") {
-            self.skip();
-            return Ok(());
-        }
-        let algorithm = match fields.algorithm.trim().to_uppercase().replace('-', "").as_str() {
-            "" | "SHA1" => TotpAlgorithm::Sha1,
-            "SHA256" => TotpAlgorithm::Sha256,
-            "SHA512" => TotpAlgorithm::Sha512,
+        let otp_type = match fields.kind.trim().to_ascii_lowercase().as_str() {
+            "" | "totp" => OtpType::Totp,
+            "steam" => OtpType::Steam,
+            "battle" => OtpType::BattleNet,
             _ => {
                 self.skip();
                 return Ok(());
             }
         };
-        let digits = fields.digits.unwrap_or(6);
-        let period = fields.period.unwrap_or(30);
         let Some(secret) = standardized_secret(fields.secret).map(Zeroizing::new) else {
             self.skip();
             return Ok(());
         };
-        if (digits != 6 && digits != 8) || period <= 0 || period > i64::from(u32::MAX) {
+        // Steam Guard and Battle.net use fixed parameters, whatever the file states.
+        let (algorithm, digits, period) = match otp_type.fixed_parameters() {
+            Some((algorithm, digits, period)) => (algorithm, i64::from(digits), i64::from(period)),
+            None => {
+                let algorithm = match fields.algorithm.trim().to_uppercase().replace('-', "").as_str() {
+                    "" | "SHA1" => TotpAlgorithm::Sha1,
+                    "SHA256" => TotpAlgorithm::Sha256,
+                    "SHA512" => TotpAlgorithm::Sha512,
+                    _ => {
+                        self.skip();
+                        return Ok(());
+                    }
+                };
+                let digits = fields.digits.unwrap_or(6);
+                if digits != 6 && digits != 8 {
+                    self.skip();
+                    return Ok(());
+                }
+                (algorithm, digits, fields.period.unwrap_or(30))
+            }
+        };
+        if period <= 0 || period > i64::from(u32::MAX) {
             self.skip();
             return Ok(());
         }
@@ -254,6 +268,7 @@ impl<'a> Collector<'a> {
             issuer: normalized_issuer(fields.issuer, self.placeholders),
             username: normalized_username(fields.username, self.placeholders),
             secret: secret.to_string(),
+            otp_type,
             algorithm,
             digits: digits as u32,
             period: period as u32,
@@ -266,8 +281,9 @@ impl<'a> Collector<'a> {
         self.push(account, extras)
     }
 
-    /// Adds an entry stored as an `otpauth://` link, or as a bare Base32 secret (password managers store either). `name`
-    /// and `username` fill in an issuer or account the link leaves out. Other links (`steam://`, HOTP, …) are skipped.
+    /// Adds an entry stored as an `otpauth://` or `steam://` link, or as a bare Base32 secret (password managers store any
+    /// of them). `name` and `username` fill in an issuer or account the link leaves out. Other links (HOTP, …) are
+    /// skipped.
     pub fn add_link(&mut self, link: &str, name: &str, username: &str, extras: Extras) -> Result<(), ImportError> {
         let link = link.trim();
         if link.is_empty() {
@@ -277,7 +293,7 @@ impl<'a> Collector<'a> {
         if !lower.contains("://") {
             return self.add_fields(&Fields { issuer: name, username, secret: link, ..Fields::default() }, extras);
         }
-        if !lower.starts_with("otpauth://") {
+        if !lower.starts_with("otpauth://") && !lower.starts_with("steam://") {
             self.skip();
             return Ok(());
         }
@@ -303,6 +319,7 @@ impl<'a> Collector<'a> {
             issuer: std::mem::take(&mut parsed.issuer),
             username: std::mem::take(&mut parsed.account),
             secret: std::mem::take(&mut parsed.secret),
+            otp_type: parsed.otp_type,
             algorithm: parsed.algorithm,
             digits: parsed.digits,
             period: parsed.period,

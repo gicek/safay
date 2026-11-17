@@ -514,5 +514,7 @@
   "Adds the account from a 2FA QR code on your screen": "从屏幕上的 2FA 二维码添加账户",
   "Launcher Access": "启动器访问",
   "Needs launcher access": "需要打开启动器访问",
-  "Erases Safay’s data on this computer. Exported files and backups aren’t affected.": "抹掉这台电脑上的 Safay 数据。已导出的文件和备份不受影响。"
+  "Erases Safay’s data on this computer. Exported files and backups aren’t affected.": "抹掉这台电脑上的 Safay 数据。已导出的文件和备份不受影响。",
+  "Type": "类型",
+  "Time Based": "基于时间"
 }

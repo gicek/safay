@@ -27,6 +27,45 @@ impl TotpAlgorithm {
     }
 }
 
+/// How an account's code is made. The persisted values (`totp` / `steam` / `battle`) must not be renamed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum OtpType {
+    /// RFC 6238 TOTP with the account's own algorithm, digits, and period.
+    #[default]
+    Totp,
+    /// Steam Guard: TOTP written as five characters from Steam's alphabet ([`crate::totp`]).
+    Steam,
+    /// Battle.net: TOTP with eight digits.
+    BattleNet,
+}
+
+impl OtpType {
+    pub const ALL: [OtpType; 3] = [OtpType::Totp, OtpType::Steam, OtpType::BattleNet];
+
+    pub fn raw_value(self) -> &'static str {
+        match self {
+            OtpType::Totp => "totp",
+            OtpType::Steam => "steam",
+            OtpType::BattleNet => "battle",
+        }
+    }
+
+    /// Parses the persisted value strictly (case-sensitive).
+    pub fn from_raw_value(value: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|otp_type| otp_type.raw_value() == value)
+    }
+
+    /// The algorithm, digits, and period every account of this type uses, or `None` for TOTP, whose parameters are
+    /// its own.
+    pub fn fixed_parameters(self) -> Option<(TotpAlgorithm, u32, u32)> {
+        match self {
+            OtpType::Totp => None,
+            OtpType::Steam => Some((TotpAlgorithm::Sha1, 5, 30)),
+            OtpType::BattleNet => Some((TotpAlgorithm::Sha1, 8, 30)),
+        }
+    }
+}
+
 /// Persisted values for an account's provenance.
 pub mod provenance {
     pub const MANUAL: &str = "manual";
@@ -40,6 +79,7 @@ pub struct Account {
     pub issuer: String,
     pub username: String,
     pub secret: String,
+    pub otp_type: OtpType,
     pub algorithm: TotpAlgorithm,
     pub digits: u32,
     pub period: u32,
@@ -75,6 +115,7 @@ impl std::fmt::Debug for Account {
             .field("issuer", &self.issuer)
             .field("username", &self.username)
             .field("secret", &redacted_secret(&self.secret))
+            .field("otp_type", &self.otp_type)
             .field("algorithm", &self.algorithm)
             .field("digits", &self.digits)
             .field("period", &self.period)

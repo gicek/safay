@@ -28,7 +28,7 @@ use zeroize::{Zeroize, Zeroizing};
 
 use crate::base32;
 use crate::canonical::{normalized_issuer, normalized_username, standardized_secret};
-use crate::model::{Account, Placeholders, TotpAlgorithm, provenance};
+use crate::model::{Account, OtpType, Placeholders, TotpAlgorithm, provenance};
 use crate::vault::{self, VaultContents};
 
 pub use crate::import::{FileKind, ImportError};
@@ -194,6 +194,8 @@ fn normalized_type(value: Option<&Value>) -> String {
         Some(raw) => match raw.as_str() {
             "1" => "totp".to_owned(),
             "2" => "hotp".to_owned(),
+            "3" => "battle".to_owned(),
+            "4" => "steam".to_owned(),
             "5" => "hex".to_owned(),
             "6" => "hhex".to_owned(),
             _ => raw,
@@ -246,26 +248,35 @@ fn account_from_raw(
     } else {
         Zeroizing::new(stored)
     };
-    let secret = match normalized_type(item.get("type")).as_str() {
-        "totp" => secret,
+    let (otp_type, secret) = match normalized_type(item.get("type")).as_str() {
+        "totp" => (OtpType::Totp, secret),
+        "steam" => (OtpType::Steam, secret),
+        "battle" => (OtpType::BattleNet, secret),
         "hex" => {
             let Some(bytes) = hex_decode(&secret).map(Zeroizing::new) else { return Ok(None) };
-            Zeroizing::new(base32::encode(&bytes))
+            (OtpType::Totp, Zeroizing::new(base32::encode(&bytes)))
         }
         _ => return Ok(None),
     };
     let Some(secret) = standardized_secret(&secret) else { return Ok(None) };
-    let Some(algorithm) = normalized_algorithm(item.get("algorithm")) else { return Ok(None) };
-    let digits = int_value(item.get("digits")).unwrap_or(6);
-    if digits != 6 && digits != 8 {
-        return Ok(None);
-    }
-    let period = int_value(item.get("period")).unwrap_or(30).clamp(1, i64::from(u32::MAX));
+    // Steam Guard and Battle.net use fixed parameters, whatever the backup states.
+    let (algorithm, digits, period) = match otp_type.fixed_parameters() {
+        Some((algorithm, digits, period)) => (algorithm, i64::from(digits), i64::from(period)),
+        None => {
+            let Some(algorithm) = normalized_algorithm(item.get("algorithm")) else { return Ok(None) };
+            let digits = int_value(item.get("digits")).unwrap_or(6);
+            if digits != 6 && digits != 8 {
+                return Ok(None);
+            }
+            (algorithm, digits, int_value(item.get("period")).unwrap_or(30).clamp(1, i64::from(u32::MAX)))
+        }
+    };
     let account = Account {
         id: vault::random_uuid().map_err(ImportError::Vault)?,
         issuer: normalized_issuer(&string_value(item.get("issuer")).unwrap_or_default(), placeholders),
         username: normalized_username(&string_value(item.get("account")).unwrap_or_default(), placeholders),
         secret,
+        otp_type,
         algorithm,
         digits: digits as u32,
         period: period as u32,
@@ -414,10 +425,27 @@ mod tests {
             "cccccccc-cccc-4ccc-8ccc-cccccccccccc": {
                 "account": "hotp@example.com", "encrypted": false, "index": 2, "issuer": "HOTP",
                 "secret": "MZXW6YTBOI", "type": "hotp"
+            },
+            "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "account": "gamer", "algorithm": "SHA256", "digits": 8, "encrypted": false, "index": 3, "issuer": "Steam",
+                "period": 60, "secret": "MZXW6YTBOI", "type": "steam"
+            },
+            "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee": {
+                "account": "hero", "algorithm": "SHA256", "encrypted": false, "index": 4, "issuer": "Battle.net",
+                "period": 60, "secret": "MZXW6YTBOI", "type": "battle"
+            },
+            "ffffffff-ffff-4fff-8fff-ffffffffffff": {
+                "account": "old", "encrypted": false, "index": 5, "issuer": "Battle.net", "secret": "MZXW6YTBOI", "type": "3"
             }
         });
         let accounts = import_authenticator(data.to_string().as_bytes(), "", SystemTime::UNIX_EPOCH, &placeholders()).unwrap();
-        assert_eq!(accounts.len(), 2);
+        assert_eq!(accounts.len(), 5);
+        // Steam Guard's parameters are fixed, whatever the backup states.
+        assert_eq!((accounts[2].algorithm, accounts[2].digits, accounts[2].period), (TotpAlgorithm::Sha1, 5, 30));
+        assert_eq!(accounts[2].otp_type, OtpType::Steam);
+        for battle in &accounts[3..] {
+            assert_eq!((battle.otp_type, battle.algorithm, battle.digits, battle.period), (OtpType::BattleNet, TotpAlgorithm::Sha1, 8, 30));
+        }
         assert_eq!(accounts[0].issuer, "GitHub Inc");
         assert_eq!(accounts[0].username, "alex@example.com");
         assert_eq!(accounts[0].secret, "MZXW6YTBOI");
@@ -491,6 +519,7 @@ mod tests {
             issuer: "GitHub".into(),
             username: "alex".into(),
             secret: "MZXW6YTBOI".into(),
+            otp_type: crate::model::OtpType::Totp,
             algorithm: TotpAlgorithm::Sha1,
             digits: 6,
             period: 30,

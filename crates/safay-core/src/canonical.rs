@@ -5,7 +5,7 @@
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 
 use crate::base32;
-use crate::model::{Account, Placeholders, TotpAlgorithm, redacted_secret};
+use crate::model::{Account, OtpType, Placeholders, TotpAlgorithm, redacted_secret};
 
 /// Strict percent-decoding: returns `None` on an incomplete `%XX` or when the result is not valid UTF-8 (matching
 /// Foundation's `removingPercentEncoding`; the `percent-encoding` crate passes invalid sequences through unchanged).
@@ -79,6 +79,7 @@ pub struct Fields {
     pub issuer: String,
     pub username: String,
     pub secret: String,
+    pub otp_type: OtpType,
     pub algorithm: TotpAlgorithm,
     pub digits: u32,
     pub period: u32,
@@ -91,6 +92,7 @@ impl std::fmt::Debug for Fields {
             .field("issuer", &self.issuer)
             .field("username", &self.username)
             .field("secret", &redacted_secret(&self.secret))
+            .field("otp_type", &self.otp_type)
             .field("algorithm", &self.algorithm)
             .field("digits", &self.digits)
             .field("period", &self.period)
@@ -98,17 +100,21 @@ impl std::fmt::Debug for Fields {
     }
 }
 
-/// Standardization applied before saving; returns `None` when digits is not 6 / 8 or the secret is invalid.
+/// Standardization applied before saving; returns `None` when a TOTP account's digits is not 6 / 8 or the secret is
+/// invalid. Steam Guard and Battle.net take their fixed parameters ([`OtpType::fixed_parameters`]), whatever was given.
+#[allow(clippy::too_many_arguments)]
 pub fn fields(
     issuer: &str,
     username: &str,
     secret: &str,
+    otp_type: OtpType,
     algorithm: TotpAlgorithm,
     digits: u32,
     period: u32,
     placeholders: &Placeholders,
 ) -> Option<Fields> {
-    if digits != 6 && digits != 8 {
+    let (algorithm, digits, period) = otp_type.fixed_parameters().unwrap_or((algorithm, digits, period.max(1)));
+    if digits != 6 && digits != 8 && otp_type == OtpType::Totp {
         return None;
     }
     let secret = standardized_secret(secret)?;
@@ -116,9 +122,10 @@ pub fn fields(
         issuer: normalized_issuer(issuer, placeholders),
         username: normalized_username(&stripping_issuer_prefix(username, issuer), placeholders),
         secret,
+        otp_type,
         algorithm,
         digits,
-        period: period.max(1),
+        period,
     })
 }
 
@@ -149,23 +156,35 @@ const QUERY_VALUE_ENCODE_SET: &AsciiSet = &NON_ALPHANUMERIC
     .remove(b'?');
 
 /// Standard otpauth URI for single-account QR code export. `algorithm`, `digits` and `period` appear only when they
-/// differ from the Key URI format's defaults (SHA1, 6, 30), so a common account's QR code stays small.
+/// differ from the Key URI format's defaults (SHA1, 6, 30), so a common account's QR code stays small. A Steam Guard
+/// account is written as `otpauth://steam/…&digits=5`, as other authenticator apps write it; a Battle.net account as plain
+/// eight-digit TOTP, which is what its codes are.
 pub fn otpauth_url(account: &Account, placeholders: &Placeholders) -> String {
-    let fields =
-        fields(&account.issuer, &account.username, &account.secret, account.algorithm, account.digits, account.period, placeholders)
-            .unwrap_or_else(|| Fields {
-                issuer: normalized_issuer(&account.issuer, placeholders),
-                username: normalized_username(&account.username, placeholders),
-                secret: clean_text(&account.secret).to_uppercase(),
-                algorithm: account.algorithm,
-                digits: account.digits,
-                period: account.period.max(1),
-            });
+    let fields = fields(
+        &account.issuer,
+        &account.username,
+        &account.secret,
+        account.otp_type,
+        account.algorithm,
+        account.digits,
+        account.period,
+        placeholders,
+    )
+    .unwrap_or_else(|| Fields {
+        issuer: normalized_issuer(&account.issuer, placeholders),
+        username: normalized_username(&account.username, placeholders),
+        secret: clean_text(&account.secret).to_uppercase(),
+        otp_type: account.otp_type,
+        algorithm: account.algorithm,
+        digits: account.digits,
+        period: account.period.max(1),
+    });
 
     let label =
         format!("{}:{}", utf8_percent_encode(&fields.issuer, LABEL_ENCODE_SET), utf8_percent_encode(&fields.username, LABEL_ENCODE_SET));
     let query = |value: &str| utf8_percent_encode(value, QUERY_VALUE_ENCODE_SET).to_string();
-    let mut url = format!("otpauth://totp/{label}?secret={}&issuer={}", query(&fields.secret), query(&fields.issuer));
+    let kind = if fields.otp_type == OtpType::Steam { "steam" } else { "totp" };
+    let mut url = format!("otpauth://{kind}/{label}?secret={}&issuer={}", query(&fields.secret), query(&fields.issuer));
     if fields.algorithm != TotpAlgorithm::Sha1 {
         url.push_str(&format!("&algorithm={}", fields.algorithm.raw_value()));
     }
@@ -209,6 +228,7 @@ mod tests {
             issuer: "GitHub".into(),
             username: "alex@example.com".into(),
             secret: "mzxw 6ytb-oi".into(),
+            otp_type: OtpType::Totp,
             algorithm: TotpAlgorithm::Sha1,
             digits: 6,
             period: 30,
@@ -225,16 +245,28 @@ mod tests {
             otpauth_url(&account, &placeholders()),
             "otpauth://totp/GitHub:alex%40example.com?secret=MZXW6YTBOI&issuer=GitHub&digits=8"
         );
+        account.otp_type = OtpType::BattleNet;
+        assert_eq!(
+            otpauth_url(&account, &placeholders()),
+            "otpauth://totp/GitHub:alex%40example.com?secret=MZXW6YTBOI&issuer=GitHub&digits=8"
+        );
+        account.otp_type = OtpType::Steam;
+        assert_eq!(
+            otpauth_url(&account, &placeholders()),
+            "otpauth://steam/GitHub:alex%40example.com?secret=MZXW6YTBOI&issuer=GitHub&digits=5"
+        );
     }
 
     #[test]
     fn fields_standardize_and_validate() {
-        let result = fields(" ", "", "mzxw 6ytb-oi", TotpAlgorithm::Sha1, 6, 0, &placeholders()).unwrap();
+        let result = fields(" ", "", "mzxw 6ytb-oi", OtpType::Totp, TotpAlgorithm::Sha1, 6, 0, &placeholders()).unwrap();
         assert_eq!(result.issuer, "Unknown service");
         assert_eq!(result.username, "No account");
         assert_eq!(result.secret, "MZXW6YTBOI");
         assert_eq!(result.period, 1);
-        assert!(fields("a", "b", "MZXW6YTBOI", TotpAlgorithm::Sha1, 7, 30, &placeholders()).is_none());
-        assert!(fields("a", "b", "A", TotpAlgorithm::Sha1, 6, 30, &placeholders()).is_none());
+        assert!(fields("a", "b", "MZXW6YTBOI", OtpType::Totp, TotpAlgorithm::Sha1, 7, 30, &placeholders()).is_none());
+        assert!(fields("a", "b", "A", OtpType::Totp, TotpAlgorithm::Sha1, 6, 30, &placeholders()).is_none());
+        let steam = fields("a", "b", "MZXW6YTBOI", OtpType::Steam, TotpAlgorithm::Sha512, 7, 60, &placeholders()).unwrap();
+        assert_eq!((steam.algorithm, steam.digits, steam.period), (TotpAlgorithm::Sha1, 5, 30));
     }
 }

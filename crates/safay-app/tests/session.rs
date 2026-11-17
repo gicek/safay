@@ -327,9 +327,9 @@ fn imports_other_apps_with_categories() {
     let (file, password) = case("aegis encrypted");
     assert_eq!(s.import_file(&file, ""), Err(Error::FilePasswordRequired));
     assert_eq!(s.import_file(&file, "wrong"), Err(Error::FilePassword));
-    assert_eq!(s.import_file(&file, &password), Ok(ImportSummary { added: 2, skipped: 3 }));
+    assert_eq!(s.import_file(&file, &password), Ok(ImportSummary { added: 3, skipped: 2 }));
     let projection = s.projection("", None).unwrap();
-    assert_eq!(projection.account_count, 2);
+    assert_eq!(projection.account_count, 3);
     let mut categories: Vec<_> = projection.categories.iter().map(|c| (c.name.as_str(), c.count)).collect();
     categories.sort();
     assert_eq!(categories, vec![("Home", 1), ("Pinned", 1), ("Work", 2)]);
@@ -537,4 +537,34 @@ fn deleted_accounts_wait_in_recently_deleted_then_go() {
     assert!(s.purge_deleted().unwrap());
     let p = s.projection("", None).unwrap();
     assert_eq!((p.account_count, p.deleted_count), (2, 0));
+}
+#[test]
+fn steam_and_battle_net_accounts_keep_fixed_parameters() {
+    use safay_app::core::{OtpType, TotpAlgorithm};
+    let (mut s, _, _, _) = setup();
+    s.create(PASSWORD, false).unwrap();
+    let mut steam = draft();
+    steam.issuer = "Steam".into();
+    (steam.otp_type, steam.algorithm, steam.digits, steam.period) = (OtpType::Steam, TotpAlgorithm::Sha256, 8, 60);
+    s.save_account(&steam).unwrap();
+    let mut battle = draft();
+    battle.issuer = "Battle.net".into();
+    (battle.otp_type, battle.algorithm, battle.digits, battle.period) = (OtpType::BattleNet, TotpAlgorithm::Sha512, 6, 60);
+    s.save_account(&battle).unwrap();
+    s.lock();
+    s.unlock(PASSWORD).unwrap();
+    let rows = s.projection("", None).unwrap().rows;
+    let row = |issuer: &str| rows.iter().find(|r| r.issuer == issuer).unwrap().clone();
+    // The same code as golden/totp.json for this secret and time, left whole.
+    assert_eq!((row("Steam").code.as_str(), row("Steam").period), ("K8G5W", 30));
+    // Battle.net codes are eight-digit SHA1 TOTP every 30 seconds.
+    let totp = safay_app::core::totp::code(OtpType::Totp, SECRET, TotpAlgorithm::Sha1, 8, 30, Time::default().wall());
+    assert_eq!((row("Battle.net").code.replace(' ', ""), row("Battle.net").period), (totp, 30));
+    let d = s.detail(row("Steam").id).unwrap();
+    assert_eq!((d.otp_type, d.algorithm, d.digits, d.period), (OtpType::Steam, TotpAlgorithm::Sha1, 5, 30));
+    let d = s.detail(row("Battle.net").id).unwrap();
+    assert_eq!((d.otp_type, d.algorithm, d.digits, d.period), (OtpType::BattleNet, TotpAlgorithm::Sha1, 8, 30));
+    let mut five = draft();
+    five.digits = 5;
+    assert_eq!(s.save_account(&five), Err(Error::Fields), "five digits is not a TOTP setting");
 }

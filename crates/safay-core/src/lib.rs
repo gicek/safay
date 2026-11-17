@@ -27,4 +27,4 @@ pub mod totp;
 pub mod trash;
 pub mod vault;
 
-pub use model::{Account, Placeholders, TotpAlgorithm};
+pub use model::{Account, OtpType, Placeholders, TotpAlgorithm};

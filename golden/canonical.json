@@ -181,6 +181,24 @@
       "period" : -5,
       "secret" : "MZXW6YTBOI",
       "username" : "c%0A"
+    },
+    {
+      "algorithm" : "SHA512",
+      "digits" : 6,
+      "issuer" : "Steam",
+      "output" : {
+        "algorithm" : "SHA1",
+        "digits" : 5,
+        "issuer" : "Steam",
+        "period" : 30,
+        "secret" : "MZXW6YTBOI",
+        "type" : "steam",
+        "username" : "gamer"
+      },
+      "period" : 60,
+      "secret" : "mzxw 6ytb-oi",
+      "type" : "steam",
+      "username" : "Steam:gamer"
     }
   ],
   "otpauthURL" : [
@@ -2163,6 +2181,16 @@
       "secret" : "bad!",
       "url" : "otpauth://totp/a%3Cb%3E:a%26b%3Dc?secret=BAD!&issuer=a%3Cb%3E&algorithm=SHA256&digits=8&period=45",
       "username" : "a&b=c"
+    },
+    {
+      "algorithm" : "SHA1",
+      "digits" : 5,
+      "issuer" : "Steam",
+      "period" : 30,
+      "secret" : "MZXW6YTBOI",
+      "type" : "steam",
+      "url" : "otpauth://steam/Steam:gamer?secret=MZXW6YTBOI&issuer=Steam&digits=5",
+      "username" : "gamer"
     }
   ],
   "placeholders" : {

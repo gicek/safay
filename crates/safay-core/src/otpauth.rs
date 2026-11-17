@@ -1,4 +1,5 @@
-//! Parsing of `otpauth://totp/...` and Google Authenticator `otpauth-migration://offline?data=...`.
+//! Parsing of `otpauth://totp/...` (and Steam Guard links, see [`parse_otpauth`]) and Google Authenticator
+//! `otpauth-migration://offline?data=...`.
 //!
 //! URL structure is parsed with `url`, the migration protobuf with `prost`. The query is split by hand: `URLComponents`
 //! does not treat `+` as a space but `url::Url::query_pairs` does, so a `+` in the issuer would differ between platforms.
@@ -8,7 +9,7 @@ use prost::Message;
 use url::Url;
 
 use crate::canonical::{clean_text, normalized_issuer, normalized_username, standardized_secret, stripping_issuer_prefix};
-use crate::model::{Placeholders, TotpAlgorithm, redacted_secret};
+use crate::model::{OtpType, Placeholders, TotpAlgorithm, redacted_secret};
 use crate::{base32, totp};
 
 /// Why parsing failed; each platform looks up localized text by `l10n_key` (keys match Mac).
@@ -47,6 +48,7 @@ pub struct ParsedOtpAuth {
     pub issuer: String,
     pub account: String,
     pub secret: String,
+    pub otp_type: OtpType,
     pub algorithm: TotpAlgorithm,
     pub digits: u32,
     pub period: u32,
@@ -60,6 +62,7 @@ impl std::fmt::Debug for ParsedOtpAuth {
             .field("issuer", &self.issuer)
             .field("account", &self.account)
             .field("secret", &redacted_secret(&self.secret))
+            .field("otp_type", &self.otp_type)
             .field("algorithm", &self.algorithm)
             .field("digits", &self.digits)
             .field("period", &self.period)
@@ -78,6 +81,7 @@ impl ParsedOtpAuth {
             issuer: String::new(),
             account: String::new(),
             secret: String::new(),
+            otp_type: OtpType::Totp,
             algorithm: TotpAlgorithm::Sha1,
             digits: 6,
             period: 30,
@@ -209,15 +213,21 @@ fn split_label(label: &str) -> Vec<String> {
     }
 }
 
+/// Reads `otpauth://totp/…`, and Steam Guard accounts as `otpauth://steam/…`, `otpauth://totp/…&encoder=steam`, or
+/// `steam://SECRET`.
 fn parse_otpauth(url: &Url, placeholders: &Placeholders) -> ParsedOtpAuth {
+    if url.scheme() == "steam" {
+        return parse_steam(url, placeholders);
+    }
     if url.scheme() != "otpauth" {
         return ParsedOtpAuth::invalid(ParseFailure::NotOtpauth);
     }
     let otp_type = url.host_str().unwrap_or("").to_lowercase();
-    if otp_type != "totp" && otp_type != "1" {
+    if otp_type != "totp" && otp_type != "1" && otp_type != "steam" {
         return ParsedOtpAuth::invalid(ParseFailure::NotTotp);
     }
     let items = query_items(url);
+    let steam = otp_type == "steam" || query_value(&items, "encoder").is_some_and(|value| value.eq_ignore_ascii_case("steam"));
     let secret = query_value(&items, "secret").unwrap_or_default();
     if clean_text(&secret).is_empty() {
         return ParsedOtpAuth::invalid(ParseFailure::MissingSecret);
@@ -235,6 +245,9 @@ fn parse_otpauth(url: &Url, placeholders: &Placeholders) -> ParsedOtpAuth {
     let account_part = if label_parts.len() > 1 { label_parts[1].clone() } else { label.clone() };
     let account = stripping_issuer_prefix(&account_part, &issuer);
 
+    if steam {
+        return steam_account(normalized_issuer(&issuer, placeholders), normalized_username(&account, placeholders), secret);
+    }
     let algorithm = query_value(&items, "algorithm")
         .and_then(|value| TotpAlgorithm::from_raw_value(&value.to_uppercase()))
         .unwrap_or(TotpAlgorithm::Sha1);
@@ -252,10 +265,29 @@ fn parse_otpauth(url: &Url, placeholders: &Placeholders) -> ParsedOtpAuth {
         issuer: normalized_issuer(&issuer, placeholders),
         account: normalized_username(&account, placeholders),
         secret,
+        otp_type: OtpType::Totp,
         algorithm,
         digits: digits as u32,
         period: period as u32,
     }
+}
+
+/// A Steam Guard entry: its parameters are fixed, whatever a link states.
+fn steam_account(issuer: String, account: String, secret: String) -> ParsedOtpAuth {
+    let (algorithm, digits, period) = OtpType::Steam.fixed_parameters().expect("Steam Guard has fixed parameters");
+    ParsedOtpAuth { failure: None, issuer, account, secret, otp_type: OtpType::Steam, algorithm, digits, period }
+}
+
+/// `steam://SECRET` (Base32), as password managers store a Steam Guard secret. It names no account.
+fn parse_steam(url: &Url, placeholders: &Placeholders) -> ParsedOtpAuth {
+    let raw = url.host_str().filter(|host| !host.is_empty()).unwrap_or_else(|| url.path().trim_matches('/'));
+    if clean_text(raw).is_empty() {
+        return ParsedOtpAuth::invalid(ParseFailure::MissingSecret);
+    }
+    let Some(secret) = standardized_secret(raw) else {
+        return ParsedOtpAuth::invalid(ParseFailure::BadBase32);
+    };
+    steam_account(normalized_issuer("Steam", placeholders), normalized_username("", placeholders), secret)
 }
 
 // Google Authenticator migration payload. Enums and omittable fields are declared optional: the fallback when absent
@@ -339,6 +371,7 @@ fn parse_migration(url: &Url, placeholders: &Placeholders) -> ScanResult {
                 issuer: normalized_issuer(&issuer, placeholders),
                 account: normalized_username(&stripping_issuer_prefix(&name, &issuer), placeholders),
                 secret,
+                otp_type: OtpType::Totp,
                 algorithm,
                 digits,
                 period: 30,
