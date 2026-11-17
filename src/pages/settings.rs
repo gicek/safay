@@ -480,13 +480,18 @@ fn recorder(s: Store, which: u8) -> impl IntoElement {
                         return;
                     }
                     s.recording.set(Some(which));
+                    // The key arrives on AppKit's main thread; it is applied here, on the engine thread.
                     #[cfg(target_os = "macos")]
-                    crate::platform::hotkeys::record(move |result| {
-                        s.recording.set(None);
-                        if let Some(next) = result {
-                            store(next)
-                        }
-                    });
+                    {
+                        let keys = crate::platform::hotkeys::record();
+                        s.task(async move {
+                            let result = blocking(move || keys.recv().ok().flatten()).await.ok().flatten();
+                            s.recording.set(None);
+                            if let Some(next) = result {
+                                store(next)
+                            }
+                        });
+                    }
                 })
                 .child(
                     text(move || {

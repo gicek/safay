@@ -95,18 +95,23 @@ fn key_name(key: u16) -> &'static str {
     LETTERS.iter().find(|(k, _)| *k == key).map(|(_, n)| *n).unwrap_or("?")
 }
 
-/// Records the next key press in this app for the shortcut editor: Escape cancels, Delete clears.
-pub fn record(done: impl FnOnce(Option<Option<safay_app::preferences::Hotkey>>) + 'static) {
+/// What the shortcut editor recorded: `None` cancelled (Escape), `Some(None)` cleared (Delete), or the new shortcut.
+pub type Recorded = Option<Option<safay_app::preferences::Hotkey>>;
+
+/// Records the next key press in this app for the shortcut editor: Escape cancels, Delete clears. AppKit hands the key
+/// to its monitor on the main thread, where the UI's signals may not be touched: the result comes through the channel,
+/// for the engine thread to apply.
+pub fn record() -> std::sync::mpsc::Receiver<Recorded> {
     use nsh_platform_macos::{
         objc2::rc::Retained,
         objc2::runtime::AnyObject,
         objc2_app_kit::{NSEvent, NSEventMask, NSEventModifierFlags},
     };
     use std::{cell::RefCell, rc::Rc};
-    type Done = Box<dyn FnOnce(Option<Option<safay_app::preferences::Hotkey>>)>;
-    let slot: Rc<RefCell<Option<Done>>> = Rc::new(RefCell::new(Some(Box::new(done))));
+    let (sender, receiver) = std::sync::mpsc::channel::<Recorded>();
+    let sender = RefCell::new(Some(sender));
     let monitor: Rc<RefCell<Option<Retained<AnyObject>>>> = Rc::new(RefCell::new(None));
-    let (slot2, monitor2) = (slot.clone(), monitor.clone());
+    let monitor2 = monitor.clone();
     let block = block2::RcBlock::new(move |event: std::ptr::NonNull<NSEvent>| -> *mut NSEvent {
         let event_ref = unsafe { event.as_ref() };
         let code = event_ref.keyCode();
@@ -137,13 +142,14 @@ pub fn record(done: impl FnOnce(Option<Option<safay_app::preferences::Hotkey>>) 
         if let Some(m) = monitor2.borrow_mut().take() {
             unsafe { NSEvent::removeMonitor(&m) };
         }
-        if let Some(f) = slot2.borrow_mut().take() {
-            f(result);
+        if let Some(sender) = sender.borrow_mut().take() {
+            let _ = sender.send(result);
         }
         std::ptr::null_mut()
     });
     let token = unsafe { NSEvent::addLocalMonitorForEventsMatchingMask_handler(NSEventMask::KeyDown, &block) };
     *monitor.borrow_mut() = token;
+    receiver
 }
 
 #[cfg(test)]
