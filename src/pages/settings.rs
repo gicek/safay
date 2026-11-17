@@ -681,7 +681,7 @@ fn advanced(s: Store) -> impl IntoElement {
                         s,
                         "Restore Last Good Copy",
                         help(s, "Replace the vault with the copy saved before the last change"),
-                        push_button(move || s.label("Restore…"), Kind::Standard, false)
+                        push_button(move || s.label("Restore"), Kind::Standard, false)
                             .on_press(move || open_main_sheet(s, Sheet::Restore)),
                     )
                     .into_element(),
@@ -839,9 +839,9 @@ fn updates(s: Store) -> impl IntoElement {
             Some(Box::new(status)),
             push_button(move || s.label(action()), Kind::Standard, false).disabled(move || !configured || busy()).on_press(move || {
                 match phase() {
-                    Phase::Available { .. } => s.download_update(true),
+                    Phase::Available { version, notes } => s.offer_update(version, notes),
                     Phase::Ready { .. } => s.restart_to_update(),
-                    _ => s.check_updates(true),
+                    _ => s.check_updates(crate::store::Check::Manual),
                 }
             }),
         )

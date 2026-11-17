@@ -20,7 +20,6 @@ import argparse
 import hashlib
 import json
 import os
-import re
 import plistlib
 import shutil
 import subprocess
@@ -52,31 +51,6 @@ def changelog_section(version: str) -> str | None:
     return "\n".join(lines).strip() if found else None
 
 
-def update_notes(section: str) -> str:
-    """The update dialog's text from a CHANGELOG section: plain text, as the app shows it as is. Lines wrapped in the
-    Markdown are joined, the `###` headings are left out, emphasis, code and link marks go, and list items become `•`
-    lines; paragraphs stay apart by a blank line."""
-    blocks: list[list[str]] = []
-    for line in section.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            blocks.append([])
-            continue
-        item = stripped.startswith(("- ", "* "))
-        text = stripped[2:] if item else stripped
-        text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)
-        text = text.replace("**", "").replace("`", "")
-        if item or not blocks or not blocks[-1]:
-            if not blocks or (not item and blocks[-1]):
-                blocks.append([])
-            blocks[-1].append(("• " if item else "") + text)
-        else:
-            # A wrapped line goes on with the line above.
-            blocks[-1][-1] += " " + text
-    paragraphs = ["\n".join(lines) for lines in blocks if lines]
-    return "\n\n".join(paragraphs)
-
-
 def write_manifest(metadata: dict, version: str, update_url: str, secret: Path, archive: Path, dist: Path, config: dict) -> None:
     """`latest.json` and `latest.json.sig` for `archive`, with this version's update notes."""
     # `nsh update-manifest` reads the id, version and key from an nsh.json with "updater": the project's own nsh.json
@@ -84,8 +58,9 @@ def write_manifest(metadata: dict, version: str, update_url: str, secret: Path, 
     with tempfile.TemporaryDirectory() as entry:
         entry_config = dict(metadata, updater={"url": update_url, "publicKey": package.UPDATE_PUBLIC_KEY})
         (Path(entry) / "nsh.json").write_text(json.dumps(entry_config), encoding="utf-8")
-        notes = Path(entry) / "notes.txt"
-        notes.write_text(update_notes(changelog_section(version) or ""), encoding="utf-8")
+        # The section's Markdown as it is: the update window renders it.
+        notes = Path(entry) / "notes.md"
+        notes.write_text(changelog_section(version) or "", encoding="utf-8")
         command = ["update-manifest", "--entry", entry, "--key", str(secret), "--notes", str(notes), "-o", str(dist), str(archive)]
         if config["download_url_prefix"]:
             command[1:1] = ["--base-url", config["download_url_prefix"]]
@@ -137,7 +112,6 @@ def main() -> None:
         if not archive.is_file():
             raise SystemExit(f"error: no {archive.relative_to(root)}: run the whole release first")
         write_manifest(metadata, version, update_url, secret, archive, dist, config)
-        print(update_notes(changelog_section(version) or ""))
         return
     if subprocess.run(["xcrun", "notarytool", "history", "--keychain-profile", notary], capture_output=True).returncode != 0:
         raise SystemExit(f"error: notarytool profile '{notary}' is missing or invalid")

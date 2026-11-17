@@ -87,6 +87,10 @@ pub fn updates_configured() -> bool {
 }
 /// The updater's phase; `None` in builds that don't update themselves.
 pub fn update_phase() -> Option<updates::Phase> {
+    #[cfg(debug_assertions)]
+    if let Some(phase) = updates::preview_phase() {
+        return Some(phase);
+    }
     updates::updater().map(updates::Updater::phase)
 }
 static REQUEST: Mutex<Option<crate::store::Sheet>> = Mutex::new(None);
@@ -99,6 +103,14 @@ pub fn request_capture() {
 /// The capture shortcut asks the same; while locked, the code is selected first and the vault unlocked after.
 pub fn request_capture_from_shortcut() {
     CAPTURE.store(2, std::sync::atomic::Ordering::SeqCst);
+}
+/// The menu bar icon's menu asks the main window to check for updates.
+static UPDATE_CHECK: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+pub fn request_update_check() {
+    UPDATE_CHECK.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+pub fn take_update_check_request() -> bool {
+    UPDATE_CHECK.swap(false, std::sync::atomic::Ordering::SeqCst)
 }
 /// The capture asked for, if any: `Some(true)` from the shortcut.
 pub fn take_capture_request() -> Option<bool> {

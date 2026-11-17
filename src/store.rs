@@ -19,6 +19,8 @@ pub enum Surface {
     Main,
     Panel,
     Settings,
+    /// The update window (`pages::update`).
+    Update,
 }
 /// A modal over the main window.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -444,7 +446,7 @@ impl Store {
         self.focus_search();
     }
     pub fn focus_search(self) {
-        if self.surface != Surface::Settings {
+        if matches!(self.surface, Surface::Main | Surface::Panel) {
             let r = self.search.get();
             set_timeout(Duration::from_millis(30), move || r.focus());
         }
@@ -460,7 +462,7 @@ impl Store {
             })
         });
     }
-    /// Results of capturing from the shortcut or the menu bar: a desktop notice near the top of the screen,
+    /// Results of what the shortcut or the menu bar asked for (a capture, an update check): a desktop notice near the top of the screen,
     /// or the window toast where there is no real desktop host.
     pub fn capture_notice(self, tone: Tone, text: SharedString) {
         #[cfg(target_os = "macos")]
@@ -1435,13 +1437,20 @@ impl Store {
     }
     /// Mirrors the updater's phase (one updater per process; the main window and Settings both show it).
     pub fn refresh_updates(self) {
-        if self.surface == Surface::Panel || self.fixture {
+        if self.surface == Surface::Panel {
             return;
         }
-        let phase = platform::update_phase();
+        // In-memory previews have no updater; debug builds show the update window's simulated download there.
+        let phase = if self.fixture { Self::preview_update_phase() } else { platform::update_phase() };
         if self.updates.get() != phase {
             self.updates.set(phase);
         }
+    }
+    fn preview_update_phase() -> Option<platform::updates::Phase> {
+        #[cfg(debug_assertions)]
+        return platform::updates::preview_phase();
+        #[cfg(not(debug_assertions))]
+        None
     }
     /// The main window of a build that updates itself: once its preferences are loaded, counts the launch, asks on the
     /// second launch whether to check automatically, and checks once a day when allowed.
@@ -1477,7 +1486,7 @@ impl Store {
             let yes = chosen.await == Some("yes");
             self.update_preferences(move |p| p.update_checks = Some(yes));
             if yes {
-                self.check_updates(false);
+                self.check_updates(Check::Auto);
             }
         });
     }
@@ -1485,28 +1494,34 @@ impl Store {
         let p = self.preferences.get();
         let now = safay_app::sync::to_ms(std::time::SystemTime::now());
         if p.update_checks == Some(true) && now.saturating_sub(p.last_update_check_ms) >= 24 * 60 * 60 * 1000 {
-            self.check_updates(false);
+            self.check_updates(Check::Auto);
         }
     }
-    /// Checks for a newer version. `manual` (the menu, Settings): the result is reported and a newer version offered;
-    /// otherwise a newer one downloads on its own when the user allowed it, else it is offered.
-    pub fn check_updates(self, manual: bool) {
+    /// Checks for a newer version. By hand (`Manual`, `MenuBar`): the result is reported and a newer version offered,
+    /// even one the user skipped. Automatic (once a day): a skipped version is ignored; a newer one downloads on its own
+    /// when the user allowed it (it installs when Safay quits), else the update window offers it. A version downloaded
+    /// earlier that hasn't installed yet, because Safay hasn't quit since, is offered again with "Install and Relaunch".
+    /// A failed automatic check doesn't count as the day's: the hourly timer tries again.
+    pub fn check_updates(self, by: Check) {
+        let manual = by != Check::Auto;
         let Some(updater) = platform::updates::updater() else { return };
         self.task(async move {
-            let phase =
-                blocking(move || updater.check()).await.unwrap_or(platform::updates::Phase::Failed(platform::updates::Failure::Network));
-            self.refresh_updates();
-            let now = safay_app::sync::to_ms(std::time::SystemTime::now());
-            self.update_preferences(move |p| p.last_update_check_ms = now);
             use platform::updates::Phase;
+            let phase = blocking(move || updater.check()).await.unwrap_or(Phase::Failed(platform::updates::Failure::Network));
+            self.refresh_updates();
+            if !matches!(phase, Phase::Failed(_)) {
+                let now = safay_app::sync::to_ms(std::time::SystemTime::now());
+                self.update_preferences(move |p| p.last_update_check_ms = now);
+            }
+            let skipped = move |version: &str| !manual && crate::pages::update::is_skipped(version, self.preferences.get().skipped_update);
             match phase {
-                Phase::Available { version, notes } => {
-                    if !manual && self.preferences.get().update_downloads {
-                        self.download_update(false);
-                    } else {
-                        self.offer_update(version, notes);
-                    }
-                }
+                Phase::Available { version, .. } if skipped(&version) => {}
+                Phase::Available { .. } if !manual && self.preferences.get().update_downloads => self.download_update(false),
+                Phase::Available { version, notes } => self.offer_update(version, notes),
+                Phase::Ready { version } => self.offer_update(version, updater.offered_notes()),
+                // From the menu bar the main window may be hidden: the result shows as a desktop notice.
+                Phase::UpToDate if by == Check::MenuBar => self.capture_notice(Tone::Success, self.label("Safay is up to date")),
+                Phase::Failed(f) if by == Check::MenuBar => self.capture_notice(Tone::Error, self.label(update_failure_key(f))),
                 Phase::UpToDate if manual && self.surface == Surface::Main => {
                     self.show_toast(Tone::Success, self.label("Safay is up to date"));
                 }
@@ -1517,7 +1532,13 @@ impl Store {
             }
         });
     }
-    fn offer_update(self, version: String, notes: Option<String>) {
+    /// Offers a newer version: the update window, with its notes (an alert where there is no desktop integration).
+    pub fn offer_update(self, version: String, notes: Option<String>) {
+        #[cfg(target_os = "macos")]
+        if crate::desktop::installed() {
+            crate::desktop::open_update(version, notes);
+            return;
+        }
         let mut dialog = crate::alert::alert(self.fmt("Safay {} is available", &[&version]));
         if let Some(notes) = notes.filter(|n| !n.trim().is_empty()) {
             dialog = dialog.description(notes);
@@ -1532,6 +1553,13 @@ impl Store {
     /// Downloads and verifies the offered version. `interactive`: then asks to restart now (it otherwise installs when
     /// the app quits).
     pub fn download_update(self, interactive: bool) {
+        #[cfg(debug_assertions)]
+        if platform::updates::updater().is_none() {
+            if let Ok(version) = std::env::var("SAFAY_PREVIEW_UPDATE") {
+                platform::updates::preview_download(version);
+            }
+            return;
+        }
         let Some(updater) = platform::updates::updater() else { return };
         self.task(async move {
             let phase =
@@ -1569,6 +1597,16 @@ impl Store {
             }
         });
     }
+}
+/// Who asked for an update check.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Check {
+    /// The daily check.
+    Auto,
+    /// The app menu or Settings.
+    Manual,
+    /// The menu bar icon's menu.
+    MenuBar,
 }
 pub fn update_failure_key(f: crate::platform::updates::Failure) -> &'static str {
     use crate::platform::updates::Failure::*;

@@ -211,6 +211,11 @@ impl Updater {
         result
     }
 
+    /// The notes of the version last offered (the one `Ready` names once it is downloaded).
+    pub fn offered_notes(&self) -> Option<String> {
+        self.lock().available.as_ref().and_then(|a| a.notes.clone())
+    }
+
     /// The app is quitting: a downloaded update replaces it now, for the next launch.
     pub fn install_on_quit(&self) {
         let (Some(installation), Some(archive)) = (self.installation.clone(), self.lock().archive.clone()) else { return };
@@ -287,6 +292,28 @@ pub fn command_line_check() -> i32 {
             1
         }
     }
+}
+
+/// Debug builds without an update source: the phase of a simulated download, so the update window's progress and
+/// "Install and Relaunch" can be seen (`SAFAY_PREVIEW_UPDATE`).
+#[cfg(debug_assertions)]
+static PREVIEW: Mutex<Option<Phase>> = Mutex::new(None);
+#[cfg(debug_assertions)]
+pub fn preview_phase() -> Option<Phase> {
+    PREVIEW.lock().ok()?.clone()
+}
+/// Simulates downloading `version` over about 20 seconds, then reports it ready.
+#[cfg(debug_assertions)]
+pub fn preview_download(version: String) {
+    std::thread::spawn(move || {
+        let set = |phase| *PREVIEW.lock().unwrap_or_else(|e| e.into_inner()) = Some(phase);
+        let total = 18_400_000;
+        for step in 0..=100u64 {
+            set(Phase::Downloading { received: total * step / 100, total: Some(total) });
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+        set(Phase::Ready { version });
+    });
 }
 
 /// The app has quit (`main` after NSH's runner returns): a downloaded update replaces it for the next launch.

@@ -96,6 +96,14 @@ pub fn install(controller: Arc<Controller>, preview: bool) {
     };
     DESKTOP.with(|slot| slot.set(Some(d)));
 
+    // Debug builds: `SAFAY_PREVIEW_UPDATE=<version>` (and `SAFAY_PREVIEW_NOTES=<Markdown file>`) opens the update
+    // window at launch, to see a version's notes as users will.
+    #[cfg(debug_assertions)]
+    if let Ok(version) = std::env::var("SAFAY_PREVIEW_UPDATE") {
+        let notes = std::env::var("SAFAY_PREVIEW_NOTES").ok().and_then(|path| std::fs::read_to_string(path).ok());
+        set_timeout(Duration::from_millis(800), move || open_update(version.clone(), notes.clone()));
+    }
+
     let main = main_window();
     let mut attributes = WindowAttributes::default();
     attributes.min_size = Some(Some(size(px(MAIN_MIN.0), px(MAIN_MIN.1))));
@@ -130,7 +138,10 @@ pub fn install(controller: Arc<Controller>, preview: bool) {
                 })
                 .menu([
                     MenuItem::new(label("Open Safay")).on_select(open_main),
-                    MenuItem::new(label("Settings…")).on_select(open_settings),
+                    MenuItem::new(label("Settings")).on_select(open_settings),
+                    MenuItem::new(label("Check for Updates"))
+                        .disabled(!platform::updates_configured())
+                        .on_select(platform::request_update_check),
                     MenuItem::separator(),
                     MenuItem::new(label("Quit")).on_select(platform::quit),
                 ]),
@@ -228,6 +239,32 @@ pub fn open_settings() {
                 .default_position(WindowPosition::Center)
                 .attributes(attributes)
                 .content(move || crate::settings_window(controller.clone(), preview)),
+        );
+    });
+}
+
+/// The update window: what `version` brings (`notes`, Markdown) and the choice to install it. 560×440, resizable down to
+/// 480×360, the traffic lights over its content. Opening it again brings the open one forward.
+pub fn open_update(version: String, notes: Option<String>) {
+    let Some(d) = desktop() else { return };
+    d.owner.get().run(|| {
+        close_panel();
+        let mut bar = TitleBarOptions::default();
+        bar.style = TitleBarStyle::Hidden;
+        let mut attributes = WindowAttributes::default();
+        attributes.title_bar = Some(bar);
+        attributes.min_size = Some(Some(size(px(480.0), px(360.0))));
+        attributes.minimizable = Some(false);
+        attributes.maximizable = Some(false);
+        let (controller, preview) = (d.controller.get(), d.preview);
+        open_window(
+            window()
+                .id("update")
+                .title(move || i18n::tr(d.language.get(), "Software Update").to_string())
+                .default_size(size(px(560.0), px(440.0)))
+                .default_position(WindowPosition::Center)
+                .attributes(attributes)
+                .content(move || crate::update_window(controller.clone(), preview, version.clone(), notes.clone())),
         );
     });
 }

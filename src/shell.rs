@@ -5,7 +5,7 @@ use crate::{
     components::*,
     icons::Icon,
     pages,
-    store::{Sheet, Store, Surface},
+    store::{Check, Sheet, Store, Surface},
 };
 use nsh_base::theme;
 use nsh_core::{
@@ -93,6 +93,9 @@ pub fn main_window(controller: Arc<Controller>, fixture: bool) -> impl IntoEleme
         if let Some(from_shortcut) = crate::platform::take_capture_request() {
             s.capture_and_import(from_shortcut);
         }
+        if crate::platform::take_update_check_request() {
+            s.check_updates(Check::MenuBar);
+        }
         // Another device changed the iCloud backup (silent push): sync now; while locked, the sync after
         // unlocking picks it up.
         #[cfg(target_os = "macos")]
@@ -146,10 +149,10 @@ fn app_menu(s: Store, unlocked: bool) {
     // Right below About, in every build; disabled where this build doesn't update itself.
     if crate::platform::supports::UPDATES {
         let configured = crate::platform::updates_configured();
-        app.push(MenuItem::new(l("Check for Updates…")).disabled(!configured).on_select(move || s.check_updates(true)));
+        app.push(MenuItem::new(l("Check for Updates")).disabled(!configured).on_select(move || s.check_updates(Check::Manual)));
     }
     app.push(MenuItem::separator());
-    app.push(MenuItem::new(l("Settings…")).shortcut("mod+,").on_select(move || open_settings(s)));
+    app.push(MenuItem::new(l("Settings")).shortcut("mod+,").on_select(move || open_settings(s)));
     app.push(MenuItem::separator());
     if look() == Look::Mac {
         app.push(MenuItem::role(nsh_core::desktop::MenuRole::Hide));

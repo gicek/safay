@@ -6,3 +6,4 @@ pub mod reorder;
 pub mod settings;
 pub mod sheets;
 pub mod unlock;
+pub mod update;

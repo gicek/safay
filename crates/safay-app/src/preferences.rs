@@ -67,6 +67,8 @@ pub struct Preferences {
     pub launches: u32,
     /// When updates were last checked (Unix ms).
     pub last_update_check_ms: i64,
+    /// The version the user chose to skip (major, minor, patch): automatic checks don't offer it.
+    pub skipped_update: Option<(u32, u32, u32)>,
     /// The third-party plugin interface (Alfred, Raycast, Tinycast through AppleScript; macOS). Off by default.
     pub launcher: bool,
 }
@@ -91,6 +93,7 @@ impl Default for Preferences {
             update_downloads: false,
             launches: 0,
             last_update_check_ms: 0,
+            skipped_update: None,
             launcher: false,
         }
     }

@@ -156,6 +156,14 @@ pub(crate) fn settings_window(controller: Arc<Controller>, preview: bool) -> imp
     surface_root(s, view().flex_1().child(pages::settings::page(s)).child(pages::sheets::auth_dialog(s)))
 }
 
+/// The update window's content (`desktop::open_update`), with a store of its own.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) fn update_window(controller: Arc<Controller>, preview: bool, version: String, notes: Option<String>) -> impl IntoElement {
+    let s = Store::new(controller, preview, Surface::Update);
+    effect(move || untracked(|| s.start()));
+    surface_root(s, pages::update::page(s, version, notes))
+}
+
 #[cfg(test)]
 mod surface_tests {
     use super::*;
