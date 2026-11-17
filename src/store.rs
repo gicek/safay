@@ -154,6 +154,8 @@ pub enum Payload {
     Silent,
     Saved,
     Imported(usize),
+    /// One account added by hand: its service name, for the toast.
+    Added(String),
     Export(Vec<u8>, usize),
     Detail(Detail),
     Choices(Vec<Choice>),
@@ -636,6 +638,10 @@ impl Store {
                     self.show_toast(Tone::Success, text);
                 }
             }
+            Payload::Added(issuer) => {
+                self.close_sheet();
+                self.show_toast(Tone::Success, self.fmt("Added {}", &[&issuer]));
+            }
             Payload::Captured(issuer, n) => {
                 // The shortcut and the panel run without a visible main window: the result shows on the desktop.
                 if n > 0 {
@@ -771,7 +777,7 @@ impl Store {
                 category,
             };
             s.save_account(&draft)?;
-            Ok(Payload::Imported(1))
+            Ok(Payload::Added(draft.issuer.trim().to_string()))
         });
     }
     pub fn save_detail(self, id: Uuid) {
@@ -1497,7 +1503,7 @@ impl Store {
             self.check_updates(Check::Auto);
         }
     }
-    /// Checks for a newer version. By hand (`Manual`, `MenuBar`): the result is reported and a newer version offered,
+    /// Checks for a newer version. By hand (`Manual`): the result is reported and a newer version offered,
     /// even one the user skipped. Automatic (once a day): a skipped version is ignored; a newer one downloads on its own
     /// when the user allowed it (it installs when Safay quits), else the update window offers it. A version downloaded
     /// earlier that hasn't installed yet, because Safay hasn't quit since, is offered again with "Install and Relaunch".
@@ -1519,14 +1525,13 @@ impl Store {
                 Phase::Available { .. } if !manual && self.preferences.get().update_downloads => self.download_update(false),
                 Phase::Available { version, notes } => self.offer_update(version, notes),
                 Phase::Ready { version } => self.offer_update(version, updater.offered_notes()),
-                // From the menu bar the main window may be hidden: the result shows as a desktop notice.
-                Phase::UpToDate if by == Check::MenuBar => self.capture_notice(Tone::Success, self.label("Safay is up to date")),
-                Phase::Failed(f) if by == Check::MenuBar => self.capture_notice(Tone::Error, self.label(update_failure_key(f))),
+                // The menus can ask while the main window is closed: the result shows as a desktop notice. Settings shows it
+                // in its own row.
                 Phase::UpToDate if manual && self.surface == Surface::Main => {
-                    self.show_toast(Tone::Success, self.label("Safay is up to date"));
+                    self.capture_notice(Tone::Success, self.label("Safay is up to date"))
                 }
                 Phase::Failed(f) if manual && self.surface == Surface::Main => {
-                    self.show_toast(Tone::Error, self.label(update_failure_key(f)));
+                    self.capture_notice(Tone::Error, self.label(update_failure_key(f)))
                 }
                 _ => {}
             }
@@ -1590,10 +1595,8 @@ impl Store {
         self.task(async move {
             match blocking(move || updater.install()).await {
                 Ok(Ok(())) => self.owner.get().run(nsh_core::element::desktop::restart),
-                _ => {
-                    self.refresh_updates();
-                    self.show_toast(Tone::Error, self.label(update_failure_key(platform::updates::Failure::Install)));
-                }
+                // The update window and Settings show the failure in their own text.
+                _ => self.refresh_updates(),
             }
         });
     }
@@ -1603,10 +1606,8 @@ impl Store {
 pub enum Check {
     /// The daily check.
     Auto,
-    /// The app menu or Settings.
+    /// The app menu, the menu bar icon's menu or Settings.
     Manual,
-    /// The menu bar icon's menu.
-    MenuBar,
 }
 pub fn update_failure_key(f: crate::platform::updates::Failure) -> &'static str {
     use crate::platform::updates::Failure::*;

@@ -51,6 +51,8 @@ fn create_add_by_key_copy_search_lock_and_unlock() {
     app.type_text("id:secret", "JBSWY3DPEHPK3PXP").unwrap();
     app.press("role:button[Save Account]").unwrap();
     app.wait_for("role:button[Copy code for RFC sample]").unwrap();
+    // Added by hand: the toast names the account.
+    app.wait_for("Added RFC sample").unwrap();
     app.press("role:button[Copy code for RFC sample]").unwrap();
     app.wait_for("Copied").unwrap();
     app.type_text("id:search", "no matching account").unwrap();

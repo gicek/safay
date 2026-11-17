@@ -842,33 +842,26 @@ pub fn modal_surface<E: Styled + Interactive>(e: E) -> E {
         .shadow_2xl()
 }
 
-/// The desktop toast: a capsule near the top that never takes input.
+/// The window's toast: a capsule in the bottom right corner, as wide as its text, that never takes input.
 pub fn toast(s: Store) -> impl IntoElement {
     when(
         move || s.toast.get().is_some(),
         move || {
-            view()
-                .absolute()
-                .top(px(chrome::toolbar_height() + 8.0))
-                .left(px(0.0))
-                .right(px(0.0))
-                .items_center()
-                .pointer_events(nsh_core::PointerEvents::None)
-                .child(
-                    view()
-                        .flex_row()
-                        .items_center()
-                        .gap(px(10.0))
-                        .max_w(px(430.0))
-                        .min_h(px(44.0))
-                        .px(px(15.0))
-                        .rounded_full()
-                        .bg(move || tok("glass"))
-                        .border_1()
-                        .border_color(move || tok("glass-border"))
-                        .shadow_lg()
-                        .child(status_line(move || s.toast.get()).into_element()),
-                )
+            view().absolute().bottom(px(16.0)).right(px(16.0)).pointer_events(nsh_core::PointerEvents::None).child(
+                view()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(10.0))
+                    .max_w(px(430.0))
+                    .min_h(px(44.0))
+                    .px(px(15.0))
+                    .rounded_full()
+                    .bg(move || tok("glass"))
+                    .border_1()
+                    .border_color(move || tok("glass-border"))
+                    .shadow_lg()
+                    .child(status_line(move || s.toast.get()).into_element()),
+            )
         },
     )
 }

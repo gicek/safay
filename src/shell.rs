@@ -94,7 +94,7 @@ pub fn main_window(controller: Arc<Controller>, fixture: bool) -> impl IntoEleme
             s.capture_and_import(from_shortcut);
         }
         if crate::platform::take_update_check_request() {
-            s.check_updates(Check::MenuBar);
+            s.check_updates(Check::Manual);
         }
         // Another device changed the iCloud backup (silent push): sync now; while locked, the sync after
         // unlocking picks it up.

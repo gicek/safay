@@ -68,8 +68,8 @@ appearance only — never capabilities.
   height so forms do not jump. Strength is evaluated once per change, never per keystroke.
 - **Fair passwords** ask before use; the default button is "Choose Stronger Password". The same rules apply when
   creating a vault, changing the password, restoring with a new password and exporting.
-- **Feedback**: copying shows "Copied" in place; imports and additions show a toast; launcher copies show a desktop
-  notice naming the account, never the code.
+- **Feedback**: copying shows "Copied" in place; imports and additions show a toast in the window's bottom right
+  corner, as wide as its text; launcher copies show a desktop notice naming the account, never the code.
 - **Focus**: `components::focus_ring` draws a 1 pt ring inside the element; focus never adds a border, which would take
   layout space.
 - **Motion**: transitions are 160–240 ms ease-out (the welcome cards use a slight overshoot); every animation is

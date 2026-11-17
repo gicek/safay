@@ -133,6 +133,14 @@ test("first launch", async () => {
   await app.press("role:button[Create Vault]");
   await app.waitFor("No 2FA accounts yet");
   await shot(app, "empty");
+  // A public RFC 6238 sample: its import confirms itself in the window's toast.
+  await app.press("role:button[Add]");
+  await app.press("role:button[Paste Links]");
+  await app.type("id:import-text", "otpauth://totp/Example:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Fixture&issuer=Example");
+  await app.waitFor("Parsed");
+  await app.press("role:button[Save Account]");
+  await app.waitFor("Imported 1 account");
+  await shot(app, "toast");
 }, minute);
 
 test("menu bar panel", async () => {

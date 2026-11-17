@@ -8,10 +8,10 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 ### Changed
 
 - **Update window**: new versions open in their own window with formatted release notes, "Skip This Version" and "Remind Me Later", and the download's progress.
-- **Check for Updates**: the menu bar icon's menu can check for a new version, and tells you when Safay is up to date.
+- **Check for Updates**: the menu bar icon's menu can check for a new version; results show as a notice at the top of the screen.
 - **New look**: an indigo accent taken from the Safay icon, in light and dark mode, on every platform.
-- **Sidebar**: "All" and your categories form one list, and "Import / Export" now puts import first.
-- **Getting started**: with no accounts yet, arrows point you to "+" to add a 2FA account and to "Import / Export".
+- **Sidebar**: "All" and your categories form one list, import comes first, and an empty Safay points you to "+" and "Import / Export".
+- **Notices**: confirmations appear in the window's bottom right corner, and adding an account by hand names it.
 
 ### Fixed
 
