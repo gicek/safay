@@ -10,6 +10,10 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 - **Update window**: new versions open in their own window with formatted release notes, "Skip This Version" and "Remind Me Later", and the download's progress.
 - **Check for Updates**: the menu bar icon's menu can check for a new version, and tells you when Safay is up to date.
 
+### Fixed
+
+- The eye in password and secret fields is crossed out while the text is shown, so you can tell which state you are in.
+
 ## [1.0.0] - 2026-11-17
 
 Safay now finds 2FA QR codes on your screen for you, even while it is locked.

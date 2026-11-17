@@ -30,6 +30,7 @@ pub enum Icon {
     Shield,
     LockShield,
     Eye,
+    EyeSlash,
     Copy,
     Trash,
     Qr,
@@ -118,6 +119,9 @@ fn shape(name: Icon) -> &'static str {
             "<path d='m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Z'/><rect x='9' y='11' width='6' height='5' rx='1'/><path d='M10.2 11V9.6a1.8 1.8 0 0 1 3.6 0V11'/>"
         }
         Icon::Eye => "<path d='M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z'/><circle cx='12' cy='12' r='3'/>",
+        Icon::EyeSlash => {
+            "<path d='M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z'/><circle cx='12' cy='12' r='3'/><path d='M4 4l16 16'/>"
+        }
         Icon::Copy => {
             "<rect x='8' y='8' width='12' height='12' rx='2'/><path d='M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2'/>"
         }
@@ -213,6 +217,7 @@ fn sf_name(name: Icon) -> Option<&'static str> {
         Icon::Search => "magnifyingglass",
         Icon::Photo => "photo.on.rectangle",
         Icon::Eye => "eye",
+        Icon::EyeSlash => "eye.slash",
         Icon::LockShieldFill => "lock.shield.fill",
         Icon::ShieldWarningFill => "exclamationmark.shield.fill",
         Icon::CheckCircleFill => "checkmark.circle.fill",

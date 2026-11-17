@@ -292,7 +292,11 @@ fn secret_input(s: Store) -> impl IntoElement {
                     .text_size(px(13.0))
                     .text_color(move || theme().foreground),
             )
-            .child(reveal_toggle(move || s.label(if shown.get() { "Hide" } else { "Show Secret" }), move || shown.update(|v| *v = !*v))),
+            .child(reveal_toggle(
+                move || shown.get(),
+                move || s.label(if shown.get() { "Hide" } else { "Show Secret" }),
+                move || shown.update(|v| *v = !*v),
+            )),
         7.0,
     )
 }
@@ -1084,7 +1088,7 @@ fn secret_section(s: Store, id: impl Fn() -> Option<Uuid> + Copy + 'static) -> i
                     .text_color(move || if shown() { theme().foreground } else { theme().muted_foreground }),
                 )
                 .child(
-                    icon_button(move || s.label(if shown() { "Hide" } else { "Show Secret" }), Icon::Eye)
+                    icon_button_with(move || s.label(if shown() { "Hide" } else { "Show Secret" }), eye_glyph(shown))
                         .disabled(move || s.busy.get())
                         .on_press(move || {
                             if shown() {

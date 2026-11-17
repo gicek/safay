@@ -121,6 +121,10 @@ pub fn link_button(label: impl Fn() -> SharedString + 'static, size: f32) -> nsh
 }
 /// A 30×30 borderless glyph button with an accessible name.
 pub fn icon_button(label: impl Fn() -> SharedString + 'static, glyph: Icon) -> nsh_base::ButtonElement {
+    icon_button_with(label, glyph_element(glyph))
+}
+/// As [`icon_button`], with its own glyph element (one that changes, as [`eye_glyph`]).
+pub fn icon_button_with(label: impl Fn() -> SharedString + 'static, glyph: AnyElement) -> nsh_base::ButtonElement {
     button()
         .accessibility_label(move || Some(label()))
         .size(px(30.0))
@@ -132,18 +136,30 @@ pub fn icon_button(label: impl Fn() -> SharedString + 'static, glyph: Icon) -> n
         .focus(|s| s.bg(move || theme().accent).text_color(move || theme().accent_foreground))
         .active(|s| s.bg(move || tok("pressed")).scale(0.94))
         .disabled_style(|s| s.opacity(0.4))
-        .child(if look() == Look::Mac {
-            // Icon prominence: a 13pt medium symbol in the primary color.
-            crate::icons::symbol_weight(glyph, 13.0, 0.23, move || theme().foreground).into_element()
-        } else {
-            icon(glyph).into_element()
-        })
+        .child(glyph)
+}
+/// An icon button's glyph: on macOS a 13pt medium symbol in the primary color (icon prominence).
+fn glyph_element(glyph: Icon) -> AnyElement {
+    if look() == Look::Mac {
+        crate::icons::symbol_weight(glyph, 13.0, 0.23, move || theme().foreground).into_element()
+    } else {
+        icon(glyph).into_element()
+    }
+}
+/// The reveal eye: crossed out while the text is `shown`, as macOS's reveal buttons are.
+pub fn eye_glyph(shown: impl Fn() -> bool + Copy + 'static) -> AnyElement {
+    when(shown, || glyph_element(Icon::EyeSlash)).otherwise(|| glyph_element(Icon::Eye)).into_element()
 }
 
 /// The eye inside a password or secret field. Not a Tab stop: Tab goes from field to field, as with a reveal
 /// button under macOS's default keyboard navigation (nsh-base's own in-field clear button is built the same way). It
-/// stays pressable and is a labeled button for screen readers. Looks like [`icon_button`].
-pub fn reveal_toggle(label: impl Fn() -> SharedString + 'static, press: impl Fn() + 'static) -> impl IntoElement + Styled {
+/// stays pressable and is a labeled button for screen readers. Looks like [`icon_button`]. The eye is crossed out while
+/// the text is `shown`, as macOS's reveal buttons are.
+pub fn reveal_toggle(
+    shown: impl Fn() -> bool + Copy + 'static,
+    label: impl Fn() -> SharedString + 'static,
+    press: impl Fn() + 'static,
+) -> impl IntoElement + Styled {
     view()
         .role(nsh_core::AccessibilityRole::Button)
         .label(label)
@@ -156,11 +172,7 @@ pub fn reveal_toggle(label: impl Fn() -> SharedString + 'static, press: impl Fn(
         .text_color(move || theme().muted_foreground)
         .hover(|s| s.bg(move || tok("hover")).text_color(move || theme().foreground))
         .active(|s| s.bg(move || tok("pressed")).scale(0.94))
-        .child(if look() == Look::Mac {
-            crate::icons::symbol_weight(Icon::Eye, 13.0, 0.23, move || theme().foreground).into_element()
-        } else {
-            icon(Icon::Eye).into_element()
-        })
+        .child(eye_glyph(shown))
 }
 
 /// macOS 26 toolbar glass: no outline, a hairline halo and a soft drop shadow, as the system draws toolbar items.
@@ -381,7 +393,13 @@ pub fn secure_field_with(
             )
             .child(when(
                 move || reveal,
-                move || reveal_toggle(move || s.label(if shown.get() { "Hide" } else { "Show" }), move || shown.update(|v| *v = !*v)),
+                move || {
+                    reveal_toggle(
+                        move || shown.get(),
+                        move || s.label(if shown.get() { "Hide" } else { "Show" }),
+                        move || shown.update(|v| *v = !*v),
+                    )
+                },
             )),
         if reveal { 8.0 } else { 7.0 },
     )

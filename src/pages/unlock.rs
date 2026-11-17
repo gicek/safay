@@ -194,6 +194,7 @@ fn capsule_password(s: Store, width: f32) -> impl IntoElement {
         )
         .child(
             reveal_toggle(
+                move || shown.get(),
                 move || s.label(if shown.get() { "Hide" } else { "Show" }),
                 move || {
                     shown.update(|v| *v = !*v);
