@@ -41,7 +41,7 @@ async fn save_path(dialog: SaveDialog) -> Result<Option<PathBuf>, Error> {
 
 /// A chosen backup: its display name and bounded contents.
 pub async fn choose_import(title: String, filter: String) -> Result<Option<(String, Vec<u8>)>, Error> {
-    let dialog = OpenDialog::files().title(title).filter(FileFilter::new(filter, ["json", "safayvault", "txt"]));
+    let dialog = OpenDialog::files().title(title).filter(FileFilter::new(filter, ["json", "safayvault", "txt", "2fas", "csv"]));
     let Some(path) = open_paths(dialog).await?.and_then(|p| p.into_iter().next()) else {
         return Ok(None);
     };

@@ -14,6 +14,7 @@ pub mod base32;
 pub mod canonical;
 pub mod category;
 pub mod dedup;
+pub mod import;
 mod json;
 pub mod merge;
 pub mod model;

@@ -355,6 +355,22 @@ fn parse_migration(url: &Url, placeholders: &Placeholders) -> ScanResult {
     }
 }
 
+/// Whether every Google Authenticator migration batch among `scans` is complete: each batch (by id and size) has all of
+/// its indices, and sizes and indices are in range. Scans that are not part of a multi-code batch always pass.
+pub fn batches_complete(scans: &[ScanResult]) -> bool {
+    let mut groups: std::collections::HashMap<(i64, i64), std::collections::HashSet<i64>> = std::collections::HashMap::new();
+    for scan in scans {
+        if scan.is_google_migration && scan.batch_size.unwrap_or(1) > 1 {
+            let (Some(size), Some(index)) = (scan.batch_size, scan.batch_index) else { return false };
+            if size > 10000 || index < 0 || index >= size {
+                return false;
+            }
+            groups.entry((scan.batch_id.unwrap_or(0), size)).or_default().insert(index);
+        }
+    }
+    groups.iter().all(|((_, size), indices)| indices.len() as i64 == *size)
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;

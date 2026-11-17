@@ -31,31 +31,7 @@ use crate::canonical::{normalized_issuer, normalized_username, standardized_secr
 use crate::model::{Account, Placeholders, TotpAlgorithm, provenance};
 use crate::vault::{self, VaultContents};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
-pub enum ImportError {
-    #[error("a password is required")]
-    PasswordRequired,
-    #[error("not a supported backup file")]
-    InvalidFile,
-    #[error("wrong password")]
-    WrongPassword,
-    #[error("no supported accounts")]
-    NoSupportedAccounts,
-    #[error("safay export: {0}")]
-    Vault(vault::VaultError),
-}
-
-impl ImportError {
-    pub fn l10n_key(self) -> &'static str {
-        match self {
-            ImportError::PasswordRequired => "err.import.password_required",
-            ImportError::InvalidFile => "err.import.invalid_file",
-            ImportError::WrongPassword => "err.import.wrong_password",
-            ImportError::NoSupportedAccounts => "err.import.no_supported",
-            ImportError::Vault(error) => error.l10n_key(),
-        }
-    }
-}
+pub use crate::import::{FileKind, ImportError};
 
 const ARGON2_TIME_COST: u32 = 2;
 const ARGON2_MEMORY_KIB: u32 = 19 * 1024;
@@ -63,38 +39,9 @@ const ARGON2_PARALLELISM: u32 = 1;
 /// Maximum number of distinct keyIds verified per backup (Authenticator only ever writes one).
 pub const MAX_KEY_IDS: usize = 16;
 
-/// Imports any supported backup file: Safay's own encrypted export is tried first, otherwise it is parsed as
-/// Authenticator. Authenticator's pinned (`pinned`) entries go into `pinned_ids`; the platform then calls
-/// [`VaultContents::adopting_pinned`] to move them into the Favorites category.
-pub fn import_file(data: &[u8], password: &str, now: SystemTime, placeholders: &Placeholders) -> Result<VaultContents, ImportError> {
-    if vault::is_safay_export(data) {
-        if password.is_empty() {
-            return Err(ImportError::PasswordRequired);
-        }
-        return vault::import_export(data, password).map_err(ImportError::Vault);
-    }
-    import_authenticator_contents(data, password, now, placeholders)
-}
-
-/// What a file chosen to import is, from its structure alone (no key derivation, nothing decrypted), as [`import_file`]
-/// would treat it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FileKind {
-    /// It needs a password: a Safay export, or an Authenticator backup with an encrypted entry.
-    Encrypted,
-    /// An Authenticator backup that opens without a password.
-    Plain,
-    /// Neither: [`import_file`] reports `InvalidFile` for it.
-    Unsupported,
-}
-
-/// See [`FileKind`]. Entries are told apart as [`import_file`] does: `Key` entries are skipped, `EncOTPStorage` is
-/// encrypted, and any other entry with a `secret` is a plain one unless marked `encrypted`.
-pub fn inspect(data: &[u8]) -> FileKind {
-    if vault::is_safay_export(data) {
-        return FileKind::Encrypted;
-    }
-    let Ok(Value::Object(root)) = serde_json::from_slice::<Value>(data) else { return FileKind::Unsupported };
+/// See [`FileKind`], for the root object of a JSON file. Entries are told apart as the import does: `Key` entries are
+/// skipped, `EncOTPStorage` is encrypted, and any other entry with a `secret` is a plain one unless marked `encrypted`.
+pub(crate) fn inspect_root(root: &Map<String, Value>) -> FileKind {
     let mut kind = FileKind::Unsupported;
     for value in root.values() {
         let Value::Object(item) = value else { continue };
@@ -113,17 +60,31 @@ pub fn inspect(data: &[u8]) -> FileKind {
     kind
 }
 
+/// [`import_authenticator_contents`] together with how many entries were skipped as unsupported.
+pub(crate) fn import_authenticator_counting(
+    data: &[u8],
+    password: &str,
+    now: SystemTime,
+    placeholders: &Placeholders,
+) -> Result<(VaultContents, usize), ImportError> {
+    let (entries, skipped) = import_authenticator_entries(data, password, now, placeholders)?;
+    Ok((contents_from(entries), skipped))
+}
+
+fn contents_from(entries: Vec<ImportedEntry>) -> VaultContents {
+    let pinned_ids = entries.iter().filter(|(_, pinned)| *pinned).map(|(account, _)| account.id).collect();
+    VaultContents { accounts: entries.into_iter().map(|(account, _)| account).collect(), categories: Vec::new(), pinned_ids }
+}
+
 /// Imports only the Authenticator format, wrapped in [`VaultContents`]: pinned (`pinned`) entries go into `pinned_ids` in
-/// order of appearance, with no categories. Used by [`import_file`].
+/// order of appearance, with no categories. [`crate::import::import_file`] reads Authenticator backups this way.
 pub fn import_authenticator_contents(
     data: &[u8],
     password: &str,
     now: SystemTime,
     placeholders: &Placeholders,
 ) -> Result<VaultContents, ImportError> {
-    let entries = import_authenticator_entries(data, password, now, placeholders)?;
-    let pinned_ids = entries.iter().filter(|(_, pinned)| *pinned).map(|(account, _)| account.id).collect();
-    Ok(VaultContents { accounts: entries.into_iter().map(|(account, _)| account).collect(), categories: Vec::new(), pinned_ids })
+    Ok(contents_from(import_authenticator_entries(data, password, now, placeholders)?.0))
 }
 
 #[cfg(test)]
@@ -324,7 +285,7 @@ pub fn import_authenticator(
     now: SystemTime,
     placeholders: &Placeholders,
 ) -> Result<Vec<Account>, ImportError> {
-    Ok(import_authenticator_entries(data, password, now, placeholders)?.into_iter().map(|(account, _)| account).collect())
+    Ok(import_authenticator_entries(data, password, now, placeholders)?.0.into_iter().map(|(account, _)| account).collect())
 }
 
 fn import_authenticator_entries(
@@ -332,7 +293,7 @@ fn import_authenticator_entries(
     password: &str,
     now: SystemTime,
     placeholders: &Placeholders,
-) -> Result<Vec<ImportedEntry>, ImportError> {
+) -> Result<(Vec<ImportedEntry>, usize), ImportError> {
     let root: Map<String, Value> = match serde_json::from_slice(data) {
         Ok(Value::Object(map)) => map,
         _ => return Err(ImportError::InvalidFile),
@@ -366,9 +327,11 @@ fn import_authenticator_entries(
     sort_entries(&mut encrypted);
 
     let mut accounts: Vec<ImportedEntry> = Vec::new();
+    let mut skipped = 0usize;
     for (_, item) in &raw {
-        if let Some(entry) = account_from_raw(item, password, now, placeholders)? {
-            accounts.push(entry);
+        match account_from_raw(item, password, now, placeholders)? {
+            Some(entry) => accounts.push(entry),
+            None => skipped += 1,
         }
     }
 
@@ -414,7 +377,8 @@ fn import_authenticator_entries(
         raw_item.insert("encrypted".to_owned(), Value::Bool(false));
         match account_from_raw(&raw_item, password, now, placeholders) {
             Ok(Some(entry)) => accounts.push(entry),
-            _ => failed += 1,
+            Ok(None) => skipped += 1,
+            Err(_) => failed += 1,
         }
     }
 
@@ -424,7 +388,7 @@ fn import_authenticator_entries(
     if accounts.is_empty() {
         return Err(ImportError::NoSupportedAccounts);
     }
-    Ok(accounts)
+    Ok((accounts, skipped + failed))
 }
 
 #[cfg(test)]
@@ -432,6 +396,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
+    use crate::import::{import_file, inspect};
     use crate::otpauth::tests::placeholders;
 
     #[test]
@@ -546,14 +511,14 @@ mod tests {
             ImportError::Vault(vault::VaultError::InvalidPassword),
             "a wrong password on a Safay export is InvalidPassword"
         );
-        assert_eq!(import_file(&export, "export-pw", SystemTime::UNIX_EPOCH, &p).unwrap().accounts[0].secret, "MZXW6YTBOI");
+        assert_eq!(import_file(&export, "export-pw", SystemTime::UNIX_EPOCH, &p).unwrap().contents.accounts[0].secret, "MZXW6YTBOI");
 
         let backup = serde_json::json!({
             "a": {"account": "one", "encrypted": false, "index": 1, "issuer": "A", "secret": "MZXW6YTBOI", "pinned": true},
             "b": {"account": "two", "encrypted": false, "index": 0, "issuer": "B", "secret": "MZXW6YTBOI"},
         })
         .to_string();
-        let imported = import_file(backup.as_bytes(), "", SystemTime::UNIX_EPOCH, &p).unwrap();
+        let imported = import_file(backup.as_bytes(), "", SystemTime::UNIX_EPOCH, &p).unwrap().contents;
         assert_eq!(imported.accounts.iter().map(|a| a.issuer.as_str()).collect::<Vec<_>>(), vec!["B", "A"]);
         assert_eq!(imported.pinned_ids, vec![imported.accounts[1].id], "pinned entries go into pinned_ids");
         assert!(imported.categories.is_empty());

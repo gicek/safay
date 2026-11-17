@@ -97,6 +97,7 @@ This includes test tools; the production graph is narrower. NSH-generated test r
 | cc | 1.10.0 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/cc/1.10.0) |
 | cfg-if | 1.0.5 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/cfg-if/1.0.5) |
 | cfg_aliases | 0.2.2 | MIT | [crates.io](https://crates.io/crates/cfg_aliases/0.2.2) |
+| chacha20 | 0.10.2 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/chacha20/0.10.2) |
 | chrono | 0.4.45 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/chrono/0.4.45) |
 | cipher | 0.5.2 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/cipher/0.5.2) |
 | cmov | 0.5.4 | Apache-2.0 OR MIT | [crates.io](https://crates.io/crates/cmov/0.5.4) |
@@ -262,6 +263,7 @@ This includes test tools; the production graph is narrower. NSH-generated test r
 | parking_lot | 0.12.5 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/parking_lot/0.12.5) |
 | parking_lot_core | 0.9.12 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/parking_lot_core/0.9.12) |
 | password-hash | 0.6.1 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/password-hash/0.6.1) |
+| pbkdf2 | 0.13.0 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/pbkdf2/0.13.0) |
 | percent-encoding | 2.3.2 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/percent-encoding/2.3.2) |
 | phc | 0.6.1 | Apache-2.0 OR MIT | [crates.io](https://crates.io/crates/phc/0.6.1) |
 | phf | 0.11.3 | MIT | [crates.io](https://crates.io/crates/phf/0.11.3) |
@@ -273,6 +275,7 @@ This includes test tools; the production graph is narrower. NSH-generated test r
 | pkcs8 | 0.10.2 | Apache-2.0 OR MIT | [crates.io](https://crates.io/crates/pkcs8/0.10.2) |
 | png | 0.17.16 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/png/0.17.16) |
 | png | 0.18.1 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/png/0.18.1) |
+| poly1305 | 0.9.1 | Apache-2.0 OR MIT | [crates.io](https://crates.io/crates/poly1305/0.9.1) |
 | polycool | 0.4.0 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/polycool/0.4.0) |
 | polyval | 0.7.3 | Apache-2.0 OR MIT | [crates.io](https://crates.io/crates/polyval/0.7.3) |
 | potential_utf | 0.1.6 | Unicode-3.0 | [crates.io](https://crates.io/crates/potential_utf/0.1.6) |
@@ -314,8 +317,10 @@ This includes test tools; the production graph is narrower. NSH-generated test r
 | rustls-webpki | 0.103.16 | ISC | [crates.io](https://crates.io/crates/rustls-webpki/0.103.16) |
 | rustversion | 1.0.23 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/rustversion/1.0.23) |
 | rustybuzz | 0.20.1 | MIT | [crates.io](https://crates.io/crates/rustybuzz/0.20.1) |
+| salsa20 | 0.11.0 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/salsa20/0.11.0) |
 | same-file | 1.0.6 | Unlicense/MIT | [crates.io](https://crates.io/crates/same-file/1.0.6) |
 | scopeguard | 1.2.0 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/scopeguard/1.2.0) |
+| scrypt | 0.12.0 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/scrypt/0.12.0) |
 | security-framework | 3.7.0 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/security-framework/3.7.0) |
 | security-framework-sys | 2.17.0 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/security-framework-sys/2.17.0) |
 | semver | 1.0.28 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/semver/1.0.28) |

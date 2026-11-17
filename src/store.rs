@@ -7,7 +7,7 @@ use nsh_core::prelude::*;
 use safay_app::{
     Uuid, Zeroizing,
     controller::Controller,
-    core::authenticator::FileKind,
+    core::import::FileKind,
     session::{Choice, Detail, Draft, Error, Projection, Session},
 };
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
@@ -155,7 +155,8 @@ pub enum Payload {
     /// A verified action that shows nothing: the verify dialog closes.
     Verified,
     Saved,
-    Imported(usize),
+    /// Accounts added, and entries skipped as unsupported.
+    Imported(usize, usize),
     /// One account added by hand: its service name, for the toast.
     Added(String),
     /// An account moved to Recently Deleted (its service name; `true` from its details sheet), or back from it.
@@ -637,8 +638,11 @@ impl Store {
                 self.cancel_auth();
                 self.capture_notice(Tone::Success, self.fmt("Copied the code for {}", &[&issuer]));
             }
-            Payload::Imported(n) => {
-                let text = self.count("imported", n);
+            Payload::Imported(n, skipped) => {
+                let mut text = self.count("imported", n);
+                if skipped > 0 {
+                    text = self.fmt("import.summary", &[&text, &self.count("skipped", skipped)]);
+                }
                 if self.sheet.get() == Some(Sheet::ExportImport) {
                     self.file.replace(None);
                     self.file_name.set(String::new());
@@ -816,7 +820,7 @@ impl Store {
         });
     }
     pub fn import_text(self, text: Zeroizing<String>) {
-        self.dispatch(true, move |s| Ok(Payload::Imported(s.import_text(&text)?)));
+        self.dispatch(true, move |s| Ok(Payload::Imported(s.import_text(&text)?, 0)));
     }
     pub fn import_file(self) {
         // A file that needs no password is imported without one, whatever was typed for an earlier file.
@@ -826,7 +830,10 @@ impl Store {
             Zeroizing::new(String::new())
         };
         let bytes = self.file.get();
-        self.dispatch(true, move |s| Ok(Payload::Imported(s.import_file(bytes.as_deref().ok_or(Error::Import)?, &password)?)));
+        self.dispatch(true, move |s| {
+            let summary = s.import_file(bytes.as_deref().ok_or(Error::Import)?, &password)?;
+            Ok(Payload::Imported(summary.added, summary.skipped))
+        });
     }
     pub fn choose_backup(self) {
         if self.fixture {
@@ -834,11 +841,8 @@ impl Store {
         }
         let epoch = self.controller.get().epoch();
         self.task(async move {
-            match platform::files::choose_import(
-                self.label("Choose File").to_string(),
-                self.label("Safay or Authenticator backup").to_string(),
-            )
-            .await
+            match platform::files::choose_import(self.label("Choose File").to_string(), self.label("Backup or export file").to_string())
+                .await
             {
                 Ok(Some((name, bytes))) if self.controller.get().epoch() == epoch => self.take_file(name, bytes),
                 Ok(_) => {}
@@ -847,7 +851,7 @@ impl Store {
         });
     }
     pub fn take_file(self, name: String, bytes: Vec<u8>) {
-        let kind = safay_app::core::authenticator::inspect(&bytes);
+        let kind = safay_app::core::import::inspect(&bytes);
         self.file_kind.set(kind);
         self.file.replace(Some(Zeroizing::new(bytes)));
         // `file_name` is what the UI follows (`has_file`): never empty for a chosen file.

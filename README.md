@@ -30,7 +30,9 @@ updater and for scripts; you don't need them to install. Each release's notes ar
   delays after failed attempts, Touch ID backed by the Secure Enclave, a last-good copy to roll back to.
 - **Backup and sync**: a folder, iCloud, WebDAV, Nextcloud, Dropbox, OneDrive or Google Drive. Only the encrypted vault
   leaves the device; conflicts are compared and resolved, never silently overwritten.
-- **Import and export**: encrypted Safay exports and Authenticator (browser extension) backups.
+- **Import and export**: encrypted Safay exports; backups from Aegis, 2FAS, Ente Auth, Proton Authenticator, Authenticator
+  (browser extension), and Bitwarden; CSV exports from Apple Passwords and other password managers; and text files with
+  one `otpauth://` link per line.
 - **Desktop integration (macOS)**: menu bar panel, global shortcuts, launch at login, a settings window, and launchers —
   Alfred, Raycast and Tinycast — that search accounts and ask Safay to copy a code.
 - English, Simplified Chinese and Traditional Chinese; light and dark appearance.

@@ -1,0 +1,1046 @@
+{
+ "placeholders": {
+  "unknownIssuer": "Unknown service",
+  "emptyUsername": "No account"
+ },
+ "note": "Encrypted samples were written with PyNaCl (Ente), cryptography (Aegis, 2FAS, Proton), and argon2-cffi (Proton).",
+ "imports": [
+  {
+   "name": "aegis plain",
+   "file": "{\"version\": 1, \"header\": {\"slots\": null, \"params\": null}, \"db\": {\"version\": 3, \"entries\": [{\"type\": \"totp\", \"uuid\": \"1\", \"name\": \"alex@example.com\", \"issuer\": \"GitHub\", \"note\": \"\", \"favorite\": true, \"icon\": null, \"info\": {\"secret\": \"JBSWY3DPEHPK3PXP\", \"algo\": \"SHA1\", \"digits\": 6, \"period\": 30}, \"groups\": [\"g-work\"]}, {\"type\": \"totp\", \"uuid\": \"2\", \"name\": \"sam\", \"issuer\": \"Example\", \"note\": \"\", \"favorite\": false, \"icon\": null, \"info\": {\"secret\": \"gezdgnbvgy3tqojqgezdgnbvgy3tqojq\", \"algo\": \"SHA512\", \"digits\": 8, \"period\": 60}, \"groups\": [\"g-work\", \"g-home\"]}, {\"type\": \"hotp\", \"uuid\": \"3\", \"name\": \"h\", \"issuer\": \"HOTP\", \"favorite\": false, \"info\": {\"secret\": \"MZXW6YTBOI\", \"algo\": \"SHA1\", \"digits\": 6, \"counter\": 3}, \"groups\": []}, {\"type\": \"steam\", \"uuid\": \"4\", \"name\": \"s\", \"issuer\": \"Steam\", \"favorite\": false, \"info\": {\"secret\": \"MZXW6YTBOI\", \"algo\": \"SHA1\", \"digits\": 5, \"period\": 30}, \"groups\": []}, {\"type\": \"totp\", \"uuid\": \"5\", \"name\": \"seven\", \"issuer\": \"Seven\", \"favorite\": false, \"info\": {\"secret\": \"MZXW6YTBOI\", \"algo\": \"SHA1\", \"digits\": 7, \"period\": 30}, \"groups\": []}], \"groups\": [{\"uuid\": \"g-work\", \"name\": \"Work\"}, {\"uuid\": \"g-home\", \"name\": \"Home\"}]}}",
+   "password": "",
+   "detect": {
+    "format": "aegis",
+    "encrypted": false
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "GitHub",
+      "username": "alex@example.com",
+      "secret": "JBSWY3DPEHPK3PXP",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": true,
+      "categories": [
+       "Work"
+      ],
+      "website": null
+     },
+     {
+      "issuer": "Example",
+      "username": "sam",
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "algorithm": "SHA512",
+      "digits": 8,
+      "period": 60,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [
+       "Work",
+       "Home"
+      ],
+      "website": null
+     }
+    ],
+    "skipped": 3
+   }
+  },
+  {
+   "name": "aegis encrypted",
+   "file": "{\"version\": 1, \"header\": {\"slots\": [{\"type\": 2, \"uuid\": \"b\", \"key\": \"ebb20f11789b9df2053e49922ae58730da559d9877b05d99830534f7c93f7f58\", \"key_params\": {\"nonce\": \"2cfbe309881be59dadba0df7\", \"tag\": \"8ff3f7f46ddbbf6fa8c8f0f786ceb631\"}}, {\"type\": 1, \"uuid\": \"p\", \"key\": \"3933af9838e8e6ea232de34bcd645e97834444f1bfa76d0ed6dbc85107449b9d\", \"key_params\": {\"nonce\": \"8cd79b7db1b64d6f6c7b08e6\", \"tag\": \"c697b657adf8d79b626931a64333c4e8\"}, \"n\": 32768, \"r\": 8, \"p\": 1, \"salt\": \"bc0ef21778f19d83f5544ed9fce9e32b42892540eb9db813861e39136188304a\", \"repaired\": true, \"is_backup\": false}], \"params\": {\"nonce\": \"3bf951e50aec1803c32a6115\", \"tag\": \"a578d65a5c9958d0a3db0c0ea4288c38\"}}, \"db\": \"V5A3XBbUWgy6UWiFL34CKV0pfX7TdrhEkr9QeiTEa5Kcz2g0dfXAXT+gkcNKrPriLx++JJDFgwUbduATkeR9DwLU7LQxgv+XSi0fDmzQj5mZOwiHeDcD7VNHkOGItkIDJbsm9Pt6Ws+HQbjKLgppb1m+pJuySFFP3rUmIf2T6d3uchsh/kOMfZGaXITYGJe51P2q34axdAxJOfmai6du9uGhduJ8ufIs+ueWkkOOdyWAAg7RSc13UZQ/q7Z+uAwRucI8rAwhSHJ9svQ0bqMTqv/OKtZ/3lVKfcjIGe75jcrMWIFZ5EcCyF0SjU4xwJxFE6gBxUDBItl0wt4RlX63lFQh0QIoWPTVuo7Oa4VhN13jpAVYMo4CTCp5OtBHvnZoKPXjxYzJEKphugRjzGNuBi/7VIkjAsLtxp2ryglMGm0t9aqDrZuFDg8URHP91wyuGojEqFE1Pbk3C3P/+j3lZ7OYa5C9DNu3BojFymcKA5A5/iKABm5X3NSXikm6+OAS5ZMmCKjT5zJOHnoZX2RLeXGOqYBxpev4YsIcSAw7oKYICWsgZ9KVQLk6GypqgQqKRkhq9iE+O51BaLexFTCHj1LKCOLf1SWKSzhbJKa2fjXnKhf0j43edOobsR+SlKW1i/XOTMOgvbTnmKr7z3I5F+jK2cs+zEEBeAf18/b8bQmjt62h7Wj1dDBRtjKo7kXzrXqtgdaHl4AeNSRH4K7Ll+aWz7RKe3K3C3qre2TYPq+WdK0YF95PUPvNXjly4bEZOa+I81qq5M3REHb5nKXdtST3o4DuY6h2D4y2BpRsKLwYSJGR1BU1vfAQ0kP4FW77gRlbwi63VjRZ4Cil6MB56Y3bYn2wc4Q8flmQEuG3h1lki51wsJ2d/Xp8AdoT7w00Qz3iUxgad3hj00EAJp62rlmyD+ihJWW9T7Xwo6/azbjsAahydC47QUT5JM50O+gdptm+MNm/yV9PEhHFYyP2xRt9kAuQFrBW9tWLHsc5k1Qv3qfNfH1ZL/bOcCIgwLiUETE8MSqdKelKAYO+kAXDXtmqzvPBaY/XrEuFA0tKKE9Qr+KBMzS/hCDVdTwc64c8nIIovBlVja0J4+xHg1kkkKk8qaJm6E0fdKpErxPIxe01lBfaADzffSjJ7nlA0f2HXhfX3F95ByJcYiQLx7evMcQJl/e4c0eFYfbhMRJg79QFuOHXHbyThdsbn3sH30ZHIGYZiCB0GD4VydE+5lyN0FW83jRxsN1uztgbFcw0AajMxa1JOwbdnXRnTSfn+nHr2f7217WUyycQtN3vOs5zHGQN2MMbw37wI6h+gomPNlMnYc05clyHzRekHsLQTiGIKJahbLVWF0XiPThp8LrkC4fY9478X2uhTqulcGmBU/xi0VUPEk01Jh/MidW9WBGoKvEL3kELFaFOclNbox31F0oDU+RA9h4aPuKNOkvf1XtBGlBa4/yjlabEqXWsvmcAEYbf\"}",
+   "password": "aegis-pw",
+   "detect": {
+    "format": "aegis",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "GitHub",
+      "username": "alex@example.com",
+      "secret": "JBSWY3DPEHPK3PXP",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": true,
+      "categories": [
+       "Work"
+      ],
+      "website": null
+     },
+     {
+      "issuer": "Example",
+      "username": "sam",
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "algorithm": "SHA512",
+      "digits": 8,
+      "period": 60,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [
+       "Work",
+       "Home"
+      ],
+      "website": null
+     }
+    ],
+    "skipped": 3
+   }
+  },
+  {
+   "name": "aegis wrong password",
+   "file": "{\"version\": 1, \"header\": {\"slots\": [{\"type\": 2, \"uuid\": \"b\", \"key\": \"ebb20f11789b9df2053e49922ae58730da559d9877b05d99830534f7c93f7f58\", \"key_params\": {\"nonce\": \"2cfbe309881be59dadba0df7\", \"tag\": \"8ff3f7f46ddbbf6fa8c8f0f786ceb631\"}}, {\"type\": 1, \"uuid\": \"p\", \"key\": \"3933af9838e8e6ea232de34bcd645e97834444f1bfa76d0ed6dbc85107449b9d\", \"key_params\": {\"nonce\": \"8cd79b7db1b64d6f6c7b08e6\", \"tag\": \"c697b657adf8d79b626931a64333c4e8\"}, \"n\": 32768, \"r\": 8, \"p\": 1, \"salt\": \"bc0ef21778f19d83f5544ed9fce9e32b42892540eb9db813861e39136188304a\", \"repaired\": true, \"is_backup\": false}], \"params\": {\"nonce\": \"3bf951e50aec1803c32a6115\", \"tag\": \"a578d65a5c9958d0a3db0c0ea4288c38\"}}, \"db\": \"V5A3XBbUWgy6UWiFL34CKV0pfX7TdrhEkr9QeiTEa5Kcz2g0dfXAXT+gkcNKrPriLx++JJDFgwUbduATkeR9DwLU7LQxgv+XSi0fDmzQj5mZOwiHeDcD7VNHkOGItkIDJbsm9Pt6Ws+HQbjKLgppb1m+pJuySFFP3rUmIf2T6d3uchsh/kOMfZGaXITYGJe51P2q34axdAxJOfmai6du9uGhduJ8ufIs+ueWkkOOdyWAAg7RSc13UZQ/q7Z+uAwRucI8rAwhSHJ9svQ0bqMTqv/OKtZ/3lVKfcjIGe75jcrMWIFZ5EcCyF0SjU4xwJxFE6gBxUDBItl0wt4RlX63lFQh0QIoWPTVuo7Oa4VhN13jpAVYMo4CTCp5OtBHvnZoKPXjxYzJEKphugRjzGNuBi/7VIkjAsLtxp2ryglMGm0t9aqDrZuFDg8URHP91wyuGojEqFE1Pbk3C3P/+j3lZ7OYa5C9DNu3BojFymcKA5A5/iKABm5X3NSXikm6+OAS5ZMmCKjT5zJOHnoZX2RLeXGOqYBxpev4YsIcSAw7oKYICWsgZ9KVQLk6GypqgQqKRkhq9iE+O51BaLexFTCHj1LKCOLf1SWKSzhbJKa2fjXnKhf0j43edOobsR+SlKW1i/XOTMOgvbTnmKr7z3I5F+jK2cs+zEEBeAf18/b8bQmjt62h7Wj1dDBRtjKo7kXzrXqtgdaHl4AeNSRH4K7Ll+aWz7RKe3K3C3qre2TYPq+WdK0YF95PUPvNXjly4bEZOa+I81qq5M3REHb5nKXdtST3o4DuY6h2D4y2BpRsKLwYSJGR1BU1vfAQ0kP4FW77gRlbwi63VjRZ4Cil6MB56Y3bYn2wc4Q8flmQEuG3h1lki51wsJ2d/Xp8AdoT7w00Qz3iUxgad3hj00EAJp62rlmyD+ihJWW9T7Xwo6/azbjsAahydC47QUT5JM50O+gdptm+MNm/yV9PEhHFYyP2xRt9kAuQFrBW9tWLHsc5k1Qv3qfNfH1ZL/bOcCIgwLiUETE8MSqdKelKAYO+kAXDXtmqzvPBaY/XrEuFA0tKKE9Qr+KBMzS/hCDVdTwc64c8nIIovBlVja0J4+xHg1kkkKk8qaJm6E0fdKpErxPIxe01lBfaADzffSjJ7nlA0f2HXhfX3F95ByJcYiQLx7evMcQJl/e4c0eFYfbhMRJg79QFuOHXHbyThdsbn3sH30ZHIGYZiCB0GD4VydE+5lyN0FW83jRxsN1uztgbFcw0AajMxa1JOwbdnXRnTSfn+nHr2f7217WUyycQtN3vOs5zHGQN2MMbw37wI6h+gomPNlMnYc05clyHzRekHsLQTiGIKJahbLVWF0XiPThp8LrkC4fY9478X2uhTqulcGmBU/xi0VUPEk01Jh/MidW9WBGoKvEL3kELFaFOclNbox31F0oDU+RA9h4aPuKNOkvf1XtBGlBa4/yjlabEqXWsvmcAEYbf\"}",
+   "password": "nope",
+   "detect": {
+    "format": "aegis",
+    "encrypted": true
+   },
+   "expected": {
+    "error": "err.import.wrong_password"
+   }
+  },
+  {
+   "name": "aegis no password",
+   "file": "{\"version\": 1, \"header\": {\"slots\": [{\"type\": 2, \"uuid\": \"b\", \"key\": \"ebb20f11789b9df2053e49922ae58730da559d9877b05d99830534f7c93f7f58\", \"key_params\": {\"nonce\": \"2cfbe309881be59dadba0df7\", \"tag\": \"8ff3f7f46ddbbf6fa8c8f0f786ceb631\"}}, {\"type\": 1, \"uuid\": \"p\", \"key\": \"3933af9838e8e6ea232de34bcd645e97834444f1bfa76d0ed6dbc85107449b9d\", \"key_params\": {\"nonce\": \"8cd79b7db1b64d6f6c7b08e6\", \"tag\": \"c697b657adf8d79b626931a64333c4e8\"}, \"n\": 32768, \"r\": 8, \"p\": 1, \"salt\": \"bc0ef21778f19d83f5544ed9fce9e32b42892540eb9db813861e39136188304a\", \"repaired\": true, \"is_backup\": false}], \"params\": {\"nonce\": \"3bf951e50aec1803c32a6115\", \"tag\": \"a578d65a5c9958d0a3db0c0ea4288c38\"}}, \"db\": \"V5A3XBbUWgy6UWiFL34CKV0pfX7TdrhEkr9QeiTEa5Kcz2g0dfXAXT+gkcNKrPriLx++JJDFgwUbduATkeR9DwLU7LQxgv+XSi0fDmzQj5mZOwiHeDcD7VNHkOGItkIDJbsm9Pt6Ws+HQbjKLgppb1m+pJuySFFP3rUmIf2T6d3uchsh/kOMfZGaXITYGJe51P2q34axdAxJOfmai6du9uGhduJ8ufIs+ueWkkOOdyWAAg7RSc13UZQ/q7Z+uAwRucI8rAwhSHJ9svQ0bqMTqv/OKtZ/3lVKfcjIGe75jcrMWIFZ5EcCyF0SjU4xwJxFE6gBxUDBItl0wt4RlX63lFQh0QIoWPTVuo7Oa4VhN13jpAVYMo4CTCp5OtBHvnZoKPXjxYzJEKphugRjzGNuBi/7VIkjAsLtxp2ryglMGm0t9aqDrZuFDg8URHP91wyuGojEqFE1Pbk3C3P/+j3lZ7OYa5C9DNu3BojFymcKA5A5/iKABm5X3NSXikm6+OAS5ZMmCKjT5zJOHnoZX2RLeXGOqYBxpev4YsIcSAw7oKYICWsgZ9KVQLk6GypqgQqKRkhq9iE+O51BaLexFTCHj1LKCOLf1SWKSzhbJKa2fjXnKhf0j43edOobsR+SlKW1i/XOTMOgvbTnmKr7z3I5F+jK2cs+zEEBeAf18/b8bQmjt62h7Wj1dDBRtjKo7kXzrXqtgdaHl4AeNSRH4K7Ll+aWz7RKe3K3C3qre2TYPq+WdK0YF95PUPvNXjly4bEZOa+I81qq5M3REHb5nKXdtST3o4DuY6h2D4y2BpRsKLwYSJGR1BU1vfAQ0kP4FW77gRlbwi63VjRZ4Cil6MB56Y3bYn2wc4Q8flmQEuG3h1lki51wsJ2d/Xp8AdoT7w00Qz3iUxgad3hj00EAJp62rlmyD+ihJWW9T7Xwo6/azbjsAahydC47QUT5JM50O+gdptm+MNm/yV9PEhHFYyP2xRt9kAuQFrBW9tWLHsc5k1Qv3qfNfH1ZL/bOcCIgwLiUETE8MSqdKelKAYO+kAXDXtmqzvPBaY/XrEuFA0tKKE9Qr+KBMzS/hCDVdTwc64c8nIIovBlVja0J4+xHg1kkkKk8qaJm6E0fdKpErxPIxe01lBfaADzffSjJ7nlA0f2HXhfX3F95ByJcYiQLx7evMcQJl/e4c0eFYfbhMRJg79QFuOHXHbyThdsbn3sH30ZHIGYZiCB0GD4VydE+5lyN0FW83jRxsN1uztgbFcw0AajMxa1JOwbdnXRnTSfn+nHr2f7217WUyycQtN3vOs5zHGQN2MMbw37wI6h+gomPNlMnYc05clyHzRekHsLQTiGIKJahbLVWF0XiPThp8LrkC4fY9478X2uhTqulcGmBU/xi0VUPEk01Jh/MidW9WBGoKvEL3kELFaFOclNbox31F0oDU+RA9h4aPuKNOkvf1XtBGlBa4/yjlabEqXWsvmcAEYbf\"}",
+   "password": "",
+   "detect": {
+    "format": "aegis",
+    "encrypted": true
+   },
+   "expected": {
+    "error": "err.import.password_required"
+   }
+  },
+  {
+   "name": "aegis scrypt beyond limits",
+   "file": "{\"version\": 1, \"header\": {\"slots\": [{\"type\": 2, \"uuid\": \"b\", \"key\": \"f7f8ae94b52bbb32f4457df69e05371c691982df7541c69ba7d54b9cee921ec5\", \"key_params\": {\"nonce\": \"da4800d19701b390efc447de\", \"tag\": \"6aa7a07e082f33992e86a7d7c6ca3cb7\"}}, {\"type\": 1, \"uuid\": \"p\", \"key\": \"9564a84e514d4f8d2b6a1a43978d10185474ec333bbd764d075c3d696aa393d7\", \"key_params\": {\"nonce\": \"41b2c78301fddff6192a68c5\", \"tag\": \"7b27bb3124831841383d77049e537512\"}, \"n\": 1073741824, \"r\": 8, \"p\": 1, \"salt\": \"07234e7aa1df129d1a15ccedc70f8f520932ed60293caf1189c39a86494475c8\", \"repaired\": true, \"is_backup\": false}], \"params\": {\"nonce\": \"0749d18f81da0cd1e9e00e8d\", \"tag\": \"dd8a6951aacebc53d82171f88a3329df\"}}, \"db\": \"4ZZ7OIJgO0y2WaNTD33e+MGKJTP4WZ8VrrK/wtuvyznjnEJrKLHM3yWps8xJW8RXBl26zl8TLHCDZQT3cWGOhltS9l8ObjZfZt2RWHfRSG1YcAfyHMPbDcnEyeJQ7LM5n2W2aULIaCYpzUthMSYik/lDXkB2Ffn7WLWgU9V4WLRIQ/CBl86035WVMg7BDhZXLmtv7etR6jV9RG50D8rEAasskDro7uXigViPipu+H9sOrwse4l6b6Us1mFiAtU6rc80VqjBA4tIt57/AWoO+bqb6soFDlnl5RQ5jLN/IM/cbw8eWor9namqzY7mub0IoESxSN6ditNEzvjwu8m8vwh4KCCcF4f+6EtvUmlYVSJAOroF6XI0JnUWBnoIBJkAOSnBPvOpkyMHH1Pr/IeI1sdIGgrwEx6iyBqEHRFZf4Lyh8HenVuXxLzTGzY+gH6ex3hiQTXQBMS/s+0/Q9GgnwFosAH/HuK6yzH2P1LeXkD33XyV0ayMTpUHKDlGqfwWYxwVOd1BJmSI3QzYAj6rUwf7k+KE/uEpJCazowBRtrg2nCQLi2233E11DBvwhxGE9ZGs4xXVVjnYXLQr3IBwD6dUx6FSYX3rPz8QmxW/2qDQOW2ALMVLMvXsfTvdtUUbtmzdNWKuPFW3IPblEu9e90imhUlP6GiDWkGRzygmD45llNEJ7i/vb2Pe0k5yb0yQX48POxUIPeEU1oqqUrMYDhSxpFl5AtylKuLK+sNl7cFjC7fJBY22HZ4qZhtRmHMFp54VOTJkHbuDl94HTTwlDfIfGMX3PCX6UYaygBdJDf9p2TFDI95+65xDAV9W6OANXY35IW+WnUBZ2qsOvRyi2f1kSJWBTyW9mb9wznancqvbYVgREf7k4WdjHRiuS/J6TgAlC5BdmCB+6Kz2dp/nwETfvrykZn6E05SJ3Hi5ufJ1+sPuWLwHT/8K0YLXJudOmJsL2cKj+Yow1IBvhwLIin+yem1IOQoYurG1wLpmhoQwZUSyUGpszNEn3FdT/zvI0RCc69N36lrs9LTsGZREBBTxYvgSu++FQcr6h4Ufm9PVIBUxkbGc1rX4Uupw7FOKE2qTgw2ApaxTmyU0+nVtxGqkEFlkapjacyM5/2n8/IA8kIqRDfigUNbVZp7x1BR1Vs4CBi+vlzNce7jFnoHRlxyDf6XTKIOs4bt66Ys40f9oJXA7cPDII6eYoUfI1Z+vQ8GNpBT03+6PqYX39KbBAEukRJCK14iKb893s9zkxA3v6plm5hEZ0kxLQIuEAQM/L3X11pzHwc0NitD3/Ari7OIdSNWpiU6b8+vdPX4e7XBw9IlErZySY2vbLLd4LCZkaSgOEYJkaSrhBYy+VyWZYGnOxYN4F3D4D9GBMWnAdo04Ro5xaX5D/EXqVWKIhT16/Un0ebIKM8ktw+gnRto+wf5/kK3pFmu9MKdj6gRRHE7tnaf++/vc5TlSm5CuRsUhFJXXF\"}",
+   "password": "aegis-pw",
+   "detect": {
+    "format": "aegis",
+    "encrypted": true
+   },
+   "expected": {
+    "error": "err.import.invalid_file"
+   }
+  },
+  {
+   "name": "2fas plain",
+   "file": "{\"services\": [{\"name\": \"GitHub\", \"secret\": \"JBSWY3DPEHPK3PXP\", \"updatedAt\": 1, \"otp\": {\"account\": \"alex\", \"issuer\": \"GitHub\", \"digits\": 6, \"period\": 30, \"algorithm\": \"SHA1\", \"tokenType\": \"TOTP\"}, \"order\": {\"position\": 1}, \"groupId\": \"grp-1\"}, {\"name\": \"\", \"secret\": \"MZXW6YTBOI\", \"updatedAt\": 1, \"otp\": {\"account\": \"first\", \"issuer\": \"Issuer From OTP\", \"digits\": 8, \"period\": 30, \"algorithm\": \"SHA256\", \"tokenType\": \"TOTP\"}, \"order\": {\"position\": 0}}, {\"name\": \"Issuu\", \"secret\": \"MZXW6YTBOI\", \"updatedAt\": 1, \"otp\": {\"account\": \"j\", \"issuer\": \"Issuu\", \"digits\": 6, \"algorithm\": \"SHA1\", \"counter\": 1, \"tokenType\": \"HOTP\"}, \"order\": {\"position\": 2}}, {\"name\": \"Steam\", \"secret\": \"MZXW6YTBOI\", \"updatedAt\": 1, \"otp\": {\"account\": \"s\", \"digits\": 5, \"period\": 30, \"algorithm\": \"SHA1\", \"tokenType\": \"STEAM\"}, \"order\": {\"position\": 3}}], \"groups\": [{\"id\": \"grp-1\", \"name\": \"Code\", \"isExpanded\": true}], \"updatedAt\": 1, \"schemaVersion\": 4, \"appVersionCode\": 1, \"appOrigin\": \"ios\"}",
+   "password": "",
+   "detect": {
+    "format": "twofas",
+    "encrypted": false
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Issuer From OTP",
+      "username": "first",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA256",
+      "digits": 8,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     },
+     {
+      "issuer": "GitHub",
+      "username": "alex",
+      "secret": "JBSWY3DPEHPK3PXP",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [
+       "Code"
+      ],
+      "website": null
+     }
+    ],
+    "skipped": 2
+   }
+  },
+  {
+   "name": "2fas encrypted",
+   "file": "{\"services\": [], \"groups\": [{\"id\": \"grp-1\", \"name\": \"Code\", \"isExpanded\": true}], \"updatedAt\": 1, \"schemaVersion\": 4, \"appVersionCode\": 1, \"appOrigin\": \"android\", \"servicesEncrypted\": \"vdNwhDZhROeRfjIfxZ5/W/kw9QqRlXiX7S0yOAvEdyNtHY8YWAjQtMTkJ3Sy7PBhSE4nlu5vP+W2TTrXJ+S++3C+OSU9tS8noi5yKZeMBLd87RrNTV3+HlXP9SVyuqk1vifCurfsvpBpcHFEadJaocQwD3SNT6LNFHjqRV3LCWdUHPdlBZSutvnsaSkM4uU+d+SKbp2T6ZTWtUtcnr6h9EDzH7sDXPmfJl88v7Qtsl9k/Gu16kObFCGKPjir/u1hOOXkAVEJkK2JSLIZK5zDUV5NJVHwP0NeWiCSLkRy8ngdYSTTL8H17K1yDU3skEZcfF2o0/WKonyhiorFPU539Gr0YB1NvU60F+3XKxvOfkagfETBgSTqXBwk42ZoZOvBCrjrf530BqHEND2sCFz55wSBiCrlE5hb9/abk93zS8pB1FPW3vkIvLWlzMnREKszNg1sTwrE6FwnWO+oKVMLhH0ypKcjgOb83XUopWVHIrrpMRJkCkuIxnmY3/2cIEg4PJPGKE7uAtXN0AxnC11WaKRDhUeUp3YhafuQKAkdkAU+nj7ZDAlyJaBv+ajb7FaHRbwWA+Lcl4jUsc4pM4ZJC5dbcoTxngijalYqC4Ock8m5jIyk+Xb5v0UwB4GZ64X/XwMeUtPak52JCmVCT885dwJ+HpAvLKouUxpgjH/oGdKNTuoMCU/o2QBoLfTNa5BHNVrOR/qSFzAj+1uyh3RV/6jvVyu+VFuhAP2/UyuFozwcQc1coCxkch+b5C2LpXLK2erdRsC2nh5L+QFiGxmIDzLT+t4DhHPHSccVsZkHVJz47LA8qWjwsXsx8hiu35PEUV/hhhBFt9RX2cyj4bWwm9+F2leXikhsPcf5nAiNfuxhsCnQ6e/VFXWZPGc3w7enIS/tijgMM0di3UE5i/KVgPoM2KI8rbHfvRpJapr4UP+o3qi25L182yJN0tpTwTiNSowVWSB5zXtCNepaXZWsYHBUvk2H9KkvomsjuDtbUUFBtHtTL0Fnz0B4626GGkZkXNpIQ0JigU6sQx0IB7TrMpneZcWwiMyPYjuE6Y+fJlxQMczBtp1GaWaHE1/MhJeK8O+8IKmO1UF0ZYAjYFB49w==:fCEiwGozYpwXs/sRa04CWvnrNx9tnHeYZYDIjTujCnBlItnvZ05ZUy4TEf3BJJIXkhLrX0W7avWR9dL5yISwS4WUYbJApYxziFX0/YkbAE9wMuehVxs+m4mis3SJKtxztltB5mwuzGtZqSK7+g5A5dScMpb1UopaPOVyyV1jZ8JkXQPpz0nSvnayTuSDi6Il83IFsuQTOiks4FQUhEd0RxwwLp4/bVfS5YFZyuKwR2EMfWc/07gmKnEBUILnFgvAFUNNmY6QF54DLvq8UoGnnPD7OH7LY2EHzkDzrXet3Ujc9HAxzl0ADOWW1jIrx5J9MYKeOe4PN3oW7tDEtI78Fg==:NhT4o1WRW7HxQoa/\", \"reference\": \"Eng5SBtyF4PxEBBw/RHVt/yLeyHUmmElcQ==:fCEiwGozYpwXs/sRa04CWvnrNx9tnHeYZYDIjTujCnBlItnvZ05ZUy4TEf3BJJIXkhLrX0W7avWR9dL5yISwS4WUYbJApYxziFX0/YkbAE9wMuehVxs+m4mis3SJKtxztltB5mwuzGtZqSK7+g5A5dScMpb1UopaPOVyyV1jZ8JkXQPpz0nSvnayTuSDi6Il83IFsuQTOiks4FQUhEd0RxwwLp4/bVfS5YFZyuKwR2EMfWc/07gmKnEBUILnFgvAFUNNmY6QF54DLvq8UoGnnPD7OH7LY2EHzkDzrXet3Ujc9HAxzl0ADOWW1jIrx5J9MYKeOe4PN3oW7tDEtI78Fg==:HadTj804ps0G3dfS\"}",
+   "password": "2fas-pw",
+   "detect": {
+    "format": "twofas",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Issuer From OTP",
+      "username": "first",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA256",
+      "digits": 8,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     },
+     {
+      "issuer": "GitHub",
+      "username": "alex",
+      "secret": "JBSWY3DPEHPK3PXP",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [
+       "Code"
+      ],
+      "website": null
+     }
+    ],
+    "skipped": 2
+   }
+  },
+  {
+   "name": "2fas wrong password",
+   "file": "{\"services\": [], \"groups\": [{\"id\": \"grp-1\", \"name\": \"Code\", \"isExpanded\": true}], \"updatedAt\": 1, \"schemaVersion\": 4, \"appVersionCode\": 1, \"appOrigin\": \"android\", \"servicesEncrypted\": \"vdNwhDZhROeRfjIfxZ5/W/kw9QqRlXiX7S0yOAvEdyNtHY8YWAjQtMTkJ3Sy7PBhSE4nlu5vP+W2TTrXJ+S++3C+OSU9tS8noi5yKZeMBLd87RrNTV3+HlXP9SVyuqk1vifCurfsvpBpcHFEadJaocQwD3SNT6LNFHjqRV3LCWdUHPdlBZSutvnsaSkM4uU+d+SKbp2T6ZTWtUtcnr6h9EDzH7sDXPmfJl88v7Qtsl9k/Gu16kObFCGKPjir/u1hOOXkAVEJkK2JSLIZK5zDUV5NJVHwP0NeWiCSLkRy8ngdYSTTL8H17K1yDU3skEZcfF2o0/WKonyhiorFPU539Gr0YB1NvU60F+3XKxvOfkagfETBgSTqXBwk42ZoZOvBCrjrf530BqHEND2sCFz55wSBiCrlE5hb9/abk93zS8pB1FPW3vkIvLWlzMnREKszNg1sTwrE6FwnWO+oKVMLhH0ypKcjgOb83XUopWVHIrrpMRJkCkuIxnmY3/2cIEg4PJPGKE7uAtXN0AxnC11WaKRDhUeUp3YhafuQKAkdkAU+nj7ZDAlyJaBv+ajb7FaHRbwWA+Lcl4jUsc4pM4ZJC5dbcoTxngijalYqC4Ock8m5jIyk+Xb5v0UwB4GZ64X/XwMeUtPak52JCmVCT885dwJ+HpAvLKouUxpgjH/oGdKNTuoMCU/o2QBoLfTNa5BHNVrOR/qSFzAj+1uyh3RV/6jvVyu+VFuhAP2/UyuFozwcQc1coCxkch+b5C2LpXLK2erdRsC2nh5L+QFiGxmIDzLT+t4DhHPHSccVsZkHVJz47LA8qWjwsXsx8hiu35PEUV/hhhBFt9RX2cyj4bWwm9+F2leXikhsPcf5nAiNfuxhsCnQ6e/VFXWZPGc3w7enIS/tijgMM0di3UE5i/KVgPoM2KI8rbHfvRpJapr4UP+o3qi25L182yJN0tpTwTiNSowVWSB5zXtCNepaXZWsYHBUvk2H9KkvomsjuDtbUUFBtHtTL0Fnz0B4626GGkZkXNpIQ0JigU6sQx0IB7TrMpneZcWwiMyPYjuE6Y+fJlxQMczBtp1GaWaHE1/MhJeK8O+8IKmO1UF0ZYAjYFB49w==:fCEiwGozYpwXs/sRa04CWvnrNx9tnHeYZYDIjTujCnBlItnvZ05ZUy4TEf3BJJIXkhLrX0W7avWR9dL5yISwS4WUYbJApYxziFX0/YkbAE9wMuehVxs+m4mis3SJKtxztltB5mwuzGtZqSK7+g5A5dScMpb1UopaPOVyyV1jZ8JkXQPpz0nSvnayTuSDi6Il83IFsuQTOiks4FQUhEd0RxwwLp4/bVfS5YFZyuKwR2EMfWc/07gmKnEBUILnFgvAFUNNmY6QF54DLvq8UoGnnPD7OH7LY2EHzkDzrXet3Ujc9HAxzl0ADOWW1jIrx5J9MYKeOe4PN3oW7tDEtI78Fg==:NhT4o1WRW7HxQoa/\", \"reference\": \"Eng5SBtyF4PxEBBw/RHVt/yLeyHUmmElcQ==:fCEiwGozYpwXs/sRa04CWvnrNx9tnHeYZYDIjTujCnBlItnvZ05ZUy4TEf3BJJIXkhLrX0W7avWR9dL5yISwS4WUYbJApYxziFX0/YkbAE9wMuehVxs+m4mis3SJKtxztltB5mwuzGtZqSK7+g5A5dScMpb1UopaPOVyyV1jZ8JkXQPpz0nSvnayTuSDi6Il83IFsuQTOiks4FQUhEd0RxwwLp4/bVfS5YFZyuKwR2EMfWc/07gmKnEBUILnFgvAFUNNmY6QF54DLvq8UoGnnPD7OH7LY2EHzkDzrXet3Ujc9HAxzl0ADOWW1jIrx5J9MYKeOe4PN3oW7tDEtI78Fg==:HadTj804ps0G3dfS\"}",
+   "password": "nope",
+   "detect": {
+    "format": "twofas",
+    "encrypted": true
+   },
+   "expected": {
+    "error": "err.import.wrong_password"
+   }
+  },
+  {
+   "name": "ente plain",
+   "file": "otpauth://totp/GitHub:alex?secret=JBSWY3DPEHPK3PXP&issuer=GitHub&algorithm=SHA1&digits=6&period=30&codeDisplay=%7B%22pinned%22%3Atrue%2C%22trashed%22%3Afalse%2C%22lastUsedAt%22%3A0%2C%22tapCount%22%3A0%2C%22tags%22%3A%5B%22Work%22%2C%22Dev%22%5D%7D\notpauth://totp/Old:gone?secret=MZXW6YTBOI&issuer=Old&codeDisplay=%7B%22pinned%22%3Afalse%2C%22trashed%22%3Atrue%2C%22lastUsedAt%22%3A0%2C%22tapCount%22%3A0%2C%22tags%22%3A%5B%5D%7D\notpauth://hotp/H:h?secret=MZXW6YTBOI&issuer=H&counter=1&codeDisplay=%7B%22pinned%22%3Afalse%2C%22trashed%22%3Afalse%2C%22lastUsedAt%22%3A0%2C%22tapCount%22%3A0%2C%22tags%22%3A%5B%5D%7D\notpauth://steam/Steam:s?secret=MZXW6YTBOI&issuer=Steam&digits=5&codeDisplay=%7B%22pinned%22%3Afalse%2C%22trashed%22%3Afalse%2C%22lastUsedAt%22%3A0%2C%22tapCount%22%3A0%2C%22tags%22%3A%5B%5D%7D\notpauth://totp/Mail:me%40example.com?secret=KRSXG5CTMVRXEZLUKN2XAZLSKNSWG4TFOQ&issuer=Mail&algorithm=SHA256&digits=8&period=30&codeDisplay=%7B%22pinned%22%3Afalse%2C%22trashed%22%3Afalse%2C%22lastUsedAt%22%3A0%2C%22tapCount%22%3A0%2C%22tags%22%3A%5B%22Work%22%5D%7D\n",
+   "password": "",
+   "detect": {
+    "format": "text",
+    "encrypted": false
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "GitHub",
+      "username": "alex",
+      "secret": "JBSWY3DPEHPK3PXP",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": true,
+      "categories": [
+       "Work",
+       "Dev"
+      ],
+      "website": null
+     },
+     {
+      "issuer": "Mail",
+      "username": "me@example.com",
+      "secret": "KRSXG5CTMVRXEZLUKN2XAZLSKNSWG4TFOQ",
+      "algorithm": "SHA256",
+      "digits": 8,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [
+       "Work"
+      ],
+      "website": null
+     }
+    ],
+    "skipped": 3
+   }
+  },
+  {
+   "name": "ente encrypted",
+   "file": "{\"version\": 1, \"kdfParams\": {\"memLimit\": 8388608, \"opsLimit\": 2, \"salt\": \"2hpbStj8/M7ZbapSZeft8g==\"}, \"encryptedData\": \"1Zgb3W3wM2D/F+o5PDRFiQKu4Qcwmgj3HJwl34bVRHZ/bKrD1obBlyXbAduSrxSWUbpwOVCvEFrHDGDqcu4qGXkJqCZwKTKO1MVYau03/CJvx5763Q0mgD6d94H90PLrQkHsyYh4+x23Bb3Vsss+QkWJQB98NVidR1VgW0Mz8NtoVGYqw1wlNYauKmX1o8opCvO5GyewjKsRjyt8dJUOXun++He87/a4gEurn8gNbuyG/S4ODcU/Vnb9C6+/03OR493WlKtXVArEIQ1z2P/L+hmGI8tXwYnmdoJmiJbj40KtkbYP0OwxoMPxkaB8a6IRwZfnOs2wMZkykAm0rMUog1VuIPoyNMtgd/nhFGg7SACUvnP7abKJCHX+yeBYNFvisCdfs7tWQj4hmeLiUrrImM1tm6NLfLLrrNLNv0r/gCVH5TW55ag0ufUqpva5yyXL43euP2Tn6Ediq29ozw4ttqAnthBbp95kMcdHND6AuBCmVYwHp8/YTop8G0MWlxW0oQvicG/YCRTIsA3bKsWVr/o70NljkXykGi3OCEFlpnofjJEp1TLzJhcHYw1Pda2nsXCrZjLjJzyQ6owl3dwgp90UhAifW+Bfzdf1XV02oplRC5PuqdP3R3l6TsWLa9OrJgM2p3y8Idl8mae1HliWNxuVC3mM+rVeqzzvSnEQvPjXx4d+HGlS2GlzRRMhaNSWGE6XdaNxY9O9SiO9oiFwZgo0THagv6JkGe5B0EPDnPUMd/VtR0MzeQ86zaFhTdPfBlQ1JEHOlnMbXa1ehVMyy2ErN5vuTUn6ahwYFXS7wqTTEJKWnRL90JZzzwKw4bo4ZecBbgbAQf1oLUWge5hgqAg3v/gEN1sV2Q/ylTMn4DOHGcsH0ZOg2HbDiqLg5FD0/zLm2gNiUkp51FCoQkEvwgsQdpO+phbSIbR16U4j1rRIsl+PAMHTMJWeuRcGe2lYnyFmigJYTOeynFkKZXu+bwR2Ur08ig1JKjdXF1JARXbpZKyWvDvCdnfSgjm2JnXBv9uVNoRm6Xg2wD2g5jUkN817yFgntP7ND3f/SAMAnKH4kaDEUHRRaU82nysTKqJxdVjlBj5N2bZVaVFCvn7n+t1jVAldce/juABSbR1q0QZaXnxwXtO88gywpgBMDdBwsVnEnKxNT1jRNcI/1zf3leEDBDUrRg7RncHv4Ks2EW0dYeZ5KLqoO+R2HNfMAhy5bCBaJyskPUuGob6x/eS8S1OEbiA8YKbdJLnO/0fyOXLZc6P589LXIZUJMaJk48ZclHM0MvrW0ElqzklpNsbm23HDQJ+Uhfg5zKOZxXs2PqTH1r5s2WE74/WeJqKB8jMCrNb+tv5fKYBqsRd2sowyzW3CvTNS/NP6jmf+YBI/hE5jn5L5CfzfwhQWNeN/Wcq17uDhLRPcDXShY/IOWCUC2wB0v/m5TnCwyRpT8ogUsXcXnQI=\", \"encryptionNonce\": \"0XET70Akyo1sqr+iIdezQyTEPzuYoJwW\"}",
+   "password": "ente-pw",
+   "detect": {
+    "format": "ente",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "GitHub",
+      "username": "alex",
+      "secret": "JBSWY3DPEHPK3PXP",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": true,
+      "categories": [
+       "Work",
+       "Dev"
+      ],
+      "website": null
+     },
+     {
+      "issuer": "Mail",
+      "username": "me@example.com",
+      "secret": "KRSXG5CTMVRXEZLUKN2XAZLSKNSWG4TFOQ",
+      "algorithm": "SHA256",
+      "digits": 8,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [
+       "Work"
+      ],
+      "website": null
+     }
+    ],
+    "skipped": 3
+   }
+  },
+  {
+   "name": "ente wrong password",
+   "file": "{\"version\": 1, \"kdfParams\": {\"memLimit\": 8388608, \"opsLimit\": 2, \"salt\": \"2hpbStj8/M7ZbapSZeft8g==\"}, \"encryptedData\": \"1Zgb3W3wM2D/F+o5PDRFiQKu4Qcwmgj3HJwl34bVRHZ/bKrD1obBlyXbAduSrxSWUbpwOVCvEFrHDGDqcu4qGXkJqCZwKTKO1MVYau03/CJvx5763Q0mgD6d94H90PLrQkHsyYh4+x23Bb3Vsss+QkWJQB98NVidR1VgW0Mz8NtoVGYqw1wlNYauKmX1o8opCvO5GyewjKsRjyt8dJUOXun++He87/a4gEurn8gNbuyG/S4ODcU/Vnb9C6+/03OR493WlKtXVArEIQ1z2P/L+hmGI8tXwYnmdoJmiJbj40KtkbYP0OwxoMPxkaB8a6IRwZfnOs2wMZkykAm0rMUog1VuIPoyNMtgd/nhFGg7SACUvnP7abKJCHX+yeBYNFvisCdfs7tWQj4hmeLiUrrImM1tm6NLfLLrrNLNv0r/gCVH5TW55ag0ufUqpva5yyXL43euP2Tn6Ediq29ozw4ttqAnthBbp95kMcdHND6AuBCmVYwHp8/YTop8G0MWlxW0oQvicG/YCRTIsA3bKsWVr/o70NljkXykGi3OCEFlpnofjJEp1TLzJhcHYw1Pda2nsXCrZjLjJzyQ6owl3dwgp90UhAifW+Bfzdf1XV02oplRC5PuqdP3R3l6TsWLa9OrJgM2p3y8Idl8mae1HliWNxuVC3mM+rVeqzzvSnEQvPjXx4d+HGlS2GlzRRMhaNSWGE6XdaNxY9O9SiO9oiFwZgo0THagv6JkGe5B0EPDnPUMd/VtR0MzeQ86zaFhTdPfBlQ1JEHOlnMbXa1ehVMyy2ErN5vuTUn6ahwYFXS7wqTTEJKWnRL90JZzzwKw4bo4ZecBbgbAQf1oLUWge5hgqAg3v/gEN1sV2Q/ylTMn4DOHGcsH0ZOg2HbDiqLg5FD0/zLm2gNiUkp51FCoQkEvwgsQdpO+phbSIbR16U4j1rRIsl+PAMHTMJWeuRcGe2lYnyFmigJYTOeynFkKZXu+bwR2Ur08ig1JKjdXF1JARXbpZKyWvDvCdnfSgjm2JnXBv9uVNoRm6Xg2wD2g5jUkN817yFgntP7ND3f/SAMAnKH4kaDEUHRRaU82nysTKqJxdVjlBj5N2bZVaVFCvn7n+t1jVAldce/juABSbR1q0QZaXnxwXtO88gywpgBMDdBwsVnEnKxNT1jRNcI/1zf3leEDBDUrRg7RncHv4Ks2EW0dYeZ5KLqoO+R2HNfMAhy5bCBaJyskPUuGob6x/eS8S1OEbiA8YKbdJLnO/0fyOXLZc6P589LXIZUJMaJk48ZclHM0MvrW0ElqzklpNsbm23HDQJ+Uhfg5zKOZxXs2PqTH1r5s2WE74/WeJqKB8jMCrNb+tv5fKYBqsRd2sowyzW3CvTNS/NP6jmf+YBI/hE5jn5L5CfzfwhQWNeN/Wcq17uDhLRPcDXShY/IOWCUC2wB0v/m5TnCwyRpT8ogUsXcXnQI=\", \"encryptionNonce\": \"0XET70Akyo1sqr+iIdezQyTEPzuYoJwW\"}",
+   "password": "nope",
+   "detect": {
+    "format": "ente",
+    "encrypted": true
+   },
+   "expected": {
+    "error": "err.import.wrong_password"
+   }
+  },
+  {
+   "name": "ente encrypted length 0",
+   "file": "{\"version\": 1, \"kdfParams\": {\"memLimit\": 8192, \"opsLimit\": 1, \"salt\": \"Kj7Txe133xUtUEk4hdvqNg==\"}, \"encryptedData\": \"/nWEpSvBOpbx2gjlL9Srslx5Xm81bws1IN9u2Ne6jGjfx7QDj+SKFE9QvUHSbmko6rxPCSpinTFiMQHrF5KUiJxB\", \"encryptionNonce\": \"hlaI2rk0Ifr93PYnsF3/mpUFz8thV5vt\"}",
+   "password": "p",
+   "detect": {
+    "format": "ente",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Pad",
+      "username": "x",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 0
+   }
+  },
+  {
+   "name": "ente encrypted length 1",
+   "file": "{\"version\": 1, \"kdfParams\": {\"memLimit\": 8192, \"opsLimit\": 1, \"salt\": \"PTrbcwaJ0XwKVQRYhp+Hyg==\"}, \"encryptedData\": \"1XkOrzViE2O/VICjLESfyBJF1FyEvmYdNpaJ80ByLJ12XVzHujNI0OUrXA9mthlPOg2Nhe1j5JbLCmAR/svCSCK05A==\", \"encryptionNonce\": \"M087l3M6KR8syJrZvq3rgKgI3SjQWvyR\"}",
+   "password": "p",
+   "detect": {
+    "format": "ente",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Pad",
+      "username": "xx",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 0
+   }
+  },
+  {
+   "name": "ente encrypted length 2",
+   "file": "{\"version\": 1, \"kdfParams\": {\"memLimit\": 8192, \"opsLimit\": 1, \"salt\": \"esxI5ycssGKhxxLDeQjpOA==\"}, \"encryptedData\": \"23IjKumO/RBOMPOy0VqiMEi3i+emXhB4ozYEuXV/ungJ4jYHtr3rOTBnbui6+UGXbKMHeaxxCe2tsP+345FMTts1Big=\", \"encryptionNonce\": \"jYpKZ7HzPLAD2yT1RoDGUYd9ryKQxgV7\"}",
+   "password": "p",
+   "detect": {
+    "format": "ente",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Pad",
+      "username": "xxx",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 0
+   }
+  },
+  {
+   "name": "ente encrypted length 3",
+   "file": "{\"version\": 1, \"kdfParams\": {\"memLimit\": 8192, \"opsLimit\": 1, \"salt\": \"tz+w9MKEUYT3fTvoNwnjmQ==\"}, \"encryptedData\": \"4qoNKmLfcAXnQQEFVTVAw/DyTMWNyIoEz2Xp5INpwhEG8HXILLan5DyB3sCPUT0t+Fy1nn51z0J45WM5l6v+UkDbvQtb\", \"encryptionNonce\": \"Qmy8Q9fKOshLEzdK3jZ1NtjzdfGcXqnF\"}",
+   "password": "p",
+   "detect": {
+    "format": "ente",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Pad",
+      "username": "xxxx",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 0
+   }
+  },
+  {
+   "name": "ente encrypted length 4",
+   "file": "{\"version\": 1, \"kdfParams\": {\"memLimit\": 8192, \"opsLimit\": 1, \"salt\": \"o/J62m2RJl1MlJMulnviwg==\"}, \"encryptedData\": \"Z2x0wM2PV/adhScZFKj+7pGvGvjfrLBcYUkuSLDq4y5ZOyfPpet6jOuJ+DZRxt2XK74B1KkMJMRaNoxM97oXQDIFXZPNBQ==\", \"encryptionNonce\": \"wTxDCZ4HrmNUkU9GOM32pf+uHo6wUBd+\"}",
+   "password": "p",
+   "detect": {
+    "format": "ente",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Pad",
+      "username": "xxxxx",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 0
+   }
+  },
+  {
+   "name": "ente encrypted length 5",
+   "file": "{\"version\": 1, \"kdfParams\": {\"memLimit\": 8192, \"opsLimit\": 1, \"salt\": \"oKxEXRPuDJv1dFt0hJv2cg==\"}, \"encryptedData\": \"Fjlnch262bkn+zxLQPGE0modW8JTJUhdroqrfykUiHNnX+R3CFD30XUXSOny9YZ246x8GeX1u6tL1MAhTHM5gfSXqWn6tqc=\", \"encryptionNonce\": \"VeKZKVwy6pSsATXAZCs3tftENncAAXQ2\"}",
+   "password": "p",
+   "detect": {
+    "format": "ente",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Pad",
+      "username": "xxxxxx",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 0
+   }
+  },
+  {
+   "name": "ente encrypted length 6",
+   "file": "{\"version\": 1, \"kdfParams\": {\"memLimit\": 8192, \"opsLimit\": 1, \"salt\": \"qwIQr9GQaiUg2myYv4UMXw==\"}, \"encryptedData\": \"whxnCWyqOjpktE+rSNhnknNvAEORKcrjHjlxcAcDfipQzbEPhX0Xd3m3SseA/n239L2aMDd0zAOdvMwsBiPCGCkLc4ucAPY4\", \"encryptionNonce\": \"GsHSmEbWmvE+DnAeMnuYRnzrLoUScX5X\"}",
+   "password": "p",
+   "detect": {
+    "format": "ente",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Pad",
+      "username": "xxxxxxx",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 0
+   }
+  },
+  {
+   "name": "ente encrypted length 7",
+   "file": "{\"version\": 1, \"kdfParams\": {\"memLimit\": 8192, \"opsLimit\": 1, \"salt\": \"bZ4g8znVoyG+uEnjlEw5LQ==\"}, \"encryptedData\": \"8VpzorHgiMmQKKS2oaYfGrYOyPIeMChGKNFM1WAG7zvs3rOrsYWJ3KJrLlpQFjMY+ThDLvPar+ZmfpjU8VxI9eHng3m3HbzDQA==\", \"encryptionNonce\": \"dvQYRQYrt2Pm7w9mXeZJAweQKxZtx2Uv\"}",
+   "password": "p",
+   "detect": {
+    "format": "ente",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Pad",
+      "username": "xxxxxxxx",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 0
+   }
+  },
+  {
+   "name": "ente encrypted length 8",
+   "file": "{\"version\": 1, \"kdfParams\": {\"memLimit\": 8192, \"opsLimit\": 1, \"salt\": \"S9D26+FL5w7t4OoPSXkqPw==\"}, \"encryptedData\": \"ZCa2HxELWtJC3SWJ8di8NAjX0sm2p+Cc9LpdKSOLzoiTpcG+TL7iGIG3boc5RIsplW4Rdof112UeHKj0W56C/fi1Epdw0AA/Q2U=\", \"encryptionNonce\": \"jI6yqadteGikv076I7telQtOFaYk9lin\"}",
+   "password": "p",
+   "detect": {
+    "format": "ente",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Pad",
+      "username": "xxxxxxxxx",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 0
+   }
+  },
+  {
+   "name": "ente encrypted length 9",
+   "file": "{\"version\": 1, \"kdfParams\": {\"memLimit\": 8192, \"opsLimit\": 1, \"salt\": \"V6sol+jW6DowK3gV5/Cdeg==\"}, \"encryptedData\": \"h9wI4ukdVICGh8gr80zzlaZi8NL06uXSvwELTidATT5SiOk4XzKIrJYCVy7raCrykV1F3+afTP/V9Xo8TYqEFe7Q1IaDCEJkIJLx\", \"encryptionNonce\": \"GXoo1pAm0C18zQ+OtP4tOvOwPJQjR7Kx\"}",
+   "password": "p",
+   "detect": {
+    "format": "ente",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Pad",
+      "username": "xxxxxxxxxx",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 0
+   }
+  },
+  {
+   "name": "ente encrypted length 10",
+   "file": "{\"version\": 1, \"kdfParams\": {\"memLimit\": 8192, \"opsLimit\": 1, \"salt\": \"BMSN2IT/clGy2PboEqaqbw==\"}, \"encryptedData\": \"ChuN9fVWuwerik+Or+1uQfA8THptTyty2jJTzpqshOczxHRNAjXJuxTE0MMoEUoOV48tABd95hg3rmbmTMZBSYmSBb5JjLCt8nmt/Q==\", \"encryptionNonce\": \"4c5nlZhG0Zbwl2vhbiLRWxrI0cGTUjyE\"}",
+   "password": "p",
+   "detect": {
+    "format": "ente",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Pad",
+      "username": "xxxxxxxxxxx",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 0
+   }
+  },
+  {
+   "name": "ente encrypted length 11",
+   "file": "{\"version\": 1, \"kdfParams\": {\"memLimit\": 8192, \"opsLimit\": 1, \"salt\": \"c7evAGA06zMjB1rihGvdUg==\"}, \"encryptedData\": \"nONeOSvfUp6h05oSdPJeCW4kbGLPCFJaMzIYfz0S46mvh+4LKsKxPH6JdTcb+mpuoiHs305ciiGucoF0Djy+uEObdgOcO8KtdxBnzNo=\", \"encryptionNonce\": \"zLWglAJgH3/yh22TbP7O4cEiFI44Sx5P\"}",
+   "password": "p",
+   "detect": {
+    "format": "ente",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Pad",
+      "username": "xxxxxxxxxxxx",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 0
+   }
+  },
+  {
+   "name": "ente encrypted length 12",
+   "file": "{\"version\": 1, \"kdfParams\": {\"memLimit\": 8192, \"opsLimit\": 1, \"salt\": \"fXK4Tvoz+JEe8TQsi3DxqQ==\"}, \"encryptedData\": \"ywNwPzZKl9UKZ6poRUcDLrmdy7FsWG7BzgIVcpuaBLNo1joF8CKDgNnJ3Om/YQl3nenyuluO12CW08znd1QVqRDM3qLuVvyCdndN5Mpv\", \"encryptionNonce\": \"yzO3iy3MQ2T67zCIh/mX1pFOGuVTKVKE\"}",
+   "password": "p",
+   "detect": {
+    "format": "ente",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Pad",
+      "username": "xxxxxxxxxxxxx",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 0
+   }
+  },
+  {
+   "name": "ente encrypted length 13",
+   "file": "{\"version\": 1, \"kdfParams\": {\"memLimit\": 8192, \"opsLimit\": 1, \"salt\": \"w9PsV9kGrr1/25ookpY7bQ==\"}, \"encryptedData\": \"XlOdRqi1cvR1veyP3tcoR2sJca0u/B6vKeGBYL1fJznTml2/5rgGWv+ZzKuWLZdSxk4NE2chgb2WRwU0GTAh0YV6K24WHsGxvnubZap4fQ==\", \"encryptionNonce\": \"SI/7MgqH+LZQJeQq3JW1FjMne2+/BRcI\"}",
+   "password": "p",
+   "detect": {
+    "format": "ente",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Pad",
+      "username": "xxxxxxxxxxxxxx",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 0
+   }
+  },
+  {
+   "name": "ente encrypted length 14",
+   "file": "{\"version\": 1, \"kdfParams\": {\"memLimit\": 8192, \"opsLimit\": 1, \"salt\": \"Qu7Sc6OB1bRJdv33b6kQ2w==\"}, \"encryptedData\": \"dh3Dcspzb3lM4d5O8p/8kPybepYceGaj0JLGsrCUm5W09aTji/ROW3rqrrZMjsZTva3nQZJdXFqv+YQFw+9x3ALmio53U9uAcksKKRGpNXY=\", \"encryptionNonce\": \"3/afPAPoKpGImhdsC45Zc++6HUoLzppk\"}",
+   "password": "p",
+   "detect": {
+    "format": "ente",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Pad",
+      "username": "xxxxxxxxxxxxxxx",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 0
+   }
+  },
+  {
+   "name": "ente encrypted length 15",
+   "file": "{\"version\": 1, \"kdfParams\": {\"memLimit\": 8192, \"opsLimit\": 1, \"salt\": \"hNbvtXp8x7FMyUW5km1cNg==\"}, \"encryptedData\": \"QVNjRyXPkcqMti/4SkGZwHSv5IFm+cIWf/prYrwoE6oAUtXUxBMmd4ozOHEq984ezUmczhQFhNKHbs5xO+iUHJJIoD9tpRXFZym5iOsTKLxi\", \"encryptionNonce\": \"+u0KpJbcu7lbmsFqoTj6iFi907H8UKQ3\"}",
+   "password": "p",
+   "detect": {
+    "format": "ente",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Pad",
+      "username": "xxxxxxxxxxxxxxxx",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 0
+   }
+  },
+  {
+   "name": "ente kdf beyond limits",
+   "file": "{\"version\": 1, \"kdfParams\": {\"memLimit\": 2147483648, \"opsLimit\": 1, \"salt\": \"Yt5T04n3dsv+polLP/Kw/w==\"}, \"encryptedData\": \"ooFNk5xbbmk8tHes/h05Q9Ej\", \"encryptionNonce\": \"QCJzdAUUL0PiShY7SnV1t997v/mOaGEf\"}",
+   "password": "p",
+   "detect": {
+    "format": "ente",
+    "encrypted": true
+   },
+   "expected": {
+    "error": "err.import.invalid_file"
+   }
+  },
+  {
+   "name": "proton plain",
+   "file": "{\"version\": 1, \"entries\": [{\"id\": \"a\", \"content\": {\"uri\": \"otpauth://totp/GitHub:alex?secret=JBSWY3DPEHPK3PXP&issuer=GitHub&algorithm=SHA1&digits=6&period=30\", \"entry_type\": \"Totp\", \"name\": \"GitHub\"}, \"note\": null}, {\"id\": \"b\", \"content\": {\"uri\": \"otpauth://totp/?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&algorithm=SHA512&digits=8&period=30\", \"entry_type\": \"Totp\", \"name\": \"Label Only\"}, \"note\": null}, {\"id\": \"c\", \"content\": {\"uri\": \"steam://MZXW6YTBOI\", \"entry_type\": \"Steam\", \"name\": \"Steam\"}, \"note\": null}]}",
+   "password": "",
+   "detect": {
+    "format": "proton",
+    "encrypted": false
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "GitHub",
+      "username": "alex",
+      "secret": "JBSWY3DPEHPK3PXP",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     },
+     {
+      "issuer": "Unknown service",
+      "username": "Label Only",
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "algorithm": "SHA512",
+      "digits": 8,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 1
+   }
+  },
+  {
+   "name": "proton encrypted",
+   "file": "{\"version\": 1, \"salt\": \"NzhvXorilWsjMVZ2tYlWqw==\", \"content\": \"lRIHjwExD5Y9u6Khgxti0wTtVqppGbvvy5KAzZiOCYXsZUyz6x/2GMqWE2M6YADUDK7+EbsLIetOhGunY85dSw8DH81HFxL0kDbmIFaIlXDjOvSoqM/88rLD8SbaQKGg/SixKy23V9c2dS8CJdIp6Wx+Oe7e6VBnbstLcffi5ugd2rNl6dg58temjiFqprrFjHg3yALSyLHIJHPsS8lUpzxhlbJHFP/Y7pLYGK4kMo0eKkEGQSyck4NSJuYO4ytO4U6Y3pW4jVkYXVw9a7e40KyXWXHyTuF6IKcQ5MyKL1h/s4WAg8oiMElIfNk5k1Z9le4IjpbCgjK5slt5rU5Uo7EU0XLQnAF39AFSohdiODN9Gn+jg6dee9iY/7LqzFKGefORT97vNm3+ySWR7cVxPAiSKyTud/kgUrGkWZHwPHkY96CgmGSpOIxeWrupra1V0DXXtECx6+LxA+wUDAMYho5rxHtSUpVEHWk4fRjmAkQvVfKVusR6K91G2WIklQJL+Klmb/JhKru1VVvLrcc3djbfk/vY8hKBGr79+jDkuRqRVnvexEsr8wfmjnE7pp9MwvnJQJ7s3M730ovXjXzQbFs86VebNHIX2OEF1/sfPzwj09k7eUwMmWHKrIKhYrNT+nxj8cwSSbiVxGkuqfOktwlBkk/Lez/eC7iFh0v6LwKar2xLGMME81NtuoktvAzNpuo0zoVzYUZkt6Q=\"}",
+   "password": "proton-pw",
+   "detect": {
+    "format": "proton",
+    "encrypted": true
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "GitHub",
+      "username": "alex",
+      "secret": "JBSWY3DPEHPK3PXP",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     },
+     {
+      "issuer": "Unknown service",
+      "username": "Label Only",
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "algorithm": "SHA512",
+      "digits": 8,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 1
+   }
+  },
+  {
+   "name": "proton wrong password",
+   "file": "{\"version\": 1, \"salt\": \"NzhvXorilWsjMVZ2tYlWqw==\", \"content\": \"lRIHjwExD5Y9u6Khgxti0wTtVqppGbvvy5KAzZiOCYXsZUyz6x/2GMqWE2M6YADUDK7+EbsLIetOhGunY85dSw8DH81HFxL0kDbmIFaIlXDjOvSoqM/88rLD8SbaQKGg/SixKy23V9c2dS8CJdIp6Wx+Oe7e6VBnbstLcffi5ugd2rNl6dg58temjiFqprrFjHg3yALSyLHIJHPsS8lUpzxhlbJHFP/Y7pLYGK4kMo0eKkEGQSyck4NSJuYO4ytO4U6Y3pW4jVkYXVw9a7e40KyXWXHyTuF6IKcQ5MyKL1h/s4WAg8oiMElIfNk5k1Z9le4IjpbCgjK5slt5rU5Uo7EU0XLQnAF39AFSohdiODN9Gn+jg6dee9iY/7LqzFKGefORT97vNm3+ySWR7cVxPAiSKyTud/kgUrGkWZHwPHkY96CgmGSpOIxeWrupra1V0DXXtECx6+LxA+wUDAMYho5rxHtSUpVEHWk4fRjmAkQvVfKVusR6K91G2WIklQJL+Klmb/JhKru1VVvLrcc3djbfk/vY8hKBGr79+jDkuRqRVnvexEsr8wfmjnE7pp9MwvnJQJ7s3M730ovXjXzQbFs86VebNHIX2OEF1/sfPzwj09k7eUwMmWHKrIKhYrNT+nxj8cwSSbiVxGkuqfOktwlBkk/Lez/eC7iFh0v6LwKar2xLGMME81NtuoktvAzNpuo0zoVzYUZkt6Q=\"}",
+   "password": "nope",
+   "detect": {
+    "format": "proton",
+    "encrypted": true
+   },
+   "expected": {
+    "error": "err.import.wrong_password"
+   }
+  },
+  {
+   "name": "bitwarden json",
+   "file": "{\"encrypted\": false, \"folders\": [{\"id\": \"f1\", \"name\": \"Personal\"}], \"items\": [{\"id\": \"1\", \"folderId\": \"f1\", \"type\": 1, \"name\": \"GitHub\", \"favorite\": true, \"login\": {\"uris\": [{\"match\": null, \"uri\": \"https://github.com/login\"}], \"username\": \"alex\", \"password\": \"hunter2\", \"totp\": \"otpauth://totp/GitHub:alex?secret=JBSWY3DPEHPK3PXP&issuer=GitHub\"}}, {\"id\": \"2\", \"folderId\": null, \"type\": 1, \"name\": \"Bare Secret\", \"favorite\": false, \"login\": {\"uris\": [], \"username\": \"sam@example.com\", \"password\": \"pw\", \"totp\": \"mzxw6ytboi\"}}, {\"id\": \"3\", \"folderId\": null, \"type\": 1, \"name\": \"Password Only\", \"favorite\": false, \"login\": {\"uris\": null, \"username\": \"x\", \"password\": \"pw\", \"totp\": null}}, {\"id\": \"4\", \"folderId\": null, \"type\": 1, \"name\": \"Steam\", \"favorite\": false, \"login\": {\"uris\": null, \"username\": null, \"password\": null, \"totp\": \"steam://MZXW6YTBOI\"}}, {\"id\": \"5\", \"folderId\": null, \"type\": 2, \"name\": \"Note\", \"favorite\": false, \"secureNote\": {\"type\": 0}}]}",
+   "password": "",
+   "detect": {
+    "format": "bitwarden",
+    "encrypted": false
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "GitHub",
+      "username": "alex",
+      "secret": "JBSWY3DPEHPK3PXP",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": true,
+      "categories": [
+       "Personal"
+      ],
+      "website": "github.com"
+     },
+     {
+      "issuer": "Bare Secret",
+      "username": "sam@example.com",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 1
+   }
+  },
+  {
+   "name": "bitwarden encrypted json",
+   "file": "{\"encrypted\": true, \"passwordProtected\": true, \"salt\": \"x\", \"data\": \"y\"}",
+   "password": "pw",
+   "detect": null,
+   "expected": {
+    "error": "err.import.invalid_file"
+   }
+  },
+  {
+   "name": "apple passwords csv",
+   "file": "Title,URL,Username,Password,Notes,OTPAuth\r\ngithub.com (alex),https://github.com/,alex,\"pa,ss\"\"word\",\"line one\nline, two\",otpauth://totp/GitHub:alex?secret=JBSWY3DPEHPK3PXP&issuer=GitHub\r\nexample.com,https://example.com/,nobody,secret,,\r\nLabel Fallback,https://accounts.example.org/,fallback@example.org,pw,,otpauth://totp/?secret=KRSXG5CTMVRXEZLUKN2XAZLSKNSWG4TFOQ&algorithm=SHA256\r\nHOTP,https://h.example/,h,pw,,otpauth://hotp/H:h?secret=MZXW6YTBOI&counter=0\r\n",
+   "password": "",
+   "detect": {
+    "format": "csv",
+    "encrypted": false
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "GitHub",
+      "username": "alex",
+      "secret": "JBSWY3DPEHPK3PXP",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": "github.com"
+     },
+     {
+      "issuer": "Label Fallback",
+      "username": "fallback@example.org",
+      "secret": "KRSXG5CTMVRXEZLUKN2XAZLSKNSWG4TFOQ",
+      "algorithm": "SHA256",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": "accounts.example.org"
+     }
+    ],
+    "skipped": 1
+   }
+  },
+  {
+   "name": "bitwarden csv",
+   "file": "folder,favorite,type,name,notes,fields,reprompt,login_uri,login_username,login_password,login_totp\nWork,1,login,GitLab,,,0,https://gitlab.com,dev,pw,GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ\nWork,,login,No Code,,,0,https://none.example,dev,pw,\n",
+   "password": "",
+   "detect": {
+    "format": "csv",
+    "encrypted": false
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "GitLab",
+      "username": "dev",
+      "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": true,
+      "categories": [
+       "Work"
+      ],
+      "website": "gitlab.com"
+     }
+    ],
+    "skipped": 0
+   }
+  },
+  {
+   "name": "proton pass csv",
+   "file": "name,url,email,username,password,note,totp,createTime,modifyTime,vault\nProton,https://proton.me,me@proton.me,,pw,,otpauth://totp/Proton:me%40proton.me?secret=MZXW6YTBOI&issuer=Proton,1,1,Personal\n",
+   "password": "",
+   "detect": {
+    "format": "csv",
+    "encrypted": false
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "Proton",
+      "username": "me@proton.me",
+      "secret": "MZXW6YTBOI",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": "proton.me"
+     }
+    ],
+    "skipped": 0
+   }
+  },
+  {
+   "name": "csv without codes",
+   "file": "Title,URL,Username,Password,Notes,OTPAuth\nexample.com,https://example.com/,a,b,,\n",
+   "password": "",
+   "detect": {
+    "format": "csv",
+    "encrypted": false
+   },
+   "expected": {
+    "error": "err.import.no_supported"
+   }
+  },
+  {
+   "name": "csv unterminated quote",
+   "file": "Title,OTPAuth\n\"open,otpauth://totp/A:b?secret=JBSWY3DPEHPK3PXP\n",
+   "password": "",
+   "detect": {
+    "format": "csv",
+    "encrypted": false
+   },
+   "expected": {
+    "error": "err.import.invalid_file"
+   }
+  },
+  {
+   "name": "link list",
+   "file": "\n  otpauth://totp/A:one?secret=JBSWY3DPEHPK3PXP&issuer=A  \nnot a link\notpauth://totp/B:two?secret=MZXW6YTBOI&issuer=B&digits=7\n",
+   "password": "",
+   "detect": {
+    "format": "text",
+    "encrypted": false
+   },
+   "expected": {
+    "accounts": [
+     {
+      "issuer": "A",
+      "username": "one",
+      "secret": "JBSWY3DPEHPK3PXP",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30,
+      "addedBy": "import",
+      "pinned": false,
+      "categories": [],
+      "website": null
+     }
+    ],
+    "skipped": 1
+   }
+  },
+  {
+   "name": "unsupported",
+   "file": "just some notes\n",
+   "password": "",
+   "detect": null,
+   "expected": {
+    "error": "err.import.invalid_file"
+   }
+  },
+  {
+   "name": "empty json",
+   "file": "{}",
+   "password": "",
+   "detect": null,
+   "expected": {
+    "error": "err.import.invalid_file"
+   }
+  }
+ ]
+}

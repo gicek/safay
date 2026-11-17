@@ -15,6 +15,7 @@ Safay's behavior baseline. `crates/safay-core/tests/golden.rs` compares every en
 | `authenticator.json` | Expected results for Authenticator plaintext and v3 encrypted backups and their errors | Random sample |
 | `rust-written.json` | Vaults and exports written by Rust | Random sample |
 | `categories.json` | Category samples written by Rust: multiple memberships, order within a category, and empty categories (exports omit empty categories) | Random sample |
+| `imports.json` | Imports from Aegis, 2FAS, Ente Auth, Proton Authenticator, Bitwarden, CSV, and text files: detected format, accounts with pinned flag, categories and website, skipped count, and errors. Encrypted samples were written with PyNaCl, cryptography, and argon2-cffi | Random sample |
 | `site-icons.json` | Website normalization and suggestion, stored icon validation, icon link ranking, fetch steps, tile or glyph badge layout (alpha maps as `#` / `+` / `.` rows); plus a vault and export written by Rust with `website` and `icon` | Deterministic, plus random samples |
 
 - Deterministic vectors: each platform recomputes them and compares every field with the file. Random samples: each platform only checks that they decrypt and match the expected contents.

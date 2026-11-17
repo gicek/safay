@@ -10,7 +10,7 @@ use nsh_base::{button, input, theme};
 use nsh_core::prelude::*;
 use safay_app::{
     Uuid, Zeroizing,
-    core::authenticator::FileKind,
+    core::import::FileKind,
     core::{otpauth, site_icon, totp},
     session::placeholders,
 };
@@ -1424,7 +1424,7 @@ fn import_tab(s: Store) -> impl IntoElement {
     view()
         .gap(px(12.0))
         .child(
-            when(move || !s.has_file(), move || drop_zone(s, "Drop a Safay or Authenticator backup here, or click to choose")).otherwise(
+            when(move || !s.has_file(), move || drop_zone(s, "Drop a backup or export file here, or click to choose")).otherwise(
                 move || {
                     view()
                         .gap(px(12.0))
@@ -1463,7 +1463,7 @@ fn import_tab(s: Store) -> impl IntoElement {
                 },
             ),
         )
-        .child(note(move || s.label("Supports Safay encrypted exports and Authenticator backups. Existing accounts are skipped.")))
+        .child(note(move || s.label("Supports Safay, Aegis, 2FAS, Ente Auth, Proton Authenticator, Authenticator, and Bitwarden, plus CSV exports from Apple Passwords and other password managers. Existing accounts are skipped.")))
 }
 
 // ---------------------------------------------------------------- password, restore, auth

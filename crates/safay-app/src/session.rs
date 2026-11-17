@@ -1,7 +1,7 @@
 //! Single-owner vault state. All operations run off the UI thread and commit before publishing changes.
 use crate::storage::{MAX_FILE_BYTES, Repository, StorageError};
 use safay_core::{
-    Account, Placeholders, TotpAlgorithm, authenticator, canonical, category, dedup, otpauth, password, search, site_icon, totp, trash,
+    Account, Placeholders, TotpAlgorithm, canonical, category, dedup, import, otpauth, password, search, site_icon, totp, trash,
     vault::{self, VaultContents, VaultError, VaultKey},
 };
 use std::{
@@ -112,8 +112,8 @@ fn file_error(e: VaultError) -> Error {
         e => e.into(),
     }
 }
-fn import_error(e: authenticator::ImportError) -> Error {
-    use authenticator::ImportError;
+fn import_error(e: import::ImportError) -> Error {
+    use import::ImportError;
     match e {
         ImportError::PasswordRequired => Error::FilePasswordRequired,
         ImportError::WrongPassword => Error::FilePassword,
@@ -121,6 +121,13 @@ fn import_error(e: authenticator::ImportError) -> Error {
         ImportError::NoSupportedAccounts => Error::ImportEmpty,
         ImportError::Vault(e) => file_error(e),
     }
+}
+
+/// What a file import added: new accounts, and entries skipped because Safay does not support them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ImportSummary {
+    pub added: usize,
+    pub skipped: usize,
 }
 
 /// Drop application-owned account strings, including cloned transaction contents.
@@ -1071,17 +1078,17 @@ impl Session {
         });
         Ok(vault::export(&chosen.0.accounts, &chosen.0.categories, password, self.clock.wall())?)
     }
-    pub fn import_file(&mut self, data: &[u8], password: &str) -> Result<usize, Error> {
+    /// Imports a backup or export file in any supported format ([`import::import_file`]); accounts the vault already has
+    /// are skipped. `skipped` in the result counts entries Safay does not support (HOTP, Steam, …), not duplicates.
+    pub fn import_file(&mut self, data: &[u8], password: &str) -> Result<ImportSummary, Error> {
         self.guard()?;
         if data.len() as u64 > MAX_FILE_BYTES {
             return Err(Error::TooLarge);
         }
-        let imported = Sensitive(
-            authenticator::import_file(data, password, self.clock.wall(), &placeholders())
-                .map_err(import_error)?
-                .adopting_pinned("Pinned", vault::random_uuid)?,
-        );
-        self.merge(&imported.0)
+        let imported = import::import_file(data, password, self.clock.wall(), &placeholders()).map_err(import_error)?;
+        let skipped = imported.skipped;
+        let contents = Sensitive(imported.contents.adopting_pinned("Pinned", vault::random_uuid)?);
+        Ok(ImportSummary { added: self.merge(&contents.0)?, skipped })
     }
     pub fn import_text(&mut self, text: &str) -> Result<usize, Error> {
         self.guard()?;
@@ -1090,18 +1097,7 @@ impl Session {
         }
         let scans: Vec<_> =
             text.lines().filter(|line| !line.trim().is_empty()).map(|line| otpauth::parse_scan_result(line, &placeholders())).collect();
-        let mut groups: std::collections::HashMap<(i64, i64), std::collections::HashSet<i64>> = std::collections::HashMap::new();
-        for scan in &scans {
-            if scan.is_google_migration && scan.batch_size.unwrap_or(1) > 1 {
-                let size = scan.batch_size.ok_or(Error::Import)?;
-                let index = scan.batch_index.ok_or(Error::Import)?;
-                if size > 10000 || index < 0 || index >= size {
-                    return Err(Error::Import);
-                }
-                groups.entry((scan.batch_id.unwrap_or(0), size)).or_default().insert(index);
-            }
-        }
-        if groups.iter().any(|((_, size), indices)| indices.len() as i64 != *size) {
+        if !otpauth::batches_complete(&scans) {
             return Err(Error::Import);
         }
         let parsed: Vec<_> = scans.into_iter().flat_map(|scan| scan.accounts).collect();

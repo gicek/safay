@@ -362,6 +362,58 @@ fn authenticator_imports_match_mac() {
     }
 }
 
+/// Imports from other apps: the detected format, the accounts with their pinned flag, categories and website, the
+/// skipped count, or the error. Encrypted samples were written with independent implementations (golden/README.md).
+#[test]
+fn imports_match_golden() {
+    use safay_core::import::{self, Format};
+
+    let file = golden("imports");
+    let p = Placeholders {
+        unknown_issuer: text(&file["placeholders"]["unknownIssuer"]).into(),
+        empty_username: text(&file["placeholders"]["emptyUsername"]).into(),
+    };
+    for sample in items(&file, "imports") {
+        let data = text(&sample["file"]).as_bytes();
+        let detected = import::detect(data).map(|(format, encrypted)| {
+            let format = match format {
+                Format::SafayExport => "safay",
+                Format::Authenticator => "authenticator",
+                Format::Aegis => "aegis",
+                Format::TwoFas => "twofas",
+                Format::Ente => "ente",
+                Format::Proton => "proton",
+                Format::Bitwarden => "bitwarden",
+                Format::Csv => "csv",
+                Format::Text => "text",
+            };
+            json!({"format": format, "encrypted": encrypted})
+        });
+        assert_eq!(detected.unwrap_or(Value::Null), sample["detect"], "{}", sample["name"]);
+        let outcome = match import::import_file(data, text(&sample["password"]), SystemTime::now(), &p) {
+            Ok(imported) => {
+                let contents = &imported.contents;
+                json!({
+                    "accounts": contents.accounts.iter().map(|account| {
+                        let mut value = imported_json(account);
+                        value["pinned"] = contents.pinned_ids.contains(&account.id).into();
+                        value["categories"] = contents.categories.iter()
+                            .filter(|c| c.account_ids.contains(&account.id))
+                            .map(|c| c.name.clone())
+                            .collect::<Vec<_>>()
+                            .into();
+                        value["website"] = account.website.clone().into();
+                        value
+                    }).collect::<Vec<_>>(),
+                    "skipped": imported.skipped,
+                })
+            }
+            Err(error) => json!({"error": error.l10n_key()}),
+        };
+        assert_eq!(outcome, sample["expected"], "{}", sample["name"]);
+    }
+}
+
 /// Websites and site icons: normalization, suggestions, icon validation, icon link ranking, fetch steps, and a vault and
 /// export written by Rust with `website` and `icon`.
 #[test]

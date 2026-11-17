@@ -5,6 +5,16 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+### Added
+
+- **Import from other apps**: bring your codes over from Aegis, 2FAS, Ente Auth, Proton Authenticator, and Bitwarden, encrypted backups included.
+- **Import from password managers**: choose a CSV export from Apple Passwords, Bitwarden, or another password manager to import its codes.
+- **Groups and favorites**: groups, tags, and folders become categories, and favorites go into "Pinned".
+
+### Changed
+
+- **Import results**: entries Safay can't use, such as HOTP or Steam codes, are skipped and counted instead of failing the import.
+
 ## [1.1.3] - 2026-11-17
 
 Touch ID no longer flashes the password dialog, and QR codes get simpler.

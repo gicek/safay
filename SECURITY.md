@@ -29,6 +29,11 @@ framework's text and image buffers and the system clipboard cannot be guaranteed
 - Only v2 with Argon2id is accepted. KDF parameters read from a file are checked against upper limits (time 10, memory
   256 MiB, parallelism 4) before any work, so a crafted file cannot run for hours or exhaust memory. Files are read up
   to 16 MiB; images up to 4096 × 4096 pixels.
+- Imports from other apps decrypt in memory with the password typed for that file and never store it. Their KDF
+  parameters are checked before any work too: Aegis scrypt up to N·r = 2^21 and N·r·p = 2^22, Ente Auth Argon2id up to
+  1 GiB of memory, 64 passes and 4 GiB·passes in total; 2FAS (PBKDF2, 10,000 iterations) and Proton Authenticator
+  (Argon2id, 19 MiB) use fixed parameters. CSV exports also hold passwords: only the one-time password, name, username,
+  website, folder and favorite columns are read, and each row's fields are wiped once it is read.
 - Writes go to a temporary file in the same directory, are synced and atomically renamed, and compare-and-swap against
   the file last read, so a change made outside the session is detected. The previous authenticated vault is kept as a
   last-good copy that can be restored. A lock file keeps two Safay processes from writing at once. On Unix the data

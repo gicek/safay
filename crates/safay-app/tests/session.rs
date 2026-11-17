@@ -1,7 +1,7 @@
 use safay_app::{
     controller::Controller,
     core::{password, vault},
-    session::{Clock, Draft, Error, Session},
+    session::{Clock, Draft, Error, ImportSummary, Session},
     storage::{MemoryRepository, Repository},
 };
 use std::{
@@ -309,9 +309,33 @@ fn import_errors_tell_the_file_apart() {
     assert_eq!(import(&mut s, case("only-unsupported")), Err(Error::ImportEmpty));
     assert_eq!(s.import_file(&export, ""), Err(Error::FilePasswordRequired));
     assert_eq!(s.import_file(&export, "wrong"), Err(Error::FilePassword));
-    assert_eq!(s.import_file(&export, OTHER), Ok(1));
+    assert_eq!(s.import_file(&export, OTHER), Ok(ImportSummary { added: 1, skipped: 0 }));
     // The vault stays unlocked: a wrong file password is not a failed master password attempt.
     assert!(s.projection("", None).unwrap().unlocked);
+}
+/// Files from other apps: groups become categories, favorites go into "Pinned", unsupported entries are counted, and
+/// importing the same file again adds nothing.
+#[test]
+fn imports_other_apps_with_categories() {
+    let golden: serde_json::Value = serde_json::from_str(include_str!("../../../golden/imports.json")).unwrap();
+    let case = |name: &str| {
+        let c = golden["imports"].as_array().unwrap().iter().find(|c| c["name"] == name).unwrap();
+        (c["file"].as_str().unwrap().as_bytes().to_vec(), c["password"].as_str().unwrap().to_owned())
+    };
+    let (mut s, _, _, _) = setup();
+    s.create(PASSWORD, false).unwrap();
+    let (file, password) = case("aegis encrypted");
+    assert_eq!(s.import_file(&file, ""), Err(Error::FilePasswordRequired));
+    assert_eq!(s.import_file(&file, "wrong"), Err(Error::FilePassword));
+    assert_eq!(s.import_file(&file, &password), Ok(ImportSummary { added: 2, skipped: 3 }));
+    let projection = s.projection("", None).unwrap();
+    assert_eq!(projection.account_count, 2);
+    let mut categories: Vec<_> = projection.categories.iter().map(|c| (c.name.as_str(), c.count)).collect();
+    categories.sort();
+    assert_eq!(categories, vec![("Home", 1), ("Pinned", 1), ("Work", 2)]);
+    assert_eq!(s.import_file(&file, &password), Err(Error::Duplicate));
+    let (file, _) = case("aegis plain");
+    assert_eq!(s.import_file(&file, ""), Err(Error::Duplicate), "the same accounts, unencrypted");
 }
 /// Launchers (crate::launcher): nothing is indexed while the interface is off; once on, the index follows the unlocked
 /// vault and survives locking (searching a locked Safay); turning it off or resetting forgets it. A copy needs proof
