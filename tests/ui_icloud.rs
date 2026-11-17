@@ -59,6 +59,9 @@ fn choosing_icloud_links_and_backs_up() {
 
     // Turning off can delete the backup in iCloud too (for every device): the record goes, and so does the subscription.
     app.on_dialog(|_| nsh_testing::DialogAnswer::Press("Turn Off and Delete iCloud Backup".into()));
+    // The button waits for the first sync to finish.
+    let can_turn_off = |screen: &nsh_testing::Screen| screen.enabled("role:button[Turn Off Backup]").unwrap_or(false);
+    app.wait_until("Turn Off Backup enabled", Duration::from_secs(10), can_turn_off).unwrap();
     app.press("role:button[Turn Off Backup]").unwrap();
     app.wait_for_within("Backup is off", Duration::from_secs(20)).unwrap();
     assert!(store.envelope().is_none(), "the backup in iCloud is deleted");
