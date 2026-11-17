@@ -1,7 +1,7 @@
 # Interface design
 
 Safay is a compact, quiet desktop authenticator: the main task is finding an account and copying its current code.
-The visual language is a blue accent, adaptive compact cards, coloured monograms, codes in Atkinson Hyperlegible Mono,
+The visual language is an indigo accent taken from the icon's shield, adaptive compact cards, coloured monograms, codes in Atkinson Hyperlegible Mono,
 ring countdowns and grouped settings.
 
 ## One layout, native on each platform
@@ -14,7 +14,7 @@ appearance only — never capabilities.
 |---|---|---|---|
 | Title bar | Hidden; a 52 pt toolbar row with the traffic lights over the sidebar | 48 pt, system caption buttons on the right | 46 pt header bar, window buttons where GTK reports them |
 | Sidebar | 210 pt; floating on macOS 26, flush on 15 and earlier and on 27 and later; accent-filled selection | 240 pt, Mica tone, 3 pt accent bar on the selection | 220 pt, flush |
-| Controls | 30/36 pt, radius 6/8 | 32 pt, radius 4, Fluent accent | 34/38 pt, radius 6, libadwaita blue |
+| Controls | 30/36 pt, radius 6/8 | 32 pt, radius 4 | 34/38 pt, radius 6 |
 | Settings | Separate 760 × 520 window (⌘,) | Dialog over the main window | Dialog over the main window |
 
 ## Colour and type
@@ -24,7 +24,8 @@ appearance only — never capabilities.
 - Body and controls use the system font at 13 pt. Codes use Atkinson Hyperlegible Mono (bundled, OFL): 21 pt on cards,
   19 pt in the list, 26 pt in details, 14 pt in the menu bar panel. Revealed passwords and keys use the same monospaced
   face, which tells `1`, `l` and `I` apart.
-- White text on accent buttons meets 4.5:1 (macOS `#0a6fe8`, Windows `#005fb8`, Linux `#1c71d8`).
+- Every platform uses the same accent. White text on accent buttons meets 4.5:1 (`#3d5fa8` light, `#4f6fb8` dark); in
+  dark mode, accent text and glyphs use a lighter `#8aa5e0`.
 
 ## Structure
 
