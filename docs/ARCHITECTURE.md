@@ -122,7 +122,7 @@ moving back to NSH. Review this list on every NSH upgrade.
 | QR decoding and generation | `platform::files` (`rqrr`, `qrcode`) | all |
 | SF Symbols | `platform::symbols` (rendered to template PNGs; SVG icons elsewhere) | macOS |
 | Lock on sleep, screen lock and user switch | `platform::macos::observe`, `platform::windows`, `platform::linux` | all |
-| Launch at login; Dock policy at runtime | `platform::macos` | macOS |
+| Dock policy at runtime | `platform::macos` | macOS |
 | Closing the menu bar panel on clicks in other apps; pointer position | `platform::macos` | macOS |
 | Roman-only input in password and key fields | `platform::macos::roman_input_only` | macOS |
 | Shortcut recorder | `platform::hotkeys` (registration uses NSH) | all |

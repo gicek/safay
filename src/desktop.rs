@@ -4,7 +4,7 @@
 //!
 //! Everything here runs on the engine thread. Windows and handlers are made under the root's owner, so they outlive
 //! the window whose button or menu asked for them. What NSH does not offer stays in `platform::macos` (the Dock
-//! policy, the login item, system lock events).
+//! policy, system lock events).
 use crate::{
     i18n::{self, Language},
     platform,

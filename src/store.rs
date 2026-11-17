@@ -1260,11 +1260,13 @@ impl Store {
         if crate::hosted() && self.surface == Surface::Main {
             crate::desktop::apply(p, language);
         }
-        // The login item's state is a synchronous query to the system: read it when the window first loads (the Settings
-        // window loads each time it opens), not on every change; its own switch reads it again after changing it.
-        #[cfg(target_os = "macos")]
-        if previous.is_none() && crate::hosted() && self.surface != Surface::Panel {
-            self.login_item.set(platform::macos::login_item());
+        // The login item's state is a query to the system: read it when the window first loads (the Settings window
+        // loads each time it opens), not on every change; its own switch reads it again after changing it.
+        if previous.is_none() && crate::hosted() && self.surface != Surface::Panel && platform::supports::LOGIN_ITEM {
+            self.task(async move {
+                let enabled = nsh_core::element::desktop::launch_at_login().await;
+                self.login_item.set(Some(enabled));
+            });
         }
     }
     /// Settings take effect at once; the file is written in the background without blocking the window (no busy

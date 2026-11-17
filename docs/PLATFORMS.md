@@ -51,7 +51,7 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
 1. Run the build and `nsh test --target windows|linux` on real systems; check the title bar areas and window chrome.
 2. Enable `src/desktop.rs` on both platforms (NSH's tray, windows and global shortcuts work there), dispatch the Dock
    and pointer calls per platform, and turn on `supports::TRAY`, `SETTINGS_WINDOW` and `GLOBAL_HOTKEYS`.
-3. Store shortcuts in a platform-neutral form (today they are macOS key codes and Carbon modifiers); add launch at
-   login (Windows `Run` key or StartupTask; Linux autostart or the Background portal).
+3. Store shortcuts in a platform-neutral form (today they are macOS key codes and Carbon modifiers); turn on launch
+   at login (NSH's login item covers the Windows `Run` key and Linux autostart).
 4. Windows Hello, only as a real key release through `KeyCredentialManager` or a TPM-backed key; never a yes/no check.
 5. Verify lock events, the clipboard, file dialogs and backup folders under sync clients on each system.

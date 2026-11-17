@@ -210,48 +210,6 @@ pub fn pointer() -> Option<(f64, f64)> {
     Some((at.x, at.y))
 }
 
-#[link(name = "ServiceManagement", kind = "framework")]
-unsafe extern "C" {}
-
-/// Launch at login through `SMAppService.mainAppService` (macOS 13+). `None` when the system can't tell (not a bundle).
-pub fn login_item() -> Option<bool> {
-    use nsh_platform_macos::objc2::{msg_send, runtime::AnyClass};
-    let class = AnyClass::get(c"SMAppService")?;
-    let service: *mut nsh_platform_macos::objc2::runtime::AnyObject = unsafe { msg_send![class, mainAppService] };
-    if service.is_null() {
-        return None;
-    }
-    let status: isize = unsafe { msg_send![service, status] };
-    match status {
-        1 => Some(true),
-        0 | 2 => Some(false),
-        _ => None,
-    }
-}
-/// Registers or unregisters the login item; the error text is the system's, shown inline.
-pub fn set_login_item(enabled: bool) -> Result<(), String> {
-    use nsh_platform_macos::{
-        objc2::{msg_send, rc::Retained, runtime::AnyClass},
-        objc2_foundation::NSError,
-    };
-    let class = AnyClass::get(c"SMAppService").ok_or_else(|| "SMAppService is unavailable".to_owned())?;
-    let service: *mut nsh_platform_macos::objc2::runtime::AnyObject = unsafe { msg_send![class, mainAppService] };
-    if service.is_null() {
-        return Err("SMAppService is unavailable".into());
-    }
-    let mut error: *mut NSError = std::ptr::null_mut();
-    let ok: bool = if enabled {
-        unsafe { msg_send![service, registerAndReturnError: &mut error] }
-    } else {
-        unsafe { msg_send![service, unregisterAndReturnError: &mut error] }
-    };
-    if ok {
-        return Ok(());
-    }
-    let message = unsafe { Retained::retain(error) }.map(|e| e.localizedDescription().to_string()).unwrap_or_default();
-    Err(message)
-}
-
 /// Which keys an [`alert`] button answers.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum AlertKey {

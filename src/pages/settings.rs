@@ -378,15 +378,18 @@ fn general(s: Store) -> impl IntoElement {
 /// Launch at Login is the system's login item state, not a stored preference.
 fn login_section(s: Store) -> impl IntoElement {
     let set_login = move |v: bool| {
-        #[cfg(target_os = "macos")]
-        if !s.fixture {
-            match crate::platform::macos::set_login_item(v) {
-                Ok(()) => s.login_error.set(None),
-                Err(e) => s.login_error.set(Some(e)),
-            }
-            s.login_item.set(crate::platform::macos::login_item());
+        use nsh_core::element::desktop::{launch_at_login, set_launch_at_login};
+        if s.fixture {
+            return;
         }
-        let _ = v;
+        s.task(async move {
+            match set_launch_at_login(v).await {
+                Ok(()) => s.login_error.set(None),
+                Err(e) => s.login_error.set(Some(e.to_string())),
+            }
+            // macOS may wait for the user's approval in Login Items: the switch shows what the system has now.
+            s.login_item.set(Some(launch_at_login().await));
+        });
     };
     section(vec![
         row(

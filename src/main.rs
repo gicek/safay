@@ -85,6 +85,7 @@ fn main() -> impl std::process::Termination {
             size: (980, 680),
             #[cfg(target_os = "macos")]
             keep_alive_on_close: true,
+            login_item: true,
             cache: native::CacheOptions::off(),
             asset_base: Some(native::AssetBase::Directory(safay::platform::assets_directory())),
             ..Default::default()
