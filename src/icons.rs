@@ -205,6 +205,7 @@ fn sf_name(name: Icon) -> Option<&'static str> {
         Icon::Accounts => "rectangle.grid.1x2",
         Icon::TouchId => "touchid",
         Icon::Folder => "folder",
+        Icon::FolderPlus => "folder.badge.plus",
         Icon::ExportImport => "square.and.arrow.up.on.square",
         Icon::Cloud => "icloud",
         Icon::CloudOff => "icloud.slash",

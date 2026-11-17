@@ -300,20 +300,26 @@ fn sidebar_header(s: Store) -> impl IntoElement {
         ))
         .child(when(|| look() == Look::Linux, || text("Safay").text_size(px(13.0)).font_weight(FontWeight::BOLD)))
         .child(spacer())
+        .gap(px(2.0))
+        .child(sidebar_button(s, "New Category", Icon::FolderPlus, move || pages::accounts::new_category(s, None)))
         .child(tool_toggle(s))
 }
 fn tool_toggle(s: Store) -> impl IntoElement {
+    sidebar_button(s, "Toggle Sidebar", Icon::Sidebar, move || s.sidebar.update(|v| *v = !*v))
+}
+/// A borderless button in the sidebar's title bar, with a round hover, as Notes' are.
+fn sidebar_button(s: Store, label: &'static str, glyph: Icon, press: impl Fn() + 'static) -> impl IntoElement {
     nsh_base::button()
-        .accessibility_label(move || Some(s.label("Toggle Sidebar")))
+        .accessibility_label(move || Some(s.label(label)))
         .size(px(30.0))
         .items_center()
         .justify_center()
-        .rounded(px(6.0))
+        .rounded_full()
         .text_color(move || theme().foreground.opacity(0.75))
         .hover(|st| st.bg(move || tok("hover")))
         .focus(focus_ring)
-        .child(crate::icons::symbol(Icon::Sidebar, 17.0, move || theme().foreground.opacity(0.75)))
-        .on_press(move || s.sidebar.update(|v| *v = !*v))
+        .child(crate::icons::symbol(glyph, 17.0, move || theme().foreground.opacity(0.75)))
+        .on_press(press)
 }
 
 fn toolbar(s: Store) -> impl IntoElement {

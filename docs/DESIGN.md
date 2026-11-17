@@ -28,8 +28,10 @@ appearance only — never capabilities.
 
 ## Structure
 
-- **Main window**: sidebar (All, categories, Export/Import, Backup & Sync, Settings) and toolbar (title, lock,
-  list/cards, search, add); a card grid (minimum 210 pt, 12 pt gaps) or a 58 pt list. Minimum size 880 × 620.
+- **Main window**: sidebar and toolbar (title, lock, list/cards, search, add); a card grid (minimum 210 pt, 12 pt
+  gaps) or a 58 pt list. Minimum size 880 × 620. The sidebar is one list without section titles: All, then the
+  categories, with "New Category" (a folder with a plus) left of the sidebar toggle in its title bar; Export/Import, Backup & Sync and Settings
+  sit at its foot.
 - **Account actions** use native context menus: copy, add to or remove from categories, details, QR code, move up/down,
   delete. Cards and rows can be dragged to reorder; categories too.
 - **Sheets**: Add Account 620 pt (scan, key, links), Details 540, QR code 420, Export/Import 660, Change Password 460,

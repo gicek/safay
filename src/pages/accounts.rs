@@ -87,9 +87,6 @@ fn sidebar_row(
                 .text_color(move || if accent() { tok("selection-foreground").opacity(0.85) } else { theme().muted_foreground }),
         )
 }
-fn header(text_: impl Fn() -> SharedString + 'static) -> impl IntoElement + Styled {
-    text(text_).text_size(px(11.0)).font_weight(FontWeight::SEMIBOLD).text_color(move || theme().muted_foreground)
-}
 
 pub fn sidebar(s: Store) -> impl IntoElement {
     let all_active = move || s.category.get().is_none();
@@ -110,9 +107,11 @@ pub fn sidebar(s: Store) -> impl IntoElement {
                     );
                 })
                 .child(
+                    // One list without section titles: "All" first, then the categories, the scopes the accounts show in.
+                    // New categories come from the sidebar's title bar (`shell::sidebar_header`) or the context menu.
                     view()
                         .gap(px(2.0))
-                        .child(header(move || s.label("Accounts")).px(px(10.0)).pt(px(22.0)))
+                        .pt(px(8.0))
                         .child(
                             sidebar_row(
                                 s,
@@ -125,20 +124,6 @@ pub fn sidebar(s: Store) -> impl IntoElement {
                                 s.category.set(None);
                                 s.refresh();
                             }),
-                        )
-                        .child(
-                            view()
-                                .flex_row()
-                                .items_center()
-                                .pl(px(10.0))
-                                .pr(px(4.0))
-                                .pt(px(18.0))
-                                .child(header(move || s.label("Categories")).flex_1())
-                                .child(
-                                    icon_button(move || s.label("New Category"), Icon::Plus)
-                                        .size(px(18.0))
-                                        .on_press(move || new_category(s, None)),
-                                ),
                         )
                         .child(categories(s, r))
                         .child(when(move || s.editing.with(|e| e.as_ref().is_some_and(|e| e.id.is_none())), move || category_editor(s))),
@@ -183,7 +168,7 @@ pub fn sidebar(s: Store) -> impl IntoElement {
                 ),
         )
 }
-fn new_category(s: Store, account: Option<Uuid>) {
+pub(crate) fn new_category(s: Store, account: Option<Uuid>) {
     s.editing.set(Some(CategoryEdit { account, ..Default::default() }));
 }
 /// The category rows, their own block as the drag container: dropping inside it saves the order; on the header, "All"
