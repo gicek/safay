@@ -9,6 +9,11 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 - **Verify It’s You**: a narrower dialog that simply asks for your master password.
 
+### Fixed
+
+- After Touch ID verifies you, the master password dialog no longer flashes before the QR code, secret or export shows.
+- Turning off "Delay After Failed Attempts" with your master password closes the dialog.
+
 ## [1.1.2] - 2026-11-17
 
 The menu bar panel is ready for typing as soon as it opens.

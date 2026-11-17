@@ -152,6 +152,8 @@ pub struct Form {
 }
 pub enum Payload {
     Silent,
+    /// A verified action that shows nothing: the verify dialog closes.
+    Verified,
     Saved,
     Imported(usize),
     /// One account added by hand: its service name, for the toast.
@@ -604,6 +606,8 @@ impl Store {
     }
     fn fail(self, e: Error) {
         if self.auth.get().is_some() {
+            // An action Touch ID proved failed: the master password dialog shows with the error.
+            self.auth_prompting.set(false);
             self.auth_error.set(Some(e));
         } else if e == Error::Category && self.editing.with(|ed| ed.is_some()) {
             self.editing.update(|ed| {
@@ -622,6 +626,7 @@ impl Store {
     fn deliver(self, payload: Payload) {
         match payload {
             Payload::Silent => {}
+            Payload::Verified => self.cancel_auth(),
             Payload::Saved => self.close_sheet(),
             Payload::Restored => {
                 self.close_sheet();
@@ -1129,7 +1134,7 @@ impl Store {
             Auth::DisableDelay => self.dispatch(true, move |s| {
                 prove(s)?;
                 s.set_failure_delay(false, &password)?;
-                Ok(Payload::Silent)
+                Ok(Payload::Verified)
             }),
             Auth::Copy(id) => {
                 let clipboard = self.clipboard.get();
@@ -2464,10 +2469,8 @@ impl Store {
         };
         self.with_touch_id(
             reason,
-            move |key| {
-                self.auth_prompting.set(false);
-                self.authorize_with(Some(key))
-            },
+            // The dialog stays hidden while the proved action runs: it shows only if the action fails (`fail`).
+            move |key| self.authorize_with(Some(key)),
             move |cancelled| {
                 // Cancelling the prompt that came first cancels the action; cancelling one asked
                 // for from the dialog's Touch ID button leaves the dialog. "Use Password…" and failures go to the
