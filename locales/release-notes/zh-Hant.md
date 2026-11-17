@@ -3,6 +3,22 @@
 Each version's section translates the one in CHANGELOG.md, item for item. The update window shows it to people who use
 Safay in Traditional Chinese.
 
+## [1.1.3] - 2026-11-17
+
+指紋驗證時不再閃出密碼對話框，QR 碼也更簡潔了。
+
+### 變更
+
+- **驗證身分**：對話框更窄，只請你輸入主密碼。
+- **QR 碼**：連結省略預設設定，QR 碼更容易掃描。
+- **空分類**：空分類或沒有搜尋結果時，只顯示一個簡潔的圖示和標題。
+
+### 修正
+
+- 指紋驗證通過後，不會再閃出主密碼對話框。
+- 用主密碼關閉「失敗嘗試後延遲」後，對話框會正常關閉。
+- 在指紋彈窗裡選擇「使用密碼⋯」後，游標會落在密碼欄位裡。
+
 ## [1.1.2] - 2026-11-17
 
 選單列面板一打開就可以直接輸入。

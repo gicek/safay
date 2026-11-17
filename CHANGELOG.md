@@ -5,17 +5,21 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-11-17
+
+Touch ID no longer flashes the password dialog, and QR codes get simpler.
+
 ### Changed
 
 - **Verify It’s You**: a narrower dialog that simply asks for your master password.
-- **QR codes**: an account's QR code and link leave out the default algorithm, digits and period, so the code is simpler to scan.
-- **Empty categories**: an empty category or search shows a simple icon and title, in the main window and the menu bar panel.
+- **QR codes**: links leave out default settings, so codes are easier to scan.
+- **Empty categories**: an empty category or search shows a simple icon and title.
 
 ### Fixed
 
-- After Touch ID verifies you, the master password dialog no longer flashes before the QR code, secret or export shows.
+- After Touch ID verifies you, the master password dialog no longer flashes.
 - Turning off "Delay After Failed Attempts" with your master password closes the dialog.
-- Choosing "Use Password…" in the Touch ID prompt puts the cursor in the password field.
+- After "Use Password…" in the Touch ID prompt, the cursor is in the password field.
 
 ## [1.1.2] - 2026-11-17
 
