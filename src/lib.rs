@@ -124,6 +124,15 @@ fn quick_shell(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
 pub(crate) fn panel_window(controller: Arc<Controller>, preview: bool) -> impl IntoElement {
     let s = Store::new(controller, preview, Surface::Panel);
     effect(move || untracked(|| s.start()));
+    // The panel does not activate Safay, so it takes the keyboard only when asked. NSH drops a focus request made
+    // before the window is mounted: ask once it reports its state.
+    let window = nsh_core::element::desktop::current_window();
+    let asked = std::cell::Cell::new(false);
+    effect(move || {
+        if window.state().is_some() && !asked.replace(true) {
+            untracked(|| window.focus());
+        }
+    });
     s.focus_search();
     let height = move || {
         let p = s.projection.get();

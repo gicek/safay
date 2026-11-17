@@ -23,6 +23,21 @@ fn content(s: Store) -> impl IntoElement {
             start_capture();
         }
     });
+    // Unlocked here, the search field takes the focus while NSH still holds the lock screen's password field, and
+    // removing that field a frame later clears the search field's focus state: the caret stays but not its focus ring.
+    // Once the password field is gone, the search field takes the focus again.
+    let was_locked = std::cell::Cell::new(false);
+    effect(move || {
+        if !s.unlocked() {
+            was_locked.set(true);
+        } else if was_locked.replace(false) {
+            let search = untracked(|| s.search.get());
+            set_timeout(std::time::Duration::from_millis(100), move || {
+                search.blur();
+                search.focus();
+            });
+        }
+    });
     view()
         .flex_1()
         .child(when(move || s.unlocked(), move || unlocked(s)).otherwise(move || {
@@ -136,6 +151,14 @@ fn unlocked(s: Store) -> impl IntoElement {
                                 // A new search starts at the top of its results.
                                 list.scroll_to_offset(px(0.0), false);
                                 s.refresh();
+                            })
+                            // Escape leaves the search field before the window sees it: the panel closes at once.
+                            .on_key_press(|key: &str| {
+                                #[cfg(target_os = "macos")]
+                                if key == "Escape" {
+                                    crate::desktop::close_panel();
+                                }
+                                let _ = key;
                             })
                             .on_submit(move |_: &str| {
                                 let i = s.highlight.get().unwrap_or(0);

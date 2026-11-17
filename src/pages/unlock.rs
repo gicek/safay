@@ -149,6 +149,14 @@ fn capsule_password(s: Store, width: f32) -> impl IntoElement {
                 s.error.set(None);
             })
             .on_submit(move |_: &str| s.unlock())
+            // In the menu bar panel, Escape closes it at once (the field takes Escape before the window sees it).
+            .on_key_press(move |key: &str| {
+                #[cfg(target_os = "macos")]
+                if key == "Escape" && s.surface == crate::store::Surface::Panel {
+                    crate::desktop::close_panel();
+                }
+                let _ = key;
+            })
             .on_focus(|_: &()| roman_input_only(true))
             .on_blur(|_: &()| roman_input_only(false))
             .auto_correct(false)

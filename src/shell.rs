@@ -415,6 +415,28 @@ fn view_picker(s: Store) -> impl IntoElement {
 fn search_field(s: Store) -> impl IntoElement {
     let mac = look() == Look::Mac;
     let r = s.search.get();
+    // NSH keeps one keyboard focus for the app: a field in the menu bar panel or Settings takes it from this one while
+    // AppKit keeps this field editing in the main window, so its focus ring would not come back (focusing it again
+    // does nothing while it edits). When the window gets the keyboard back with this field still editing, the field
+    // takes the focus again.
+    let editing = std::rc::Rc::new(std::cell::Cell::new(false));
+    let own_window = nsh_core::element::desktop::current_window();
+    let was_key = std::cell::Cell::new(true);
+    effect({
+        let editing = editing.clone();
+        move || {
+            let key = own_window.state().is_some_and(|w| w.focused);
+            // Read first: the window losing the keyboard is noted too.
+            let was = was_key.replace(key);
+            if key && !was && editing.get() {
+                set_timeout(std::time::Duration::from_millis(50), move || {
+                    r.blur();
+                    r.focus();
+                });
+            }
+        }
+    });
+    let (focused, blurred) = (editing.clone(), editing);
     view()
         .window_drag(false)
         .w(move || px(if window().width.0 >= 960.0 { 240.0 } else { 180.0 }))
@@ -441,6 +463,8 @@ fn search_field(s: Store) -> impl IntoElement {
                 .element_ref(&r)
                 .test_id("search")
                 .auto_focus(true)
+                .on_focus(move |_: &()| focused.set(true))
+                .on_blur(move |_: &()| blurred.set(false))
                 .label(move || s.label("Search accounts or sites"))
                 .placeholder(move || s.label("Search accounts or sites").to_string())
                 .placeholder_color(move || {

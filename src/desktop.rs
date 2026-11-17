@@ -305,7 +305,6 @@ pub fn toggle_panel() {
                 .content(move || crate::panel_window(controller.clone(), preview)),
         );
         if let Some(panel) = opened {
-            panel.focus();
             PANEL.with(|p| *p.borrow_mut() = Some(panel));
             // A click in another app closes it too: the panel keeps the keyboard then, so no blur tells.
             let (clicked, clicks) = std::sync::mpsc::channel();

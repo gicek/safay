@@ -5,6 +5,11 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+### Fixed
+
+- The menu bar panel's search field is ready for typing whenever the panel opens, also right after you unlock it there.
+- Escape closes the menu bar panel at once, and the main window's search field keeps its focus ring after you use the panel.
+
 ## [1.1.1] - 2026-11-17
 
 Deleted accounts wait in Recently Deleted for 30 days, so you can bring them back.
