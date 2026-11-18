@@ -5,16 +5,20 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-18
+
+Import from other apps and password managers, plus Steam Guard and Battle.net accounts.
+
 ### Added
 
-- **Import from other apps**: bring your codes over from Aegis, 2FAS, Ente Auth, Proton Authenticator, and Bitwarden, encrypted backups included.
-- **Import from password managers**: choose a CSV export from Apple Passwords, Bitwarden, or another password manager to import its codes.
-- **Groups and favorites**: groups, tags, and folders become categories, and favorites go into "Pinned".
-- **Steam Guard and Battle.net**: pick the account type under "Advanced Options", or add these accounts from a link, QR code, or import.
+- **Import from other apps**: Aegis, 2FAS, Ente Auth, Proton Authenticator, and Bitwarden backups, encrypted ones included.
+- **Password manager CSV**: import codes from Apple Passwords, Bitwarden, and others.
+- **Groups and favorites**: groups become categories, and favorites go into "Pinned".
+- **Steam Guard and Battle.net**: choose the type under "Advanced Options", or add by link, QR code, or import.
 
 ### Changed
 
-- **Import results**: entries Safay can't use, such as HOTP codes, are skipped and counted instead of failing the import.
+- **Import results**: entries Safay can't use, such as HOTP, are skipped and counted.
 
 ## [1.1.3] - 2026-11-17
 

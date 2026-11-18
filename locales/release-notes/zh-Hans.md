@@ -3,6 +3,21 @@
 Each version's section translates the one in CHANGELOG.md, item for item. The update window shows it to people who use
 Safay in Simplified Chinese.
 
+## [1.2.0] - 2026-11-18
+
+可以从其他应用和密码管理器导入验证码，也能添加 Steam 令牌和 Battle.net 账户了。
+
+### 新增
+
+- **从其他应用导入**：支持 Aegis、2FAS、Ente Auth、Proton Authenticator 和 Bitwarden 的备份，加密的也可以。
+- **密码管理器 CSV**：从 Apple 密码、Bitwarden 等密码管理器导出的 CSV 导入验证码。
+- **分组与收藏**：导入的分组会变成分类，收藏的条目放进“Pinned”。
+- **Steam 令牌和 Battle.net**：在“高级选项”里选择类型，也可以通过链接、二维码或导入添加。
+
+### 变更
+
+- **导入结果**：Safay 无法使用的条目（如 HOTP）会被跳过并计数。
+
 ## [1.1.3] - 2026-11-17
 
 指纹验证时不再闪出密码对话框，二维码也更简洁了。
