@@ -92,6 +92,8 @@ fn main() -> impl std::process::Termination {
             keep_alive_on_close: true,
             login_item: true,
             cache: native::CacheOptions::off(),
+            // The directory the vault opened in above: NSH keeps its own files there too.
+            data_dir: safay::platform::data_directory(),
             asset_base: Some(native::AssetBase::Directory(safay::platform::assets_directory())),
             ..Default::default()
         },

@@ -8,9 +8,14 @@
 //! URL and the archive it names (HTTPS, redirects HTTPS only, size limits); nothing about the vault is sent.
 //!
 //! One updater per process: the main window and Settings read [`state`] and call the actions; work runs on its own
-//! threads. A downloaded update installs when the app quits (`install_on_quit`) or at once with
-//! [`Updater::install`] followed by a restart.
-use nsh_updater::{Available, Config, Download, install::Installation};
+//! threads. A verified download is unpacked and checked beside the app at once (`Installation::stage`, which includes
+//! the new app's code signature), so a refused update is reported while the app can still say so. The staged app then
+//! takes the installed one's place when the app quits (`install_on_quit`) or at once with [`Updater::install`]
+//! followed by a restart; either way only two renames are left (`Staged::finish`).
+use nsh_updater::{
+    Available, Config, Download,
+    install::{Installation, Staged},
+};
 use std::{
     fs,
     io::{Read, Write},
@@ -23,7 +28,6 @@ use std::{
 const MAX_MANIFEST: u64 = 1024 * 1024;
 /// An archive larger than this is refused even if the manifest says otherwise.
 const MAX_ARCHIVE: u64 = 1024 * 1024 * 1024;
-
 /// Where the updater is, as Settings shows it.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum Phase {
@@ -40,7 +44,7 @@ pub enum Phase {
         received: u64,
         total: Option<u64>,
     },
-    /// Downloaded and verified: installs when the app quits, or now.
+    /// Downloaded, verified and staged: installs when the app quits, or now.
     Ready {
         version: String,
     },
@@ -53,7 +57,7 @@ pub enum Failure {
     Network,
     /// The manifest or the archive failed its checks (signature, id, hash, size).
     Invalid,
-    /// The app could not be replaced (permissions, signature of the new app).
+    /// The app could not be replaced (permissions, the new app's id or signature).
     Install,
 }
 
@@ -77,7 +81,8 @@ pub struct Updater {
 struct Inner {
     phase: Phase,
     available: Option<Available>,
-    archive: Option<PathBuf>,
+    /// The downloaded update, unpacked and checked beside the app; `None` in builds without an installation.
+    staged: Option<Staged>,
     busy: bool,
 }
 
@@ -140,7 +145,8 @@ impl Updater {
         phase
     }
 
-    /// Downloads the available version into an exclusively created file and checks it. Blocking.
+    /// Downloads the available version into an exclusively created file, checks it and stages it beside the app.
+    /// Blocking.
     pub fn download(&self) -> Phase {
         let Some(available) = self.lock().available.clone() else { return self.phase() };
         // A manifest entry without a hash is a page to visit, not an archive (the app opens it instead).
@@ -171,11 +177,16 @@ impl Updater {
                 return Err(f);
             }
             file.sync_all().map_err(|_| Failure::Install)?;
-            Ok(path)
+            drop(file);
+            // Unpacked and checked now; the archive is not needed after that. Without an installation (a development
+            // build) there is nothing to stage, and installing fails later.
+            let staged = self.installation.as_ref().map(|i| i.stage(&path).map_err(|_| Failure::Install)).transpose();
+            let _ = fs::remove_file(&path);
+            staged
         })();
         let phase = match result {
-            Ok(path) => {
-                self.lock().archive = Some(path);
+            Ok(staged) => {
+                self.lock().staged = staged;
                 Phase::Ready { version: available.version.clone() }
             }
             Err(f) => Phase::Failed(f),
@@ -188,24 +199,21 @@ impl Updater {
     /// Swaps the installed app for the downloaded one; on `Ok` the caller restarts (`nsh_core::element::desktop::restart`),
     /// which starts the new version once this process has exited. The old app stays if the swap fails.
     pub fn install(&self) -> Result<(), Failure> {
-        let (Some(installation), Some(archive)) = (self.installation.clone(), self.lock().archive.clone()) else {
-            return Err(Failure::Install);
-        };
         if !self.begin() {
             return Err(Failure::Install);
         }
+        // Taken out: the quit that follows must not install it a second time.
+        let Some(staged) = self.lock().staged.take() else {
+            self.end();
+            return Err(Failure::Install);
+        };
         self.set(Phase::Installing);
         // The restart starts the app at the path the user knows: after the swap this process' executable is the old
         // one, moved aside.
         nsh_core::restart::remember_program();
-        let result = installation.install(&archive).map_err(|_| Failure::Install);
-        match &result {
-            Ok(()) => {
-                let _ = fs::remove_file(&archive);
-                // The quit that follows must not install it a second time.
-                self.lock().archive = None;
-            }
-            Err(f) => self.set(Phase::Failed(*f)),
+        let result = staged.finish().map_err(|_| Failure::Install);
+        if let Err(f) = result {
+            self.set(Phase::Failed(f));
         }
         self.end();
         result
@@ -216,11 +224,12 @@ impl Updater {
         self.lock().available.as_ref().and_then(|a| a.notes.clone())
     }
 
-    /// The app is quitting: a downloaded update replaces it now, for the next launch.
+    /// The app is quitting: a downloaded update takes its place now, for the next launch.
     pub fn install_on_quit(&self) {
-        let (Some(installation), Some(archive)) = (self.installation.clone(), self.lock().archive.clone()) else { return };
-        if self.begin() && installation.install(&archive).is_ok() {
-            let _ = fs::remove_file(&archive);
+        if self.begin()
+            && let Some(staged) = self.lock().staged.take()
+        {
+            let _ = staged.finish();
         }
     }
 }
@@ -281,8 +290,8 @@ pub fn command_line_check() -> i32 {
     if !matches!(downloaded, Phase::Ready { .. }) {
         return 1;
     }
-    let (Some(installation), Some(archive)) = (u.installation.clone(), u.lock().archive.clone()) else { return 1 };
-    match installation.install(&archive) {
+    let Some(staged) = u.lock().staged.take() else { return 1 };
+    match staged.finish() {
         Ok(()) => {
             println!("install: replaced");
             0
@@ -445,12 +454,80 @@ mod tests {
         let u = Updater::new(config(&public), None, dir.clone(), Arc::new(server(&secret, "0.2.0", &archive, &archive)));
         assert_eq!(u.check(), Phase::Available { version: "0.2.0".into(), notes: Some("Fixes".into()) });
         assert_eq!(u.download(), Phase::Ready { version: "0.2.0".into() });
-        let saved = fs::read_dir(&dir).unwrap().next().unwrap().unwrap().path();
-        assert_eq!(fs::read(saved).unwrap(), archive);
         // A verified download stays ready on the next check.
         assert_eq!(u.check(), Phase::Ready { version: "0.2.0".into() });
         // Without an installation (a development build) nothing is replaced.
         assert_eq!(u.install(), Err(Failure::Install));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// `App/run` with `body`, archived as an update (`.tar.gz`, one directory).
+    fn app_archive(dir: &std::path::Path, body: &str) -> Vec<u8> {
+        use std::os::unix::fs::PermissionsExt as _;
+        let src = dir.join("src");
+        fs::create_dir_all(src.join("App")).unwrap();
+        fs::write(src.join("App/run"), body).unwrap();
+        fs::set_permissions(src.join("App/run"), fs::Permissions::from_mode(0o755)).unwrap();
+        let out = dir.join("update.tar.gz");
+        let status = std::process::Command::new("tar")
+            .env("COPYFILE_DISABLE", "1")
+            .arg("-czf")
+            .arg(&out)
+            .arg("-C")
+            .arg(&src)
+            .arg("App")
+            .status()
+            .unwrap();
+        assert!(status.success());
+        fs::read(out).unwrap()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_download_is_staged_at_once_and_replaces_the_app_only_when_installed() {
+        let (secret, public) = keys();
+        let dir = temp_dir("staged");
+        let archive = app_archive(&dir, "new");
+        let root = dir.join("installed/App");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("run"), "old").unwrap();
+        let installation = Installation::directory(&root, &root.join("run")).unwrap();
+        let downloads = dir.join("downloads");
+        let u =
+            Updater::new(config(&public), Some(installation), downloads.clone(), Arc::new(server(&secret, "0.2.0", &archive, &archive)));
+        assert!(matches!(u.check(), Phase::Available { .. }));
+        assert_eq!(u.download(), Phase::Ready { version: "0.2.0".into() });
+        // Unpacked and checked beside the app; the archive is gone and the app untouched.
+        assert_eq!(fs::read_dir(&downloads).unwrap().count(), 0);
+        assert_eq!(fs::read_to_string(root.join("run")).unwrap(), "old");
+        u.install_on_quit();
+        assert_eq!(fs::read_to_string(root.join("run")).unwrap(), "new");
+        // Installed once: nothing is left to install.
+        assert_eq!(u.install(), Err(Failure::Install));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_update_that_is_not_the_app_fails_before_the_quit() {
+        let (secret, public) = keys();
+        let dir = temp_dir("not-the-app");
+        let archive = app_archive(&dir, "new");
+        let root = dir.join("installed/App");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("main"), "old").unwrap();
+        // The installed app's executable is `main`; the archive has none.
+        let installation = Installation::directory(&root, &root.join("main")).unwrap();
+        let u = Updater::new(
+            config(&public),
+            Some(installation),
+            dir.join("downloads"),
+            Arc::new(server(&secret, "0.2.0", &archive, &archive)),
+        );
+        assert!(matches!(u.check(), Phase::Available { .. }));
+        assert_eq!(u.download(), Phase::Failed(Failure::Install));
+        u.install_on_quit();
+        assert_eq!(fs::read_to_string(root.join("main")).unwrap(), "old");
         let _ = fs::remove_dir_all(dir);
     }
 

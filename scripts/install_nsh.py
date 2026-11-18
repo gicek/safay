@@ -20,10 +20,15 @@ REPOSITORY = "https://github.com/longbridge/nsh"
 SOURCE = root / ".nsh/toolchain/source"
 
 
+def locked_commits(lock: Path) -> set[str]:
+    """The NSH commits a lock file resolved the nsh crates to."""
+    text = lock.read_text(encoding="utf-8") if lock.is_file() else ""
+    return set(re.findall(r'source = "git\+' + re.escape(REPOSITORY) + r'\?branch=main#([0-9a-f]{40})"', text))
+
+
 def pinned_commit() -> str:
     """The commit Cargo.lock resolved for the nsh crates (all from one checkout)."""
-    lock = (root / "Cargo.lock").read_text(encoding="utf-8")
-    commits = set(re.findall(r'source = "git\+' + re.escape(REPOSITORY) + r'\?branch=main#([0-9a-f]{40})"', lock))
+    commits = locked_commits(root / "Cargo.lock")
     if len(commits) != 1:
         raise SystemExit(f"Cargo.lock must pin NSH to exactly one main commit, found: {sorted(commits) or 'none'}")
     return commits.pop()

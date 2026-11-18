@@ -117,8 +117,10 @@ moving back to NSH. Review this list on every NSH upgrade.
 | Open, save and folder panels (macOS) | `platform::files::{open_paths, save_path}`, `platform::macos::file_panel` | Same presentation issue as alerts | Together with alerts |
 | Showing the master password on the lock screen | `pages::unlock::capsule_password`, `platform::macos::scroll_to_caret` | A centered native field misplaces text set by the app, clips the last glyph and does not scroll to the caret; replacing the field on `masked` changes moves the text | NSH fixes the centered field; then one field toggling `masked` |
 | HTTP for backups and icons | `platform::http`, `platform::tls` | NSH's `fetch` cannot disable redirects, bound the body, or pin a certificate | NSH's network API offers these controls |
-| Data directory | `platform::data_directory` | NSH's `data_dir()` is available only once the engine runs; the vault and the instance lock open before it | NSH exposes it before the engine starts (the path must not change) |
-| Update downloads | `platform::updates` | `nsh-updater`'s complete flow is TSX-only; Rust apps bring their own HTTP | NSH offers the flow to Rust apps |
+| Data directory | `platform::data_directory` | NSH's `data_dir()` is available only once the engine runs; the vault and the instance lock open before it. NSH is given the same directory (`AppOptions::data_dir`) | NSH exposes it before the engine starts (the path must not change) |
+| Update checks and downloads | `platform::updates` | `nsh-updater`'s complete flow is TSX-only; Rust apps bring their own HTTP. The app uses the crate for the manifest, its signature, the download's checks and the install (staged when downloaded, swapped in on quit) | NSH offers the flow to Rust apps |
+| Update notes in each language | `scripts/release.py`, `pages::update::notes_in` | NSH's `localizedNotes` puts each language in a file beside the manifest: one more release asset per language. The manifest's `notes` carry every language instead, after `<!-- lang: <code> -->` lines | NSH can carry each language's notes inside the manifest |
+| OAuth sign-in (macOS) | `platform::web_auth` (`ASWebAuthenticationSession`) | NSH's `open_auth_session` shows an in-app sign-in session only on iOS and Android; on macOS it opens the default browser and waits for a link of a claimed URL scheme | NSH shows `ASWebAuthenticationSession` on macOS |
 
 ### Capabilities NSH does not have
 
@@ -128,7 +130,6 @@ moving back to NSH. Review this list on every NSH upgrade.
 | Credential storage | `platform::credentials` (`keyring`) | macOS, Windows |
 | Secret clipboard (concealed, expiring) | `platform::clipboard` | all |
 | iCloud backup; silent pushes | `platform::icloud`; `platform::macos::enable_remote_push` (adds the push callback to NSH's app delegate class at runtime — recheck on every NSH upgrade) | macOS |
-| OAuth sign-in | `platform::web_auth` (`ASWebAuthenticationSession`) | macOS |
 | Camera and on-screen QR selection | `platform::camera`, `platform::screen_capture`, `scan` (the overlay) | macOS |
 | QR decoding and generation | `platform::files` (`rqrr`, `qrcode`) | all |
 | SF Symbols | `platform::symbols` (rendered to template PNGs; SVG icons elsewhere) | macOS |
