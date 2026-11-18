@@ -8,6 +8,7 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 ### Fixed
 
 - The export list and the "Account Details" header show each account's site icon instead of its initials.
+- The countdown in "Account Details" stays in place as the seconds change.
 
 ## [1.2.0] - 2026-11-18
 

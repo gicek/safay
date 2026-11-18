@@ -892,10 +892,16 @@ fn detail_sheet(s: Store) -> impl IntoElement {
                                             .gap(px(5.0))
                                             .child(code_ring(move || row().map(|r| (r.remaining, r.period)), 12.0))
                                             .child(
+                                                // Same-width digits, and a figure space before one digit: the line keeps
+                                                // its width as the seconds count down, so the ring beside it stays put.
                                                 note(move || {
-                                                    s.fmt("Refreshes in {}s", &[&row().map(|r| r.remaining).unwrap_or(0).to_string()])
+                                                    s.fmt(
+                                                        "Refreshes in {}s",
+                                                        &[&format!("{:\u{2007}>2}", row().map(|r| r.remaining).unwrap_or(0))],
+                                                    )
                                                 })
-                                                .text_size(px(11.0)),
+                                                .text_size(px(11.0))
+                                                .tabular_nums(),
                                             ),
                                     ),
                             ),
