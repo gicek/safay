@@ -475,6 +475,8 @@
   "Safay automation access is off": "Safay 自动化权限已关闭",
   "Allow this app to control Safay in System Settings → Automation": "在系统设置 → 自动化中允许此应用控制 Safay",
   "Safay isn’t running": "Safay 未运行",
+  "Safay isn’t installed": "Safay 未安装",
+  "Download Safay": "下载 Safay",
   "Search works once you unlock Safay after it starts": "Safay 启动后解锁一次即可搜索",
   "Copy Code": "复制验证码",
   "Couldn’t copy the code": "无法复制验证码",

@@ -1,6 +1,16 @@
 import { Action, ActionPanel, Icon, List, closeMainWindow, showHUD } from "@raycast/api";
 import { useEffect, useState } from "react";
-import { Account, CopyStatus, Found, TEXT, copyCode, findAccounts, openAutomationSettings, openSafay } from "./safay";
+import {
+  Account,
+  CopyStatus,
+  DOWNLOAD_URL,
+  Found,
+  TEXT,
+  copyCode,
+  findAccounts,
+  openAutomationSettings,
+  openSafay,
+} from "./safay";
 
 export default function Command() {
   const [query, setQuery] = useState("");
@@ -49,6 +59,18 @@ function Content({ found }: { found: Found }) {
     case "notRunning":
     case "error":
       return <Notice title={TEXT.notRunningTitle} action={TEXT.openSafay} run={openSafay} />;
+    case "notInstalled":
+      return (
+        <List.EmptyView
+          icon={Icon.ExclamationMark}
+          title={TEXT.notInstalledTitle}
+          actions={
+            <ActionPanel>
+              <Action.OpenInBrowser title={TEXT.download} url={DOWNLOAD_URL} />
+            </ActionPanel>
+          }
+        />
+      );
     case "permission":
       return (
         <Notice

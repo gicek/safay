@@ -28,6 +28,8 @@ KEYS = {
     "permissionTitle": "Safay automation access is off",
     "permissionSubtitle": "Allow this app to control Safay in System Settings → Automation",
     "notRunningTitle": "Safay isn’t running",
+    "notInstalledTitle": "Safay isn’t installed",
+    "download": "Download Safay",
     "notReadyTitle": "Unlock Safay first",
     "notReadySubtitle": "Search works once you unlock Safay after it starts",
     "noMatches": "No matching accounts",

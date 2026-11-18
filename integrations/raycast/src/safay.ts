@@ -1,6 +1,7 @@
 // Talks to Safay through its AppleScript commands (Safay.sdef), the only channel: macOS Automation decides which apps
 // may, and Safay itself asks for Touch ID or the master password before every copy. Nothing here sees a code or a
 // secret, keeps the account list, or uses the network.
+import { getApplications } from "@raycast/api";
 import { execFile } from "node:child_process";
 import { BRIDGE } from "./generated";
 
@@ -18,6 +19,7 @@ export type Found =
   | { kind: "disabled" }
   | { kind: "notReady" }
   | { kind: "notRunning" }
+  | { kind: "notInstalled" }
   | { kind: "permission" }
   | { kind: "error" };
 
@@ -59,7 +61,7 @@ export async function findAccounts(query: string): Promise<Found> {
   } catch (error) {
     return { kind: (error as Error).message === "permission" ? "permission" : "error" };
   }
-  if (output === "not_running") return { kind: "notRunning" };
+  if (output === "not_running") return { kind: (await isInstalled()) ? "notRunning" : "notInstalled" };
   try {
     const found = JSON.parse(output) as { enabled: boolean; ready: boolean; accounts: Account[] };
     if (!found.enabled) return { kind: "disabled" };
@@ -77,6 +79,13 @@ export async function copyCode(id: string): Promise<CopyStatus> {
   } catch (error) {
     return (error as Error).message === "permission" ? "permission" : "failed";
   }
+}
+
+export const DOWNLOAD_URL = "https://github.com/gicek/safay/releases/latest";
+
+async function isInstalled(): Promise<boolean> {
+  const apps = await getApplications();
+  return apps.some((app) => app.bundleId !== undefined && BUNDLE_IDS.includes(app.bundleId));
 }
 
 /** Opens Safay (the release build when both are installed) without sending it an Apple event. */
