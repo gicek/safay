@@ -5,6 +5,10 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+### Fixed
+
+- The export list and the "Account Details" header show each account's site icon instead of its initials.
+
 ## [1.2.0] - 2026-11-18
 
 Import from other apps and password managers, plus Steam Guard and Battle.net accounts.

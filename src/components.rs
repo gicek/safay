@@ -515,16 +515,9 @@ pub fn status_line(status: impl Fn() -> Option<Status> + Copy + 'static) -> impl
     )
 }
 
-/// LogoBadge: the core's monogram on its palette color, with the recently-added dot.
-pub fn badge(
-    issuer: impl Fn() -> String + Copy + 'static,
-    recent: impl Fn() -> bool + Copy + 'static,
-    size: f32,
-) -> impl IntoElement + Styled {
-    badge_with_icon(issuer, recent, || None, size)
-}
-/// As [`badge`], showing the account's site icon when it has one: a tile fills the
-/// badge, cropped to its bounds; a glyph sits inset on a white plate. Both get a 0.5pt outline.
+/// LogoBadge: the account's site icon when it has one, otherwise the core's monogram on its palette color, with the
+/// recently-added dot. A tile icon fills the badge, cropped to its bounds; a glyph sits inset on a white plate. Both get
+/// a 0.5pt outline.
 pub fn badge_with_icon(
     issuer: impl Fn() -> String + Copy + 'static,
     recent: impl Fn() -> bool + Copy + 'static,

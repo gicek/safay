@@ -827,9 +827,10 @@ fn detail_sheet(s: Store) -> impl IntoElement {
                             .flex_row()
                             .items_center()
                             .gap(px(14.0))
-                            .child(badge(
+                            .child(badge_with_icon(
                                 move || s.detail.with(|d| d.as_ref().map(|d| d.issuer.clone()).unwrap_or_default()),
                                 || false,
+                                move || row().and_then(|r| r.icon),
                                 46.0,
                             ))
                             .child(
@@ -1437,7 +1438,12 @@ fn export_tab(s: Store, submit: impl Fn() + Copy + 'static) -> impl IntoElement 
                                 // The box sits in the checkbox's indicator slot; an empty slot would take a gap of its own.
                                 // A checkbox sits 6pt from its label; the label's own parts are 10pt apart.
                                 .indicator(view().mr(px(-4.0)).child(check_box(on)))
-                                .child(badge(move || c.with(|c| c.issuer.clone()), || false, 22.0))
+                                .child(badge_with_icon(
+                                    move || c.with(|c| c.issuer.clone()),
+                                    || false,
+                                    move || c.with(|c| c.icon.clone()),
+                                    22.0,
+                                ))
                                 .child(
                                     text(move || c.with(|c| c.issuer.clone()))
                                         .number_of_lines(1)

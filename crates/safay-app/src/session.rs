@@ -216,12 +216,14 @@ pub struct Detail {
     pub imported: bool,
     pub created_at: SystemTime,
 }
-/// Export choices; the list is only issuer/username and never secrets.
+/// Export choices: issuer, username and site icon, never secrets.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Choice {
     pub id: Uuid,
     pub issuer: String,
     pub username: String,
+    /// The stored site icon, as in [`Row::icon`].
+    pub icon: Option<std::sync::Arc<[u8]>>,
 }
 /// An account in Recently Deleted: what its row shows, never a code.
 #[derive(Clone, PartialEq, Eq)]
@@ -882,7 +884,12 @@ impl Session {
             .accounts
             .iter()
             .filter(|a| !a.is_deleted())
-            .map(|a| Choice { id: a.id, issuer: a.issuer.clone(), username: a.username.clone() })
+            .map(|a| Choice {
+                id: a.id,
+                issuer: a.issuer.clone(),
+                username: a.username.clone(),
+                icon: a.icon.as_deref().map(std::sync::Arc::from),
+            })
             .collect())
     }
     pub fn edit_draft(&mut self, id: Uuid) -> Result<Draft, Error> {
