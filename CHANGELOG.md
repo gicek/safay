@@ -5,16 +5,22 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-19
+
+Back up through Dropbox, and follow each step while connecting a server.
+
+### Added
+
+- **Dropbox**: back up, sync and restore your vault in "Backup & Sync"; Safay sees only its "Apps › Safay" folder.
+
 ### Changed
 
-- **Connecting to WebDAV or Nextcloud**: you see each step as it happens, and you can go back at any time before the
-  backup check.
+- **Connecting to WebDAV or Nextcloud**: each step shows as it happens, and you can go back before the backup check.
 
 ### Fixed
 
-- The export list and the "Account Details" header show each account's site icon instead of its initials.
-- The countdown in "Account Details" stays in place as the seconds change.
-- An update that can't be installed shows an error as soon as it downloads, instead of failing quietly when you quit.
+- The export list and "Account Details" show site icons, and the countdown there stays in place.
+- An update that can't be installed reports an error right after downloading, not silently on quit.
 - The camera preview in "Add Account" no longer flickers.
 
 ## [1.2.0] - 2026-11-18

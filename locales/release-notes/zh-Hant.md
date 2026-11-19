@@ -3,6 +3,24 @@
 Each version's section translates the one in CHANGELOG.md, item for item. The update window shows it to people who use
 Safay in Traditional Chinese.
 
+## [1.3.0] - 2026-11-19
+
+可以用 Dropbox 備份和同步了，連線伺服器時也能看到每一步進度。
+
+### 新增
+
+- **Dropbox**：在「備份與同步」中用 Dropbox 備份、同步和回復保險庫；Safay 只能存取它自己的「應用程式 › Safay」檔案夾。
+
+### 變更
+
+- **連線 WebDAV 或 Nextcloud**：每一步都會顯示出來，在檢查備份之前隨時可以返回。
+
+### 修正
+
+- 匯出列表和「帳號詳細資料」顯示網站圖示，那裡的倒數也不再跳動。
+- 無法安裝的更新會在下載完成後立即提示錯誤，不再等到結束時默默失敗。
+- 「加入帳號」中的相機預覽不再閃爍。
+
 ## [1.2.0] - 2026-11-18
 
 可以從其他 App 和密碼管理工具匯入驗證碼，也能加入 Steam 令牌和 Battle.net 帳號了。
