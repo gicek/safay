@@ -141,7 +141,6 @@
   "Keep This Mac’s Copy": "保留本机的版本",
   "Keep accounts from both sides. For accounts changed on both, use the version you picked above.": "保留两边的账户；两边都改过的账户使用上方选定的版本。",
   "Keep an end-to-end encrypted backup in a folder or a cloud service": "把端到端加密的备份保存在文件夹或云存储中",
-  "Keep an end-to-end encrypted backup in a folder": "把端到端加密的备份保存在文件夹中",
   "Language": "语言",
   "Last synced {}": "上次同步：{}",
   "Launch at Login": "登录时启动",

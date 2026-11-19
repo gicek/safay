@@ -280,13 +280,9 @@ fn overview(s: Store) -> impl IntoElement {
                         )
                         .child(
                             text(move || {
-                                s.projection.with(|p| p.sync.location.as_ref().map(|l| location_detail(s, l))).unwrap_or_else(|| {
-                                    s.label(if crate::platform::supports::CLOUD {
-                                        "Keep an end-to-end encrypted backup in a folder or a cloud service"
-                                    } else {
-                                        "Keep an end-to-end encrypted backup in a folder"
-                                    })
-                                })
+                                s.projection
+                                    .with(|p| p.sync.location.as_ref().map(|l| location_detail(s, l)))
+                                    .unwrap_or_else(|| s.label("Keep an end-to-end encrypted backup in a folder or a cloud service"))
                             })
                             .number_of_lines(2)
                             .text_size(px(12.0))

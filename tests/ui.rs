@@ -346,7 +346,6 @@ fn settings_choice_applies_at_once_and_is_kept() {
 }
 /// First-run restore lists the cloud storage services; their connection sheet opens over onboarding and Back closes it
 /// without linking anything.
-#[cfg(any(target_os = "macos", target_os = "windows"))]
 #[test]
 fn restore_offers_cloud_storage_and_back_leaves_it() {
     let mut app = open();
@@ -414,7 +413,6 @@ fn sidebar_follows_the_macos_release() {
 
 /// A server certificate the system does not trust: setup shows its fingerprint for the user to compare, and Cancel
 /// leaves the form as it was (the fixture's `self-signed.example.invalid` answers as such a server).
-#[cfg(any(target_os = "macos", target_os = "windows"))]
 #[test]
 fn webdav_setup_shows_an_untrusted_certificate_for_confirmation() {
     let mut app = open();

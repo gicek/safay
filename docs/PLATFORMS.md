@@ -11,7 +11,7 @@ marked *coded* are written and untested on a real system. The interface shows a 
 |---|---|---|---|
 | Vault, accounts, categories, codes, import and export | Yes | Coded | Coded |
 | Folder backup | Yes | Coded | Coded |
-| WebDAV and Nextcloud backup | Yes | Coded (Credential Manager) | Not yet (needs a Secret Service credential store) |
+| WebDAV and Nextcloud backup | Yes | Coded (Credential Manager) | Yes (the Secret Service: GNOME Keyring, KWallet) |
 | Dropbox, OneDrive, Google Drive | Yes | Not yet (OAuth sign-in) | Not yet |
 | iCloud | Yes | — | — |
 | Touch ID / hardware-protected unlock | Touch ID | Planned: Windows Hello key release | Not planned (no common hardware key API) |

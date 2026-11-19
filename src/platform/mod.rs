@@ -2,7 +2,6 @@
 #[cfg(target_os = "macos")]
 pub mod automation;
 pub mod clipboard;
-#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub mod credentials;
 pub mod files;
 pub mod http;
@@ -88,8 +87,8 @@ pub mod supports {
     /// iCloud backup is listed among the locations: macOS has it (in a signed package); Windows lists it as unavailable;
     /// Linux, which never has it, does not list it.
     pub const ICLOUD: bool = cfg!(not(target_os = "linux"));
-    /// Cloud storage backup: needs a system credential store (Linux's Secret Service is not wired yet).
-    pub const CLOUD: bool = cfg!(any(target_os = "macos", target_os = "windows"));
+    /// Cloud storage backup: its sign-ins go to the system credential store (Linux: the Secret Service).
+    pub const CLOUD: bool = true;
     /// OAuth sign-in for Dropbox, OneDrive and Google Drive (macOS: `ASWebAuthenticationSession`; Windows not yet).
     pub const OAUTH: bool = cfg!(target_os = "macos");
     /// Updating the app itself (NSH's `nsh-updater`; active only in packages that carry an update source).
@@ -261,21 +260,11 @@ pub fn device_name() -> String {
 }
 
 /// Installs the cloud backup services: the real executor, and the system credential store (memory in `--preview`, so a
-/// preview never touches the keychain). Linux has no credential store wired yet; cloud locations stay hidden there.
+/// preview never touches the keychain).
 pub fn install_network(preview: bool) {
     use safay_app::cloud::{Credentials, Services};
-    let credentials: std::sync::Arc<dyn Credentials> = if preview || !supports::CLOUD {
-        std::sync::Arc::new(MemoryCredentials::default())
-    } else {
-        #[cfg(any(target_os = "macos", target_os = "windows"))]
-        {
-            std::sync::Arc::new(credentials::Keychain)
-        }
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-        {
-            std::sync::Arc::new(MemoryCredentials::default())
-        }
-    };
+    let credentials: std::sync::Arc<dyn Credentials> =
+        if preview { std::sync::Arc::new(MemoryCredentials::default()) } else { std::sync::Arc::new(credentials::Keychain) };
     safay_app::cloud::install(Services {
         http: std::sync::Arc::new(http::Executor::storage()),
         credentials,

@@ -62,6 +62,8 @@ nsh-platform-linux = { git = "https://github.com/longbridge/nsh", branch = "main
 # Screenshot and Camera, on zbus's own runtime; the camera's PipeWire stream read with GStreamer, as NSH's sound does.
 ashpd = { version = "=0.14.0", default-features = false, features = ["async-io", "camera", "screenshot"] }
 futures-executor = "=0.3.34"
+# Cloud sign-ins in the Secret Service (GNOME Keyring, KWallet), over libdbus; its session encryption in Rust.
+keyring = { version = "=3.6.3", default-features = false, features = ["sync-secret-service", "crypto-rust"] }
 gstreamer = "=0.25.4"
 gstreamer-app = "=0.25.2"
 

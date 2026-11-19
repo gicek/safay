@@ -38,7 +38,7 @@ Versions below are exact pins. Cargo.lock records the full production build grap
 | ureq | 3.5.1 | MIT OR Apache-2.0 | HTTP executor for cloud backup and site icons (rustls, system certificate verification); already used by NSH |
 | rustls, rustls-pki-types, rustls-platform-verifier | 0.23.46, 1.15.1, 0.7.1 | Apache-2.0 OR ISC OR MIT, MIT OR Apache-2.0, MIT OR Apache-2.0 | The pinned-certificate TLS step for self-signed WebDAV / Nextcloud servers (`src/platform/tls.rs`); the same versions ureq already uses |
 | sha2 | 0.11.0 | MIT OR Apache-2.0 | Certificate fingerprints; already used by the core |
-| keyring | 3.6.3 | MIT OR Apache-2.0 | Cloud sign-ins in the macOS Keychain / Windows Credential Manager; replace the credential store adapter |
+| keyring | 3.6.3 | MIT OR Apache-2.0 | Cloud sign-ins in the macOS Keychain / Windows Credential Manager / Linux Secret Service (over libdbus); replace the credential store adapter |
 | objc2-app-kit, objc2-authentication-services | 0.3.2 | Zlib OR Apache-2.0 OR MIT | macOS system APIs (AppKit, web sign-in sessions) |
 | objc2-foundation | 0.3.2 | MIT | macOS Foundation APIs (including AppleScript commands for launchers) |
 | objc2-av-foundation, objc2-core-media, objc2-core-video | 0.3.2 | Zlib OR Apache-2.0 OR MIT | macOS camera scanning (AVFoundation capture, pixel buffers) |

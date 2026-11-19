@@ -100,8 +100,8 @@ Remote storage receives only the encrypted vault and a metadata file with a devi
   (`ASWebAuthenticationSession`), with access to the app's own folder only. `state` and the callback are verified by
   the core. Nextcloud uses Login Flow v2, with the login page, polling and result required to share an origin.
 - Credentials (the serialized connection, including tokens or app passwords) are stored only in the system credential
-  store (Keychain, Windows Credential Manager); `sync.json` holds the entry's ID and a display name. Turning a backup
-  off revokes the token where the provider supports it and deletes the entry.
+  store (Keychain, Windows Credential Manager, the Secret Service on Linux); `sync.json` holds the entry's ID and a
+  display name. Turning a backup off revokes the token where the provider supports it and deletes the entry.
 - Plain `http://` WebDAV requires explicit consent in the interface.
 - **Self-signed servers** (WebDAV, Nextcloud): when the system does not trust a server's certificate, Safay shows the
   leaf certificate's SHA-256 fingerprint for the user to compare. Once confirmed, the location accepts either a

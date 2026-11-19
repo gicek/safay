@@ -127,7 +127,7 @@ moving back to NSH. Review this list on every NSH upgrade.
 | Capability | Where | Platforms |
 |---|---|---|
 | Touch ID unlock (Secure Enclave key wrapping) | `platform::biometric` | macOS |
-| Credential storage | `platform::credentials` (`keyring`) | macOS, Windows |
+| Credential storage | `platform::credentials` (`keyring`; the Secret Service on Linux) | all |
 | Secret clipboard (concealed, expiring) | `platform::clipboard` | all |
 | iCloud backup; silent pushes | `platform::icloud`; `platform::macos::enable_remote_push` (adds the push callback to NSH's app delegate class at runtime — recheck on every NSH upgrade) | macOS |
 | Camera and on-screen QR selection | macOS: `platform::camera`, `platform::screen_capture`, `scan` (the overlay). Linux: `platform::camera` (`camera_linux.rs`: the Camera portal, PipeWire and GStreamer) and `platform::screenshot` (the Screenshot portal, the desktop's own selection) | macOS, Linux |
