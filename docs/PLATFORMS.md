@@ -19,7 +19,8 @@ marked *coded* are written and untested on a real system. The interface shows a 
 | Auto-lock on app input | Yes | Partial (input inside the page only) | Partial |
 | Secret clipboard | Yes | Coded (excluded from history and cloud clipboard) | Coded (password-manager hint, no PRIMARY) |
 | Menu bar / tray panel | Yes | Not yet wired (NSH supports it) | Yes (StatusNotifierItem) |
-| Global shortcuts, settings window | Yes | Not yet wired (NSH supports them) | Not yet wired (shortcuts via the GlobalShortcuts portal); Settings is a dialog |
+| Global shortcuts | Yes | Not yet wired (NSH supports them) | Yes (the GlobalShortcuts portal) |
+| Settings window | Yes | A dialog over the main window | A dialog over the main window |
 | Launch at login, background launch | Yes | Not yet | Not yet |
 | Select a QR code on screen; camera | Yes | Not yet | Yes (the Screenshot and Camera portals) |
 | Launchers (Alfred, Raycast, Tinycast) | Yes | — | — |
@@ -41,8 +42,8 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
 
 - Checked on Arch Linux with Hyprland 0.56 (Omarchy) and GTK 4.24: the build, every test (`make ci`'s steps and
   `nsh test --target linux`), first launch, creating, locking and unlocking a vault, adding accounts by selecting a QR
-  code on screen and with the camera, the tray icon and its panel, and the window in tiled and floating layouts. Other
-  desktops are untested.
+  code on screen and with the camera, the tray icon and its panel, the global shortcuts, and the window in tiled and
+  floating layouts. Other desktops are untested.
 - Selecting a QR code on screen uses the desktop portal's interactive screenshot: the desktop's own tool picks the area
   (`slurp` on Hyprland, the screenshot tool on GNOME and KDE). Without a Screenshot portal, Safay says it can't take a
   screenshot.
@@ -53,6 +54,12 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
   closing the main window keeps Safay in the tray. Wayland lets no app place a window: on Hyprland the panel opens at
   the focused monitor's top right, under its bar (a window rule over Hyprland's socket); elsewhere where the compositor
   puts it, usually the center. The panel is at least 430 pt tall and the list scrolls past nine rows.
+- Global shortcuts go through the GlobalShortcuts portal, which knows an app outside a sandbox by its desktop entry: the
+  runner writes `<app ID>.desktop` in `~/.local/share/applications` (it also opens `safay://` links). Plasma and GNOME
+  48+ bind the keys, possibly asking first; Hyprland's portal binds none, so Safay binds them over Hyprland's socket,
+  leaving any key the user's config binds. The defaults are Super+Alt+Z, X and A (macOS's ⌥⌘ keys). The capture shortcut
+  and the tray panel's screenshot button follow macOS's order: select first, import at once, and say so in a desktop
+  notification; while locked the code waits for the lock screen's unlock.
 - The window buttons follow the desktop's `gtk-decoration-layout`. On a tiling desktop that also draws title bars on
   floating windows (Omarchy), a floating Safay shows two sets; `gsettings set org.gnome.desktop.wm.preferences
   button-layout 'appmenu:'` removes GTK's.
@@ -72,8 +79,7 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
 1. Run the build and `nsh test --target windows` on a real Windows system, and Linux on GNOME and KDE; check the title
    bar areas and window chrome.
 2. Windows: enable the desktop integration (NSH's tray, windows and global shortcuts work there), as Linux's
-   `src/desktop_linux.rs` does for the tray, and turn on `supports::TRAY`. Both: `SETTINGS_WINDOW` and
-   `GLOBAL_HOTKEYS`.
+    `src/desktop_linux.rs` does, and turn on `supports::TRAY` and `GLOBAL_HOTKEYS`. Both: `SETTINGS_WINDOW`.
 3. Store shortcuts in a platform-neutral form (today they are macOS key codes and Carbon modifiers); turn on launch
    at login (NSH's login item covers the Windows `Run` key and Linux autostart).
 4. Windows Hello, only as a real key release through `KeyCredentialManager` or a TPM-backed key; never a yes/no check.

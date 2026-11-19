@@ -517,6 +517,7 @@
   "After 5 wrong attempts, each try waits longer, up to 5 minutes": "连续 5 次输错后，每次重试的等待时间会逐渐变长，最长 5 分钟",
   "Unlocks Safay and encrypts your vault and backups": "用于解锁 Safay，并加密你的保险库和备份",
   "Show Menu Bar Panel": "显示菜单栏面板",
+  "Show Tray Panel": "显示托盘面板",
   "Your codes, from anywhere": "在任何地方查看验证码",
   "Show Main Window": "显示主窗口",
   "Brings Safay’s main window forward": "将 Safay 主窗口移到最前",

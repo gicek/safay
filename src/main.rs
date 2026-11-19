@@ -90,6 +90,11 @@ fn main() -> impl std::process::Termination {
             size: (980, 680),
             #[cfg(target_os = "macos")]
             keep_alive_on_close: true,
+            // Linux: the runner writes the app's desktop entry (named after its id, opening `safay://` links). The
+            // desktop portal knows an app outside a sandbox only by that entry: without it, it refuses the global
+            // shortcuts ("An app id is required").
+            #[cfg(target_os = "linux")]
+            schemes: vec![safay::platform::URL_SCHEME.into()],
             login_item: true,
             cache: native::CacheOptions::off(),
             // The directory the vault opened in above: NSH keeps its own files there too.

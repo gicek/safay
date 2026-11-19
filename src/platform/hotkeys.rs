@@ -1,6 +1,7 @@
 //! The global shortcuts' stored form and editor. The shortcuts themselves are registered through NSH
 //! (`register_global_shortcut`, in `desktop.rs`); the preferences store a macOS virtual key
-//! code with Carbon modifier bits.
+//! code with Carbon modifier bits. Linux stores the same form: its editor maps NSH's key events onto it
+//! ([`recorded`]), and Command is the Super key there.
 
 /// The keystroke NSH registers for `h` (`"alt+cmd+z"`): the key by its US-layout name, as [`label`] shows it. `None`
 /// for a key outside the names below, which is then not registered.
@@ -28,8 +29,29 @@ pub fn keystroke(h: safay_app::preferences::Hotkey) -> Option<String> {
     Some(out)
 }
 
-/// "⌥⌘Z": modifiers in display order (⌃⌥⇧⌘) and the key's label on a US layout.
+/// "⌥⌘Z": modifiers in display order (⌃⌥⇧⌘) and the key's label on a US layout. Linux: "Super+Alt+Z", as its desktops
+/// write shortcuts.
 pub fn label(h: safay_app::preferences::Hotkey) -> String {
+    if cfg!(target_os = "linux") {
+        let mut out = String::new();
+        for (bit, name) in [(0x100, "Super"), (0x1000, "Ctrl"), (0x800, "Alt"), (0x200, "Shift")] {
+            if h.modifiers & bit != 0 {
+                out.push_str(name);
+                out.push('+');
+            }
+        }
+        out.push_str(match key_name(h.key) {
+            "↩" => "Enter",
+            "⇥" => "Tab",
+            "⌫" => "Backspace",
+            "←" => "Left",
+            "→" => "Right",
+            "↓" => "Down",
+            "↑" => "Up",
+            name => name,
+        });
+        return out;
+    }
     let mut out = String::new();
     for (bit, sign) in [(0x1000, "⌃"), (0x800, "⌥"), (0x200, "⇧"), (0x100, "⌘")] {
         if h.modifiers & bit != 0 {
@@ -98,9 +120,50 @@ fn key_name(key: u16) -> &'static str {
 /// What the shortcut editor recorded: `None` cancelled (Escape), `Some(None)` cleared (Delete), or the new shortcut.
 pub type Recorded = Option<Option<safay_app::preferences::Hotkey>>;
 
+/// The shortcut editor's key press on Linux, from NSH's key event (`code` is the DOM's physical key, `KeyZ`): Escape
+/// cancels, Backspace or Delete clears, a lone modifier or a key without Super, Ctrl or Alt waits for the next press
+/// (`None`), and a key outside the stored names is not taken either.
+#[cfg(target_os = "linux")]
+pub fn recorded(code: &str, modifiers: nsh_core::keymap::Modifiers) -> Option<Recorded> {
+    match code {
+        "Escape" => return Some(None),
+        "Backspace" | "Delete" => return Some(Some(None)),
+        _ => {}
+    }
+    let name = if let Some(letter) = code.strip_prefix("Key") {
+        letter
+    } else if let Some(digit) = code.strip_prefix("Digit") {
+        digit
+    } else {
+        match code {
+            "Space" => "Space",
+            "Enter" => "↩",
+            "Tab" => "⇥",
+            "ArrowLeft" => "←",
+            "ArrowRight" => "→",
+            "ArrowDown" => "↓",
+            "ArrowUp" => "↑",
+            "F1" | "F2" | "F3" | "F4" | "F5" | "F6" => code,
+            _ => return None,
+        }
+    };
+    let key = (0..=u16::from(u8::MAX)).find(|k| key_name(*k) == name)?;
+    let mut bits = 0;
+    for (held, bit) in [(modifiers.cmd, 0x100), (modifiers.shift, 0x200), (modifiers.alt, 0x800), (modifiers.ctrl, 0x1000)] {
+        if held {
+            bits |= bit;
+        }
+    }
+    if bits & (0x100 | 0x800 | 0x1000) == 0 {
+        return None;
+    }
+    Some(Some(Some(safay_app::preferences::Hotkey { key, modifiers: bits })))
+}
+
 /// Records the next key press in this app for the shortcut editor: Escape cancels, Delete clears. AppKit hands the key
 /// to its monitor on the main thread, where the UI's signals may not be touched: the result comes through the channel,
 /// for the engine thread to apply.
+#[cfg(target_os = "macos")]
 pub fn record() -> std::sync::mpsc::Receiver<Recorded> {
     use nsh_platform_macos::{
         objc2::rc::Retained,
@@ -170,5 +233,22 @@ mod tests {
         }
         // A key without a name is not registered.
         assert_eq!(keystroke(Hotkey { key: 200, modifiers: 0x100 }), None);
+    }
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_key_presses_become_the_stored_form() {
+        let held = |cmd, alt, ctrl, shift| nsh_core::keymap::Modifiers { cmd, alt, ctrl, shift };
+        // Super+Alt+Z is ⌥⌘Z's stored form, and reads back as Linux writes it.
+        let z = recorded("KeyZ", held(true, true, false, false));
+        assert_eq!(z, Some(Some(Some(Hotkey { key: 6, modifiers: 0x100 | 0x800 }))));
+        assert_eq!(label(Hotkey { key: 6, modifiers: 0x100 | 0x800 }), "Super+Alt+Z");
+        assert_eq!(label(Hotkey { key: 123, modifiers: 0x1000 | 0x200 }), "Ctrl+Shift+Left");
+        assert_eq!(recorded("Digit7", held(false, false, true, false)), Some(Some(Some(Hotkey { key: 26, modifiers: 0x1000 }))));
+        // Escape cancels, Backspace clears; Shift alone, a lone modifier and an unnamed key wait for another press.
+        assert_eq!(recorded("Escape", held(false, false, false, false)), Some(None));
+        assert_eq!(recorded("Backspace", held(false, false, false, false)), Some(Some(None)));
+        assert_eq!(recorded("KeyA", held(false, false, false, true)), None);
+        assert_eq!(recorded("AltLeft", held(false, true, false, false)), None);
+        assert_eq!(recorded("F12", held(true, false, false, false)), None);
     }
 }

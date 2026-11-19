@@ -1,4 +1,4 @@
-//! Placing the tray's quick panel on Hyprland. Wayland lets no app place its windows and neither GTK 4 nor NSH can, so
+//! Placing the tray's quick panel and binding the global shortcuts' keys on Hyprland. Wayland lets no app place its windows and neither GTK 4 nor NSH can, so
 //! elsewhere the compositor puts the panel where it likes (most center it). Hyprland takes window rules over its IPC
 //! socket: before the panel opens, a rule floats it at the top right of the focused monitor, under the bar's reserved
 //! area, as a menu bar panel sits. The rule matches only the panel's title and the app's class, and is replaced each
@@ -62,6 +62,69 @@ fn top_right(monitors: &str, width: f64) -> Option<(i64, i64)> {
     Some((x.round() as i64, (top + EDGE).round() as i64))
 }
 
+/// Binds each of the app's global shortcuts (NSH keystrokes, `alt+cmd+z`) to its key on Hyprland, whose portal
+/// registers shortcuts but binds no key (`bind = …, global, <app id>:<id>` in the user's config otherwise). The keys this
+/// app bound before in this Hyprland session (a Lua global, gone with a config reload, as the binds) are unbound first;
+/// a key the user's config already binds is left to it. Does nothing outside Hyprland.
+pub fn bind_shortcuts(keystrokes: &[String]) {
+    let Some(socket) = socket() else { return };
+    if request(&socket, "eval for _, k in ipairs(safay_keys or {}) do hl.unbind(k) end safay_keys = {}").is_none() {
+        return;
+    }
+    let taken = request(&socket, "j/binds").map(|binds| bound_keys(&binds)).unwrap_or_default();
+    let mut lua = String::new();
+    for keystroke in keystrokes {
+        let Ok(shortcut) = nsh_core::desktop::Shortcut::parse(keystroke, true) else { continue };
+        let Some((keys, modmask, key)) = hyprland_keys(&shortcut) else { continue };
+        if taken.iter().any(|(m, k)| *m == modmask && k.eq_ignore_ascii_case(&key)) {
+            continue;
+        }
+        // NSH's id for it on the portal (`global_shortcut::portal_id`): its label, lowercase, Win as Super.
+        let id = shortcut.label().to_lowercase().replace("win+", "super+");
+        lua.push_str(&format!("hl.bind(\"{keys}\", hl.dsp.global(\"{}:{id}\")) table.insert(safay_keys, \"{keys}\") ", super::APP_ID));
+    }
+    if !lua.is_empty() {
+        drop(request(&socket, &format!("eval {lua}")));
+    }
+}
+
+/// The modifier bits and key of every bind Hyprland has.
+fn bound_keys(binds: &str) -> Vec<(i64, String)> {
+    let Ok(serde_json::Value::Array(binds)) = serde_json::from_str(binds) else { return Vec::new() };
+    binds.iter().filter_map(|b| Some((b["modmask"].as_i64()?, b["key"].as_str()?.to_owned()))).collect()
+}
+
+/// How Hyprland writes `shortcut` (`SUPER + ALT + Z`), its modifier bits (Super 64, Alt 8, Control 4, Shift 1) and its
+/// key's name (xkb's).
+fn hyprland_keys(shortcut: &nsh_core::desktop::Shortcut) -> Option<(String, i64, String)> {
+    use nsh_core::desktop::Key;
+    let key = match shortcut.key {
+        Key::Char(c) if c.is_ascii_alphanumeric() => c.to_ascii_uppercase().to_string(),
+        Key::Space => "space".into(),
+        Key::Enter => "Return".into(),
+        Key::Tab => "Tab".into(),
+        Key::Backspace => "BackSpace".into(),
+        Key::Left => "Left".into(),
+        Key::Right => "Right".into(),
+        Key::Up => "Up".into(),
+        Key::Down => "Down".into(),
+        Key::F(n) => format!("F{n}"),
+        _ => return None,
+    };
+    let mut parts = Vec::new();
+    let mut modmask = 0;
+    for (held, name, bit) in
+        [(shortcut.meta, "SUPER", 64), (shortcut.ctrl, "CTRL", 4), (shortcut.alt, "ALT", 8), (shortcut.shift, "SHIFT", 1)]
+    {
+        if held {
+            parts.push(name);
+            modmask |= bit;
+        }
+    }
+    parts.push(&key);
+    Some((parts.join(" + "), modmask, key.clone()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -77,5 +140,15 @@ mod tests {
         assert_eq!(top_right(turned, 310.0), Some((1080 - 40 - 310 - 8, 8)));
         assert_eq!(top_right("[]", 310.0), None);
         assert_eq!(top_right("not json", 310.0), None);
+    }
+    #[test]
+    fn shortcuts_are_written_as_hyprland_binds_them() {
+        let keys = |k: &str| hyprland_keys(&nsh_core::desktop::Shortcut::parse(k, true).unwrap());
+        assert_eq!(keys("alt+cmd+z"), Some(("SUPER + ALT + Z".into(), 72, "Z".into())));
+        assert_eq!(keys("ctrl+shift+space"), Some(("CTRL + SHIFT + space".into(), 5, "space".into())));
+        assert_eq!(keys("cmd+f5"), Some(("SUPER + F5".into(), 64, "F5".into())));
+        let binds = r#"[{"modmask":72,"key":"F","dispatcher":"__lua"},{"modmask":64,"key":"return"}]"#;
+        assert_eq!(bound_keys(binds), vec![(72, "F".to_owned()), (64, "return".to_owned())]);
+        assert!(bound_keys("not json").is_empty());
     }
 }

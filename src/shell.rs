@@ -89,20 +89,9 @@ pub fn main_window(controller: Arc<Controller>, fixture: bool) -> impl IntoEleme
     on_key("mod+,", move |_| open_settings(s));
     // Requests from the Settings window, the tray panel or a global shortcut; only a sheet kind crosses stores.
     set_interval(std::time::Duration::from_millis(200), move || {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         if let Some(from_shortcut) = crate::platform::take_capture_request() {
             s.capture_and_import(from_shortcut);
-        }
-        // Linux: the tray panel's screenshot button. The Add Account sheet takes the result, as its own "Select on
-        // Screen" does.
-        #[cfg(target_os = "linux")]
-        if crate::platform::take_capture_request().is_some() && s.unlocked() {
-            crate::platform::open_main();
-            if s.sheet.get_untracked() != Some(Sheet::Add) {
-                s.open_sheet(Sheet::Add);
-            }
-            s.add_tab.set(crate::store::AddTab::Scan);
-            s.capture_screen();
         }
         if crate::platform::take_update_check_request() {
             s.check_updates(Check::Manual);
@@ -118,7 +107,7 @@ pub fn main_window(controller: Arc<Controller>, fixture: bool) -> impl IntoEleme
             s.launcher_copy_request(id);
         }
         s.launcher_copy_after_unlock();
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         s.capture_after_unlock();
         if let Some(sheet) = crate::platform::take_request()
             && (s.unlocked() || sheet == Sheet::Settings)

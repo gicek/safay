@@ -465,7 +465,14 @@ fn login_section(s: Store) -> impl IntoElement {
 }
 fn shortcuts(s: Store) -> impl IntoElement {
     section(vec![
-        row(s, "Show Menu Bar Panel", help(s, "Your codes, from anywhere"), recorder(s, 0)).into_element(),
+        // Elsewhere a tray, not a menu bar.
+        row(
+            s,
+            if look() == Look::Mac { "Show Menu Bar Panel" } else { "Show Tray Panel" },
+            help(s, "Your codes, from anywhere"),
+            recorder(s, 0),
+        )
+        .into_element(),
         row(s, "Show Main Window", help(s, "Brings Safay’s main window forward"), recorder(s, 1)).into_element(),
         row(s, "Select QR Code on Screen", help(s, "Adds the account from a 2FA QR code on your screen"), recorder(s, 2)).into_element(),
     ])
@@ -490,89 +497,99 @@ fn recorder(s: Store, which: u8) -> impl IntoElement {
     };
     let mac = look() == Look::Mac;
     // macOS: the recorder, a 130×24 capsule with its clear button inside.
-    view()
-        .w(px(if mac { 130.0 } else { 150.0 }))
-        .flex_row()
+    let field = button()
+        .accessibility_label(move || Some(s.label(if recording() { "Type shortcut" } else { "Record Shortcut" })))
+        .flex_1()
+        .h(px(if mac { 24.0 } else { 26.0 }))
         .items_center()
-        .gap(px(4.0))
+        .justify_center()
+        .rounded(px(if mac { 12.0 } else { 6.0 }))
+        .border_1()
+        .border_color(move || {
+            if recording() {
+                theme().ring
+            } else if mac {
+                tok("input")
+            } else {
+                tok("separator")
+            }
+        })
+        .bg(move || if mac { tok("input-bg") } else { tok("glass") })
+        .focus(|st| st.border_color(move || theme().ring))
+        .on_press(move || {
+            if s.fixture {
+                return;
+            }
+            s.recording.set(Some(which));
+            // The key arrives on AppKit's main thread; it is applied here, on the engine thread.
+            #[cfg(target_os = "macos")]
+            {
+                let keys = crate::platform::hotkeys::record();
+                s.task(async move {
+                    let result = blocking(move || keys.recv().ok().flatten()).await.ok().flatten();
+                    s.recording.set(None);
+                    if let Some(next) = result {
+                        store(next)
+                    }
+                });
+            }
+        })
         .child(
-            button()
-                .accessibility_label(move || Some(s.label(if recording() { "Type shortcut" } else { "Record Shortcut" })))
-                .flex_1()
-                .h(px(if mac { 24.0 } else { 26.0 }))
-                .items_center()
-                .justify_center()
-                .rounded(px(if mac { 12.0 } else { 6.0 }))
-                .border_1()
-                .border_color(move || {
-                    if recording() {
-                        theme().ring
-                    } else if mac {
-                        tok("input")
-                    } else {
-                        tok("separator")
+            text(move || {
+                if recording() {
+                    return s.label("Type shortcut");
+                }
+                match current() {
+                    #[cfg(any(target_os = "macos", target_os = "linux"))]
+                    Some(h) => crate::platform::hotkeys::label(h).into(),
+                    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+                    Some(_) => "".into(),
+                    None => s.label("Record Shortcut"),
+                }
+            })
+            .text_size(px(12.5))
+            .text_color(move || if current().is_some() || recording() { theme().foreground } else { theme().muted_foreground }),
+        );
+    // Linux: NSH's key events while recording (macOS records through AppKit, above). The desktop's own shortcuts reach
+    // it first and never get here.
+    #[cfg(target_os = "linux")]
+    let field =
+        view().flex_1().child(field).capture_keys(move || if recording() { KeyCapture::All } else { KeyCapture::None }).on_key_down(
+            move |event: &nsh_core::KeyEvent| {
+                if !recording() || event.repeat {
+                    return;
+                }
+                if let Some(result) = crate::platform::hotkeys::recorded(&event.code, event.modifiers) {
+                    s.recording.set(None);
+                    if let Some(next) = result {
+                        store(next)
                     }
-                })
-                .bg(move || if mac { tok("input-bg") } else { tok("glass") })
-                .focus(|st| st.border_color(move || theme().ring))
-                .on_press(move || {
-                    if s.fixture {
-                        return;
-                    }
-                    s.recording.set(Some(which));
-                    // The key arrives on AppKit's main thread; it is applied here, on the engine thread.
-                    #[cfg(target_os = "macos")]
-                    {
-                        let keys = crate::platform::hotkeys::record();
-                        s.task(async move {
-                            let result = blocking(move || keys.recv().ok().flatten()).await.ok().flatten();
-                            s.recording.set(None);
-                            if let Some(next) = result {
-                                store(next)
-                            }
-                        });
-                    }
-                })
-                .child(
-                    text(move || {
-                        if recording() {
-                            return s.label("Type shortcut");
-                        }
-                        match current() {
-                            #[cfg(target_os = "macos")]
-                            Some(h) => crate::platform::hotkeys::label(h).into(),
-                            #[cfg(not(target_os = "macos"))]
-                            Some(_) => "".into(),
-                            None => s.label("Record Shortcut"),
-                        }
-                    })
-                    .text_size(px(12.5))
-                    .text_color(move || if current().is_some() || recording() { theme().foreground } else { theme().muted_foreground }),
-                ),
-        )
-        .child(when(
-            move || current().is_some() && !recording(),
-            move || {
-                if mac {
-                    view()
-                        .absolute()
-                        .right(px(5.0))
-                        .top(px(0.0))
-                        .bottom(px(0.0))
-                        .justify_center()
-                        .child(
-                            button()
-                                .accessibility_label(move || Some(s.label("Clear")))
-                                .active(|st| st.opacity(0.6))
-                                .on_press(move || store(None))
-                                .child(crate::icons::symbol(Icon::ClearFill, 13.0, move || theme().muted_foreground)),
-                        )
-                        .into_element()
-                } else {
-                    icon_button(move || s.label("Clear"), Icon::Close).size(px(22.0)).on_press(move || store(None)).into_element()
                 }
             },
-        ))
+        );
+    view().w(px(if mac { 130.0 } else { 150.0 })).flex_row().items_center().gap(px(4.0)).child(field).child(when(
+        move || current().is_some() && !recording(),
+        move || {
+            if mac {
+                view()
+                    .absolute()
+                    .right(px(5.0))
+                    .top(px(0.0))
+                    .bottom(px(0.0))
+                    .justify_center()
+                    .child(
+                        button()
+                            .accessibility_label(move || Some(s.label("Clear")))
+                            .active(|st| st.opacity(0.6))
+                            .on_press(move || store(None))
+                            .child(crate::icons::symbol(Icon::ClearFill, 13.0, move || theme().muted_foreground)),
+                    )
+                    .into_element()
+            } else {
+                icon_button(move || s.label("Clear"), Icon::Close).size(px(22.0)).on_press(move || store(None)).into_element()
+            }
+        },
+    ))
 }
 fn security(s: Store) -> impl IntoElement {
     when(move || !s.unlocked(), move || locked_section(s)).otherwise(move || {

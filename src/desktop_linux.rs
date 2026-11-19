@@ -14,7 +14,9 @@ use crate::{
 };
 use nsh_core::{
     desktop::{SizeToContent, WindowAttributes, WindowKind},
-    element::desktop::{MenuItem, WindowRef, main_window, open_window, set_tray, tray, window},
+    element::desktop::{
+        MenuItem, WindowRef, main_window, open_window, register_global_shortcut, set_tray, tray, unregister_all_global_shortcuts, window,
+    },
     prelude::*,
 };
 use safay_app::{controller::Controller, preferences::Preferences};
@@ -98,6 +100,32 @@ pub fn install(controller: Arc<Controller>, preview: bool) {
         ]));
     });
 
+    // The system-wide shortcuts, through the desktop portal: registered again only when one of them changes. On
+    // Hyprland, whose portal binds no key itself, they are bound to their keys too (`platform::hyprland`).
+    let keys = signal(None::<[Option<String>; 3]>);
+    effect(move || {
+        let next = d
+            .preferences
+            .get()
+            .map(|p| [p.hotkey_panel, p.hotkey_main, p.hotkey_capture].map(|h| h.and_then(platform::hotkeys::keystroke)));
+        if untracked(|| keys.get()) != next {
+            keys.set(next);
+        }
+    });
+    effect(move || {
+        let Some(keys) = keys.get() else { return };
+        unregister_all_global_shortcuts();
+        let actions: [fn(); 3] = [toggle_panel, open_main, platform::request_capture_from_shortcut];
+        for (keystroke, action) in keys.iter().zip(actions) {
+            if let Some(keystroke) = keystroke {
+                // A keystroke the desktop refuses is not taken; the answer is not awaited.
+                drop(register_global_shortcut(keystroke, action));
+            }
+        }
+        let bound: Vec<String> = keys.into_iter().flatten().collect();
+        platform::hyprland::bind_shortcuts(&bound);
+    });
+
     // `safay://` links (the scheme `platform::URL_SCHEME`): any of them brings the main window forward. Nothing in a
     // link is read or acted on beyond that.
     spawn(async move {
@@ -123,6 +151,21 @@ pub fn apply(preferences: Preferences, language: Language) {
     if !preferences.tray_icon && HIDDEN.with(|h| h.replace(false)) {
         main_window().show();
     }
+}
+
+/// A result of capturing a QR code from the shortcut or the tray panel, shown as a desktop notification (macOS shows its
+/// own card). A newer one replaces the one on screen. Only already-localized result text is shown, never secrets.
+pub fn notice(tone: crate::store::Tone, text: String) {
+    let _ = tone;
+    let Some(d) = desktop() else { return };
+    d.owner.get().run(|| {
+        let mut notification = nsh_core::notifications::Notification::new("capture", "Safay", text);
+        notification.silent = true;
+        spawn(async move {
+            // A desktop without a notification service shows nothing.
+            let _ = show_notification(notification).await;
+        });
+    });
 }
 
 /// Brings the main window forward, showing it if it was closed to the tray.

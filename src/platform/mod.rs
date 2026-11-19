@@ -28,7 +28,7 @@ pub mod camera;
 #[cfg(target_os = "linux")]
 #[path = "camera_linux.rs"]
 pub mod camera;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 pub mod hotkeys;
 #[cfg(target_os = "macos")]
 pub mod icloud;
@@ -72,7 +72,7 @@ pub mod supports {
     /// puts it).
     pub const TRAY: bool = cfg!(any(target_os = "macos", target_os = "linux"));
     /// System-wide shortcuts and their recorder.
-    pub const GLOBAL_HOTKEYS: bool = cfg!(target_os = "macos");
+    pub const GLOBAL_HOTKEYS: bool = cfg!(any(target_os = "macos", target_os = "linux"));
     /// Launch at login and background-only launch.
     pub const LOGIN_ITEM: bool = cfg!(target_os = "macos");
     /// Hardware-protected key release (Touch ID; Windows Hello later).

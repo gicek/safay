@@ -274,8 +274,8 @@ fn settings_show_default_global_shortcuts_and_login_options() {
     app.wait_for("⌥⌘Z").unwrap();
     app.wait_for("⌥⌘X").unwrap();
 }
-/// Linux has a tray, not a menu bar: its switch and the panel's account scope are named for it, and nothing for login
-/// items or shortcuts shows yet.
+/// Linux has a tray, not a menu bar: its switch, the panel's account scope and its shortcut are named for it, and nothing
+/// for login items shows yet.
 #[cfg(target_os = "linux")]
 #[test]
 fn settings_offer_the_tray_icon_on_linux() {
@@ -295,9 +295,15 @@ fn settings_offer_the_tray_icon_on_linux() {
     app.wait_for("Tray Icon").unwrap();
     app.wait_for("Tray Accounts").unwrap();
     let texts = app.screen().texts();
-    for absent in ["Menu Bar Accounts", "Start in Menu Bar", "Shortcuts"] {
+    for absent in ["Menu Bar Accounts", "Start in Menu Bar"] {
         assert!(!texts.contains(&absent), "{absent} shows on Linux");
     }
+    // The shortcuts, as Linux desktops write them (Command is Super there).
+    app.press("role:button[Shortcuts]").unwrap();
+    app.wait_for("Show Tray Panel").unwrap();
+    app.wait_for("Super+Alt+Z").unwrap();
+    app.wait_for("Super+Alt+X").unwrap();
+    app.wait_for("Super+Alt+A").unwrap();
 }
 #[cfg(target_os = "macos")]
 #[test]

@@ -213,7 +213,7 @@ pub struct Store {
     launcher_waiting: Signal<Option<(Uuid, std::time::Instant)>>,
     /// A code captured from the shortcut while locked, waiting for the vault to be unlocked with the master password: its
     /// text, its first issuer and since when.
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     capture_waiting: Signal<Option<(Zeroizing<String>, String, std::time::Instant)>>,
     pub stage: Signal<Stage>,
     pub add_tab: Signal<AddTab>,
@@ -331,7 +331,7 @@ impl Store {
             auth_error: signal(None),
             auth_prompting: signal(false),
             launcher_waiting: signal(None),
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "macos", target_os = "linux"))]
             capture_waiting: signal(None),
             stage: signal(Stage::Welcome),
             add_tab: signal(AddTab::Scan),
@@ -480,7 +480,7 @@ impl Store {
     /// Results of what the shortcut or the menu bar asked for (a capture, an update check): a desktop notice near the top of the screen,
     /// or the window toast where there is no real desktop host.
     pub fn capture_notice(self, tone: Tone, text: SharedString) {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         if crate::hosted() {
             crate::desktop::notice(tone, text.to_string());
             return;
@@ -926,6 +926,59 @@ impl Store {
             }
         });
     }
+    /// The capture shortcut and the tray panel's screenshot button on Linux, in macOS's order (`capture_and_import`
+    /// above): the desktop's screenshot tool first, with no window of Safay's in the way; the code is imported at once
+    /// and the result shows as a desktop notification. While locked, the panel unlocks first; the shortcut selects first
+    /// and the code waits for the lock screen's unlock (two minutes at most). There is no Touch ID here.
+    #[cfg(target_os = "linux")]
+    pub fn capture_and_import(self, from_shortcut: bool) {
+        use platform::screenshot::Capture;
+        if self.fixture || self.busy.get() {
+            return;
+        }
+        if !self.projection.with(|p| p.exists) {
+            self.capture_notice(Tone::Info, self.label("Set up Safay first"));
+            return;
+        }
+        if !self.unlocked() && !from_shortcut {
+            self.capture_notice(Tone::Info, self.label("Unlock Safay first"));
+            platform::open_main();
+            return;
+        }
+        let epoch = self.controller.get().epoch();
+        self.task(async move {
+            let capture = blocking(platform::screenshot::capture).await;
+            if self.controller.get().epoch() != epoch {
+                return;
+            }
+            let text = match capture {
+                Ok(Capture::Codes(text)) => text,
+                Ok(Capture::Cancelled) => return,
+                Ok(Capture::NoCode) => {
+                    self.capture_notice(Tone::Error, self.label("No QR code found"));
+                    return;
+                }
+                Ok(Capture::Failed) | Err(_) => {
+                    self.capture_notice(Tone::Error, self.label("Can’t take a screenshot"));
+                    return;
+                }
+            };
+            let issuer = safay_app::core::otpauth::parse_lines(&text, &safay_app::session::placeholders())
+                .into_iter()
+                .find(|p| p.is_valid())
+                .map(|p| p.issuer);
+            let Some(issuer) = issuer else {
+                self.capture_notice(Tone::Error, self.label("No QR code found"));
+                return;
+            };
+            if self.unlocked() {
+                self.import_captured(text, issuer, None);
+                return;
+            }
+            self.capture_notice(Tone::Info, self.label("QR code recognized. Unlock first."));
+            self.wait_for_unlock(text, issuer);
+        });
+    }
     /// Which of a QR code's accounts the vault already has, for the on-screen selection to mark (never stores anything).
     #[cfg(target_os = "macos")]
     fn known_accounts(self) -> crate::scan::Known {
@@ -1002,7 +1055,7 @@ impl Store {
     }
     /// Imports a captured code, unlocking with Touch ID's `key` first when one is given. A code the vault already has is
     /// reported as such (the desktop notice), not as a failed import.
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     fn import_captured(self, text: Zeroizing<String>, issuer: String, key: Option<Zeroizing<Vec<u8>>>) {
         self.dispatch(true, move |s| {
             if let Some(key) = key {
@@ -1015,13 +1068,13 @@ impl Store {
         });
     }
     /// Keeps a captured code for the lock screen's unlock and brings the lock screen forward.
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     fn wait_for_unlock(self, text: Zeroizing<String>, issuer: String) {
         self.capture_waiting.set(Some((text, issuer, std::time::Instant::now())));
         platform::open_main();
     }
     /// Imports a code captured while locked, once the vault is unlocked.
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     pub fn capture_after_unlock(self) {
         let Some(since) = self.capture_waiting.with(|w| w.as_ref().map(|w| w.2)) else { return };
         if since.elapsed() > Duration::from_secs(120) {

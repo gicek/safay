@@ -134,11 +134,11 @@ moving back to NSH. Review this list on every NSH upgrade.
 | QR decoding and generation | `platform::files` (`rqrr`, `qrcode`) | all |
 | SF Symbols | `platform::symbols` (rendered to template PNGs; SVG icons elsewhere) | macOS |
 | Lock on sleep, screen lock and user switch | `platform::macos::observe`, `platform::windows`, `platform::linux` | all |
-| Placing the tray panel (Wayland lets no app place a window) | `platform::hyprland` (a window rule over Hyprland's socket) | Linux on Hyprland |
+| Placing the tray panel (Wayland lets no app place a window); binding the global shortcuts' keys (Hyprland's portal binds none) | `platform::hyprland` (a window rule and binds over Hyprland's socket) | Linux on Hyprland |
 | Dock policy at runtime | `platform::macos` | macOS |
 | Closing the menu bar panel on clicks in other apps; pointer position | `platform::macos` | macOS |
 | Roman-only input in password and key fields | `platform::macos::roman_input_only` | macOS |
-| Shortcut recorder | `platform::hotkeys` (registration uses NSH) | all |
+| Shortcut recorder | `platform::hotkeys` (registration uses NSH; macOS records through AppKit, Linux from NSH's key events) | all |
 | Device name for backup history | `platform::device_name` | all |
 | Launcher commands (AppleScript) | `platform::automation`, `src/launcher.rs` | macOS |
 
