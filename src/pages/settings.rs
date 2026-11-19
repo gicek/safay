@@ -289,6 +289,8 @@ fn general(s: Store) -> impl IntoElement {
     } else {
         "Show an icon in the notification area for quick code access"
     };
+    // Elsewhere a tray, not a menu bar (as the switch above).
+    let accounts_title = if look() == Look::Mac { "Menu Bar Accounts" } else { "Tray Accounts" };
     let mut integration =
         vec![
             row(
@@ -311,14 +313,14 @@ fn general(s: Store) -> impl IntoElement {
                 })
                 .child(row(
                     s,
-                    "Menu Bar Accounts",
+                    accounts_title,
                     help(
                         s,
                         if look() == Look::Mac { "Which accounts the menu bar panel shows" } else { "Which accounts the tray panel shows" },
                     ),
                     choice(
                         s,
-                        "Menu Bar Accounts",
+                        accounts_title,
                         move || {
                             let mut items = vec![SelectItem::new("all", s.label("All"))];
                             items.extend(s.projection.with(|p| {

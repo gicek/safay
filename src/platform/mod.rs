@@ -12,6 +12,9 @@ pub mod site_icons;
 pub mod tls;
 pub mod updates;
 
+/// Placing the tray's quick panel where Hyprland lets an app ask for it.
+#[cfg(target_os = "linux")]
+pub mod hyprland;
 #[cfg(target_os = "linux")]
 pub mod linux;
 #[cfg(target_os = "windows")]
@@ -65,8 +68,9 @@ use std::sync::Mutex;
 /// What this desktop's adapter implements. The UI shows a feature only when it is true here: no switch for a capability
 /// that does nothing. Gaps and plans for each OS are in docs/PLATFORMS.md.
 pub mod supports {
-    /// Menu bar / tray icon with the quick panel.
-    pub const TRAY: bool = cfg!(target_os = "macos");
+    /// Menu bar / tray icon with the quick panel (Linux: a StatusNotifierItem; the panel opens where the compositor
+    /// puts it).
+    pub const TRAY: bool = cfg!(any(target_os = "macos", target_os = "linux"));
     /// System-wide shortcuts and their recorder.
     pub const GLOBAL_HOTKEYS: bool = cfg!(target_os = "macos");
     /// Launch at login and background-only launch.
@@ -150,14 +154,15 @@ pub fn take_launcher_copy() -> Option<safay_app::Uuid> {
 }
 /// Brings the main window forward.
 pub fn open_main() {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     crate::desktop::open_main();
 }
 /// Settings: a window of its own where `supports::SETTINGS_WINDOW`, else a dialog over the main window.
 pub fn open_settings_window() {
-    #[cfg(target_os = "macos")]
+    // Linux's opens the dialog over the main window and brings that window forward (it may be in the tray).
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     crate::desktop::open_settings();
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     request_sheet(crate::store::Sheet::Settings);
 }
 /// Asks the main window to present a sheet (Change Password, Restore) and brings it forward.

@@ -93,6 +93,17 @@ pub fn main_window(controller: Arc<Controller>, fixture: bool) -> impl IntoEleme
         if let Some(from_shortcut) = crate::platform::take_capture_request() {
             s.capture_and_import(from_shortcut);
         }
+        // Linux: the tray panel's screenshot button. The Add Account sheet takes the result, as its own "Select on
+        // Screen" does.
+        #[cfg(target_os = "linux")]
+        if crate::platform::take_capture_request().is_some() && s.unlocked() {
+            crate::platform::open_main();
+            if s.sheet.get_untracked() != Some(Sheet::Add) {
+                s.open_sheet(Sheet::Add);
+            }
+            s.add_tab.set(crate::store::AddTab::Scan);
+            s.capture_screen();
+        }
         if crate::platform::take_update_check_request() {
             s.check_updates(Check::Manual);
         }

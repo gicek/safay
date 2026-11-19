@@ -47,7 +47,8 @@ appearance only — never capabilities.
 - **First launch**: an introduction beside two choices, Start Fresh and Restore a Backup; restoring lists every backup
   location and Safay export files.
 - **Menu bar panel**: 310 pt wide; search, 44 pt rows, arrow keys and Return to copy, select-on-screen in the footer,
-  category scope; it closes on Escape or when focus leaves.
+  category scope; it closes on Escape or when focus leaves. On Linux it opens from the tray icon, square (the compositor
+  draws its corners), at least 430 pt tall, at the top right on Hyprland.
 - **Desktop card**: the glass card of the desktop notice and of the selection's instructions: 56 pt tall, the 36 pt
   app icon 10 pt in, its 8 pt corners concentric with the card's 18 pt ones. It sits 44 pt under the top of the visible
   area of the display under the pointer.

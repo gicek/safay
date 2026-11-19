@@ -9,6 +9,10 @@ mod components;
 mod demo;
 #[cfg(target_os = "macos")]
 mod desktop;
+// The tray icon and its quick panel; the same functions for the parts Linux has.
+#[cfg(target_os = "linux")]
+#[path = "desktop_linux.rs"]
+mod desktop;
 mod i18n;
 mod icons;
 #[cfg(target_os = "macos")]
@@ -60,8 +64,11 @@ pub fn App() -> impl IntoElement {
             desktop::install(controller.clone(), *preview);
         }
         #[cfg(target_os = "linux")]
-        if !*preview {
-            platform::linux::configure(controller.clone());
+        {
+            if !*preview {
+                platform::linux::configure(controller.clone());
+            }
+            desktop::install(controller.clone(), *preview);
         }
         shell::main_window(controller.clone(), *preview).into_element()
     } else {
@@ -120,7 +127,7 @@ fn quick_shell(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
 /// The menu bar panel's window content (`desktop::toggle_panel`), made each time the panel opens: the search and the
 /// highlight start empty and the keyboard goes to the search field. The window follows this view's height, in the
 /// same frame as the content changes (the account list is virtualized); the lock screen is 430 pt.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 pub(crate) fn panel_window(controller: Arc<Controller>, preview: bool) -> impl IntoElement {
     let s = Store::new(controller, preview, Surface::Panel);
     effect(move || untracked(|| s.start()));
@@ -145,7 +152,10 @@ pub(crate) fn panel_window(controller: Arc<Controller>, preview: bool) -> impl I
         } else {
             38.0 + 18.0 + 1.0 + p.rows.len().clamp(5, 9) as f32 * pages::quick::ROW + 1.0 + 42.0
         };
-        px(height.clamp(320.0, 500.0))
+        // Linux: at least the lock screen's height, so unlocking or a short list never shrinks the panel the compositor
+        // placed; the list scrolls past nine rows on both.
+        let least = if cfg!(target_os = "linux") { 430.0 } else { 320.0 };
+        px(height.clamp(least, 500.0))
     };
     // The window is transparent: the panel's shape is this view's. It fades in like an AppKit panel window
     // (AppKit's 0.25 s alpha animation), at once with reduced motion.

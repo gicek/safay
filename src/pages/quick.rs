@@ -15,7 +15,7 @@ pub fn page(s: Store) -> impl IntoElement {
 fn content(s: Store) -> impl IntoElement {
     // The screenshot button pressed while locked: the panel unlocks first, then the capture starts.
     let capture_after_unlock = signal(false);
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     effect(move || {
         if s.unlocked() && capture_after_unlock.get() {
             capture_after_unlock.set(false);
@@ -49,8 +49,9 @@ fn content(s: Store) -> impl IntoElement {
         }))
         .child(when(move || s.projection.with(|p| p.exists), move || footer(s, capture_after_unlock)))
 }
-/// The panel closes while the user selects; the main window runs the capture and shows the result.
-#[cfg(target_os = "macos")]
+/// The panel closes while the user selects; the main window runs the capture and shows the result (Linux: in its Add
+/// Account sheet, where the user saves what was found).
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn start_capture() {
     crate::desktop::close_panel();
     crate::platform::request_capture();
@@ -154,7 +155,7 @@ fn unlocked(s: Store) -> impl IntoElement {
                             })
                             // Escape leaves the search field before the window sees it: the panel closes at once.
                             .on_key_press(|key: &str| {
-                                #[cfg(target_os = "macos")]
+                                #[cfg(any(target_os = "macos", target_os = "linux"))]
                                 if key == "Escape" {
                                     crate::desktop::close_panel();
                                 }
@@ -366,7 +367,7 @@ fn footer(s: Store, capture_after_unlock: Signal<bool>) -> impl IntoElement {
                 // it is set up, else the password field), and the capture starts once it is unlocked.
                 footer_button(move || s.label("Add account via screenshot"))
                     .on_press(move || {
-                        #[cfg(target_os = "macos")]
+                        #[cfg(any(target_os = "macos", target_os = "linux"))]
                         {
                             if s.unlocked() {
                                 start_capture();
@@ -392,45 +393,47 @@ fn footer(s: Store, capture_after_unlock: Signal<bool>) -> impl IntoElement {
             .child(when(
                 move || s.unlocked() && s.projection.with(|p| !p.categories.is_empty()),
                 move || {
-                    footer_button(move || s.label("Menu Bar Accounts"))
-                        .on_press(move || {
-                            let current = s.category.get();
-                            let mut items = vec![
-                                MenuItem::new(s.label("All").to_string())
-                                    .checked(current.is_none())
-                                    .on_select(move || s.update_preferences(|p| p.menu_bar_category = None)),
-                                MenuItem::separator(),
-                            ];
-                            items.extend(s.projection.with(|p| {
-                                p.categories
-                                    .iter()
-                                    .map(|c| {
-                                        let id = c.id;
-                                        MenuItem::new(c.name.clone())
-                                            .checked(current == Some(id))
-                                            .on_select(move || s.update_preferences(move |p| p.menu_bar_category = Some(id)))
-                                    })
-                                    .collect::<Vec<_>>()
-                            }));
-                            show_menu(s, items, None);
+                    footer_button(move || {
+                        s.label(if crate::chrome::look() == crate::chrome::Look::Mac { "Menu Bar Accounts" } else { "Tray Accounts" })
+                    })
+                    .on_press(move || {
+                        let current = s.category.get();
+                        let mut items = vec![
+                            MenuItem::new(s.label("All").to_string())
+                                .checked(current.is_none())
+                                .on_select(move || s.update_preferences(|p| p.menu_bar_category = None)),
+                            MenuItem::separator(),
+                        ];
+                        items.extend(s.projection.with(|p| {
+                            p.categories
+                                .iter()
+                                .map(|c| {
+                                    let id = c.id;
+                                    MenuItem::new(c.name.clone())
+                                        .checked(current == Some(id))
+                                        .on_select(move || s.update_preferences(move |p| p.menu_bar_category = Some(id)))
+                                })
+                                .collect::<Vec<_>>()
+                        }));
+                        show_menu(s, items, None);
+                    })
+                    .child(
+                        text(move || {
+                            s.category
+                                .get()
+                                .and_then(|id| {
+                                    s.projection
+                                        .with(|p| p.categories.iter().find(|c| c.id == id).map(|c| SharedString::from(c.name.clone())))
+                                })
+                                .unwrap_or_else(|| s.label("All"))
                         })
-                        .child(
-                            text(move || {
-                                s.category
-                                    .get()
-                                    .and_then(|id| {
-                                        s.projection
-                                            .with(|p| p.categories.iter().find(|c| c.id == id).map(|c| SharedString::from(c.name.clone())))
-                                    })
-                                    .unwrap_or_else(|| s.label("All"))
-                            })
-                            .max_w(px(150.0))
-                            .number_of_lines(1)
-                            .text_size(px(12.0))
-                            .font_weight(FontWeight::MEDIUM),
-                        )
-                        // The name, then an 8pt semibold chevron.up.chevron.down.
-                        .child(crate::icons::symbol_weight(Icon::ChevronUpDown, 8.0, 0.3, move || theme().muted_foreground))
+                        .max_w(px(150.0))
+                        .number_of_lines(1)
+                        .text_size(px(12.0))
+                        .font_weight(FontWeight::MEDIUM),
+                    )
+                    // The name, then an 8pt semibold chevron.up.chevron.down.
+                    .child(crate::icons::symbol_weight(Icon::ChevronUpDown, 8.0, 0.3, move || theme().muted_foreground))
                 },
             ))
             .child(spacer())

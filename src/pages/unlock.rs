@@ -151,7 +151,7 @@ fn capsule_password(s: Store, width: f32) -> impl IntoElement {
             .on_submit(move |_: &str| s.unlock())
             // In the menu bar panel, Escape closes it at once (the field takes Escape before the window sees it).
             .on_key_press(move |key: &str| {
-                #[cfg(target_os = "macos")]
+                #[cfg(any(target_os = "macos", target_os = "linux"))]
                 if key == "Escape" && s.surface == crate::store::Surface::Panel {
                     crate::desktop::close_panel();
                 }

@@ -18,7 +18,8 @@ marked *coded* are written and untested on a real system. The interface shows a 
 | Lock on sleep, screen lock, user switch | Yes | Coded (`WM_WTSSESSION_CHANGE`, power broadcasts) | Coded (logind, screensaver) |
 | Auto-lock on app input | Yes | Partial (input inside the page only) | Partial |
 | Secret clipboard | Yes | Coded (excluded from history and cloud clipboard) | Coded (password-manager hint, no PRIMARY) |
-| Menu bar / tray panel, global shortcuts, settings window | Yes | Not yet wired (NSH supports them) | Not yet wired (shortcuts via the GlobalShortcuts portal) |
+| Menu bar / tray panel | Yes | Not yet wired (NSH supports it) | Yes (StatusNotifierItem) |
+| Global shortcuts, settings window | Yes | Not yet wired (NSH supports them) | Not yet wired (shortcuts via the GlobalShortcuts portal); Settings is a dialog |
 | Launch at login, background launch | Yes | Not yet | Not yet |
 | Select a QR code on screen; camera | Yes | Not yet | Yes (the Screenshot and Camera portals) |
 | Launchers (Alfred, Raycast, Tinycast) | Yes | — | — |
@@ -40,12 +41,18 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
 
 - Checked on Arch Linux with Hyprland 0.56 (Omarchy) and GTK 4.24: the build, every test (`make ci`'s steps and
   `nsh test --target linux`), first launch, creating, locking and unlocking a vault, adding accounts by selecting a QR
-  code on screen and with the camera, and the window in tiled and floating layouts. Other desktops are untested.
+  code on screen and with the camera, the tray icon and its panel, and the window in tiled and floating layouts. Other
+  desktops are untested.
 - Selecting a QR code on screen uses the desktop portal's interactive screenshot: the desktop's own tool picks the area
   (`slurp` on Hyprland, the screenshot tool on GNOME and KDE). Without a Screenshot portal, Safay says it can't take a
   screenshot.
 - The camera goes through the Camera portal, which may ask for permission first, and PipeWire.
 - There is no least window size: tiling compositors give a window the tile they choose, so the layout narrows instead.
+- The tray icon is a StatusNotifierItem: Plasma, Waybar and Quickshell (Omarchy) show it; GNOME needs the AppIndicator
+  extension. A click opens the quick panel, its menu has "Open Safay", "Settings" and "Quit". While the icon shows,
+  closing the main window keeps Safay in the tray. Wayland lets no app place a window: on Hyprland the panel opens at
+  the focused monitor's top right, under its bar (a window rule over Hyprland's socket); elsewhere where the compositor
+  puts it, usually the center. The panel is at least 430 pt tall and the list scrolls past nine rows.
 - The window buttons follow the desktop's `gtk-decoration-layout`. On a tiling desktop that also draws title bars on
   floating windows (Omarchy), a floating Safay shows two sets; `gsettings set org.gnome.desktop.wm.preferences
   button-layout 'appmenu:'` removes GTK's.
@@ -64,8 +71,9 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
 
 1. Run the build and `nsh test --target windows` on a real Windows system, and Linux on GNOME and KDE; check the title
    bar areas and window chrome.
-2. Enable `src/desktop.rs` on both platforms (NSH's tray, windows and global shortcuts work there), dispatch the Dock
-   and pointer calls per platform, and turn on `supports::TRAY`, `SETTINGS_WINDOW` and `GLOBAL_HOTKEYS`.
+2. Windows: enable the desktop integration (NSH's tray, windows and global shortcuts work there), as Linux's
+   `src/desktop_linux.rs` does for the tray, and turn on `supports::TRAY`. Both: `SETTINGS_WINDOW` and
+   `GLOBAL_HOTKEYS`.
 3. Store shortcuts in a platform-neutral form (today they are macOS key codes and Carbon modifiers); turn on launch
    at login (NSH's login item covers the Windows `Run` key and Linux autostart).
 4. Windows Hello, only as a real key release through `KeyCredentialManager` or a TPM-backed key; never a yes/no check.

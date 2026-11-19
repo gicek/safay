@@ -274,6 +274,31 @@ fn settings_show_default_global_shortcuts_and_login_options() {
     app.wait_for("⌥⌘Z").unwrap();
     app.wait_for("⌥⌘X").unwrap();
 }
+/// Linux has a tray, not a menu bar: its switch and the panel's account scope are named for it, and nothing for login
+/// items or shortcuts shows yet.
+#[cfg(target_os = "linux")]
+#[test]
+fn settings_offer_the_tray_icon_on_linux() {
+    let mut config = EngineConfig::new(Root::of::<safay::FixtureApp>());
+    config.viewport = Size::new(px(1040.0), px(720.0));
+    config.storage = Some(MemoryStorage::new(std::iter::empty::<(String, String)>()));
+    config.clipboard = Some(Arc::new(MemoryClipboard::default()));
+    config.clock = Clock::manual(SystemTime::UNIX_EPOCH);
+    config.network = None;
+    config.data_dir = None;
+    config.cache = nsh_engine::CacheOptions::off();
+    config.environment.os = nsh_core::platform::Os::Linux;
+    config.environment.idiom = nsh_core::platform::Idiom::Desktop;
+    let mut app = Headless::start(config).unwrap();
+    create(&mut app);
+    app.press("role:button[Settings]").unwrap();
+    app.wait_for("Tray Icon").unwrap();
+    app.wait_for("Tray Accounts").unwrap();
+    let texts = app.screen().texts();
+    for absent in ["Menu Bar Accounts", "Start in Menu Bar", "Shortcuts"] {
+        assert!(!texts.contains(&absent), "{absent} shows on Linux");
+    }
+}
 #[cfg(target_os = "macos")]
 #[test]
 fn about_shows_updates_disabled_without_an_update_feed() {

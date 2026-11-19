@@ -1449,7 +1449,7 @@ impl Store {
             });
         }
         // The real host (also `--preview`, whose data stays in memory) integrates with the system; NSH test runners don't.
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         if crate::hosted() && self.surface == Surface::Main {
             crate::desktop::apply(p, language);
         }
