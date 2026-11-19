@@ -134,7 +134,8 @@ changed by code. The manifest must carry a valid Ed25519 signature from Safay's 
 higher version; the archive is checked against the manifest's SHA-256 and size while it streams, and the new app must
 carry this app's ID and executable. On macOS its code signature is verified too before the bundle is replaced; Linux and
 Windows packages carry no code signature, so the manifest's signature and the archive's hash are what vouch for them.
-Safay replaces itself only where the user can write; installed elsewhere, it offers the new version as a download.
+On Linux and Windows, Safay replaces itself only where the user can write; installed elsewhere, it offers the new
+version as a download. On macOS an app that cannot be replaced reports it as soon as the update downloads.
 Requests go only to the update source over HTTPS and carry no vault or device information. Automatic checks start only
 after the user agrees on the second launch.
 

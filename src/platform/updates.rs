@@ -6,9 +6,10 @@
 //! The source and the key come from the package, never from code: `scripts/package.py` writes
 //! `nsh/assets/nsh-updater.json` (`url`, `publicKey`, id, version) and `nsh/app.json` into the package (under
 //! `Contents/Resources` on macOS, beside the executable elsewhere), which `Installation::current` requires; development
-//! builds have neither, so nothing here runs. An app where the user cannot write (a system location, a package
-//! manager's) is not replaced: the update is offered as a download instead ([`Updater::read_only`]). Requests go only to that
-//! URL and the archive it names (HTTPS, redirects HTTPS only, size limits); nothing about the vault is sent.
+//! builds have neither, so nothing here runs. On Linux and Windows an app where the user cannot write (a system
+//! location, a package manager's) is not replaced: the update is offered as a download instead
+//! ([`Updater::read_only`]). Requests go only to that URL and the archive it names (HTTPS, redirects HTTPS only, size
+//! limits); nothing about the vault is sent.
 //!
 //! One updater per process: the main window and Settings read [`state`] and call the actions; work runs on its own
 //! threads. A verified download is unpacked and checked beside the app at once (`Installation::stage`, which includes
@@ -93,7 +94,9 @@ struct Inner {
 
 impl Updater {
     pub fn new(config: Config, installation: Option<Installation>, downloads: PathBuf, fetch: Arc<dyn Fetch>) -> Self {
-        let read_only = installation.as_ref().is_some_and(|i| !i.can_install());
+        // Linux and Windows only: a folder unpacked into a system location or installed by a package manager. macOS keeps
+        // its own flow: the download is staged beside the app, and an app that cannot be replaced reports it then.
+        let read_only = !cfg!(target_os = "macos") && installation.as_ref().is_some_and(|i| !i.can_install());
         Self { config, installation, read_only, downloads, fetch, inner: Mutex::new(Inner::default()) }
     }
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
@@ -525,7 +528,8 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
-    #[cfg(unix)]
+    // macOS never offers a download instead (`Updater::new`).
+    #[cfg(all(unix, not(target_os = "macos")))]
     #[test]
     fn an_app_where_the_user_cannot_write_is_offered_as_a_download() {
         use std::os::unix::fs::PermissionsExt;
