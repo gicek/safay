@@ -203,6 +203,78 @@ pub fn enable_remote_push() {
         let _: () = unsafe { msg_send![&*app, registerForRemoteNotifications] };
     });
 }
+/// NSH's own `constrainFrameRect:toScreen:` on its window class, kept to call from [`constrain_to_title_bar_display`].
+static CONSTRAIN: std::sync::OnceLock<nsh_platform_macos::objc2::runtime::Imp> = std::sync::OnceLock::new();
+type Constrain = unsafe extern "C-unwind" fn(
+    *mut nsh_platform_macos::objc2::runtime::AnyObject,
+    nsh_platform_macos::objc2::runtime::Sel,
+    nsh_platform_macos::objc2_foundation::NSRect,
+    *mut nsh_platform_macos::objc2_app_kit::NSScreen,
+) -> nsh_platform_macos::objc2_foundation::NSRect;
+
+/// The display that holds the middle of `frame`'s top edge (its title bar), in AppKit's screen coordinates; `None`
+/// when that point is on no display.
+fn display_under_title_bar(
+    frame: nsh_platform_macos::objc2_foundation::NSRect,
+) -> Option<Retained<nsh_platform_macos::objc2_app_kit::NSScreen>> {
+    use nsh_platform_macos::{objc2::MainThreadMarker, objc2_app_kit::NSScreen};
+    let mtm = MainThreadMarker::new()?;
+    let (x, y) = (frame.origin.x + frame.size.width / 2.0, frame.origin.y + frame.size.height - 1.0);
+    NSScreen::screens(mtm).into_iter().find(|screen| {
+        let area = screen.frame();
+        (area.origin.x..area.origin.x + area.size.width).contains(&x) && (area.origin.y..area.origin.y + area.size.height).contains(&y)
+    })
+}
+
+/// Constrains a window to the display its title bar is on, rather than the one that holds most of it.
+unsafe extern "C-unwind" fn constrain_to_title_bar_display(
+    this: *mut nsh_platform_macos::objc2::runtime::AnyObject,
+    cmd: nsh_platform_macos::objc2::runtime::Sel,
+    rect: nsh_platform_macos::objc2_foundation::NSRect,
+    screen: *mut nsh_platform_macos::objc2_app_kit::NSScreen,
+) -> nsh_platform_macos::objc2_foundation::NSRect {
+    let Some(original) = CONSTRAIN.get() else { return rect };
+    // SAFETY: `CONSTRAIN` holds the implementation this one replaced, of the same selector and signature.
+    let original: Constrain = unsafe { std::mem::transmute(*original) };
+    let title_bar = display_under_title_bar(rect);
+    let screen = title_bar.as_ref().map_or(screen, |s| Retained::as_ptr(s).cast_mut());
+    // SAFETY: the arguments AppKit passed, with a display that lives (`title_bar`) until the call returns.
+    unsafe { original(this, cmd, rect, screen) }
+}
+
+/// Lets a window be dragged onto a display above or below the one it is on.
+///
+/// NSH moves a window dragged by a `windowDrag` view or a hidden title bar itself, and constrains every step to the
+/// window's display (`move_window` in nsh-platform-macos, since #2295), the one that holds most of it: its top then
+/// stops at that display's menu bar, so it never reaches a display placed above, and a window whose title bar has just
+/// crossed is pushed back when the button goes up. This wraps the constraint on NSH's window class so it uses the
+/// display the title bar is on, the rule AppKit's own window drag keeps (a title bar never goes under the menu bar of the
+/// display it is on). A frame whose title bar is on no display keeps the display AppKit passed. Only a method the class
+/// implements itself is wrapped, never NSWindow's. Remove once NSH constrains to that display. Any thread.
+pub fn drag_windows_across_displays() {
+    use nsh_platform_macos::objc2::{runtime::AnyClass, sel};
+    static INSTALLED: std::sync::Once = std::sync::Once::new();
+    dispatch2::DispatchQueue::main().exec_async(|| {
+        INSTALLED.call_once(|| {
+            let Some(class) = AnyClass::get(c"NshWindow") else { return };
+            let selector = sel!(constrainFrameRect:toScreen:);
+            if !class.instance_methods().iter().any(|method| method.name() == selector) {
+                return;
+            }
+            let Some(method) = class.instance_method(selector) else { return };
+            if CONSTRAIN.set(method.implementation()).is_err() {
+                return;
+            }
+            // SAFETY: the replacement has the selector's signature (`{CGRect}@:{CGRect}@`: self, _cmd, the frame, the
+            // display) and calls the implementation it replaces, kept in `CONSTRAIN` before the swap.
+            unsafe {
+                let imp: nsh_platform_macos::objc2::runtime::Imp = std::mem::transmute(constrain_to_title_bar_display as Constrain);
+                method.set_implementation(imp);
+            }
+        });
+    });
+}
+
 /// Where the pointer is, in AppKit's screen coordinates (from the primary display's bottom left). NSH reports the
 /// displays, not the pointer.
 pub fn pointer() -> Option<(f64, f64)> {

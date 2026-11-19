@@ -104,6 +104,9 @@ pub fn install(controller: Arc<Controller>, preview: bool) {
         set_timeout(Duration::from_millis(800), move || open_update(version.clone(), notes.clone()));
     }
 
+    // Dragging a window onto a display above or below its own (NSH stops it at its display's menu bar).
+    platform::macos::drag_windows_across_displays();
+
     let main = main_window();
     let mut attributes = WindowAttributes::default();
     attributes.min_size = Some(Some(size(px(MAIN_MIN.0), px(MAIN_MIN.1))));
