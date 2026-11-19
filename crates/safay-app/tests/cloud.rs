@@ -120,17 +120,17 @@ fn webdav_backup_restore_conflict_and_failures() {
 
     let endpoint = Endpoint::parse(BASE, Transport::RequireHttps).unwrap();
     // Setting up: a wrong password is caught before anything is stored; plain HTTP needs consent.
-    assert_eq!(cloud::connect(Connection::webdav(endpoint.clone(), "alice".into(), "wrong".into())), Err(SyncError::SignIn));
+    assert_eq!(cloud::connect(Connection::webdav(endpoint.clone(), "alice", "wrong")), Err(SyncError::SignIn));
     assert_eq!(cloud::endpoint("192.168.1.20/dav", false), Err(cloud::AddressError::NeedsInsecureConsent));
     assert!(cloud::endpoint("192.168.1.20/dav", true).is_ok());
     assert!(cloud::endpoint("dav.example.com/dav", false).unwrap().is_secure());
-    let linked = cloud::connect(Connection::webdav(endpoint.clone(), "alice".into(), "pw".into())).unwrap();
+    let linked = cloud::connect(Connection::webdav(endpoint.clone(), "alice", "pw")).unwrap();
     assert!(matches!(&linked, Location::Cloud { provider: Provider::Webdav, .. }));
     if let Location::Cloud { credential, .. } = &linked {
         assert!(credentials.load(credential).is_some());
         cloud::forget(credential);
     }
-    credentials.save("test-webdav", &Connection::webdav(endpoint, "alice".into(), "pw".into()).to_bytes()).unwrap();
+    credentials.save("test-webdav", &Connection::webdav(endpoint, "alice", "pw").to_bytes()).unwrap();
     a.add("Alpha", "JBSWY3DPEHPK3PXP");
     sync::link(&a.c, a.c.epoch(), location()).unwrap();
     assert_eq!(a.run(), Ok(Status::Synced));
@@ -174,7 +174,7 @@ fn webdav_backup_restore_conflict_and_failures() {
     // under a new credential without a new sign-in.
     server.dav.lock().unwrap().authorization = AUTH.into();
     let endpoint = Endpoint::parse(BASE, Transport::RequireHttps).unwrap();
-    credentials.save("test-restore", &Connection::webdav(endpoint, "alice".into(), "pw".into()).to_bytes()).unwrap();
+    credentials.save("test-restore", &Connection::webdav(endpoint, "alice", "pw").to_bytes()).unwrap();
     let sent = server.dav.lock().unwrap().requests.len();
     let kept = cloud::take("test-restore").expect("stored");
     assert!(credentials.load("test-restore").is_none());

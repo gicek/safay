@@ -10,13 +10,16 @@ application layer owns the single unlocked session; the interface is written wit
 | Path | Contents |
 |---|---|
 | `crates/safay-core` | Vault format and encryption, TOTP, Steam Guard, and Battle.net codes, Base32, `otpauth://` and Google migration parsing, canonical account fields, search and masking, password rules, imports (Safay exports and other apps' backups and CSV exports, `import`), sync decisions, site-icon fetch planning. No I/O. |
-| `crates/cloudset` | Sans-IO cloud storage client: WebDAV, Nextcloud, Dropbox, OneDrive, Google Drive. Builds requests, parses responses, advances state machines; the caller sends the requests. See its [README](../crates/cloudset/README.md). |
 | `crates/safay-app` | The session and its controller, storage (`Repository`), preferences, sync and cloud backends, the launcher search index, the secret clipboard port. No UI and no implicit production I/O. |
 | `src/` | The NSH application: pages, components, the per-window `Store`, desktop windows, platform adapters. |
 | `golden/` | Behaviour baseline: JSON vectors every core change is checked against (`crates/safay-core/tests/golden.rs`). |
 | `integrations/` | Launcher integrations: the Raycast/Tinycast extension and the Alfred workflow. |
 | `previews/` | Debug-only, in-memory entry points for UI tests and screenshots. |
 | `locales/`, `theme*.json`, `assets/` | Translations, design tokens per platform, fonts and images. |
+
+Cloud storage protocols (WebDAV, Nextcloud, Dropbox, OneDrive, Google Drive) come from the
+[cloudset](https://crates.io/crates/cloudset) crate, a sans-IO client: it builds requests, parses responses and
+advances state machines, and `src/platform/http.rs` sends the requests.
 
 ## Session model
 

@@ -139,7 +139,7 @@ impl Session {
     }
 
     fn done<T>(&mut self, value: T) -> Step<T> {
-        Step::Done(Done { value, connection: self.connection.take() })
+        Step::Done(Done::new(value).with_connection(self.connection.take()))
     }
 }
 
@@ -367,6 +367,7 @@ pub fn l10n_key(error: &CloudError) -> &'static str {
         CloudError::AuthorizationDenied => "err.cloud.authorization_denied",
         CloudError::StateMismatch => "err.cloud.authorization_failed",
         CloudError::OutOfOrder => "err.cloud.internal",
+        _ => "err.cloud.internal",
     }
 }
 
@@ -375,7 +376,7 @@ mod tests {
     use std::time::{Duration, UNIX_EPOCH};
 
     use cloudset::testing::{BASE, MemoryDav};
-    use cloudset::{ClientConfig, Endpoint, Method, Transport, drive};
+    use cloudset::{ClientConfig, Endpoint, Method, Transport, run as drive};
 
     use super::*;
 
@@ -383,7 +384,7 @@ mod tests {
 
     fn client() -> Client {
         let endpoint = Endpoint::parse(BASE, Transport::RequireHttps).unwrap();
-        Client::new(Connection::webdav(endpoint, "alice".into(), "pw".into()), ClientConfig::new("Safay-test"))
+        Client::new(Connection::webdav(endpoint, "alice", "pw"), ClientConfig::new("Safay-test"))
     }
 
     fn folder() -> RemotePath {

@@ -36,14 +36,16 @@ impl Provider {
             Provider::GoogleDrive => "Google Drive",
         }
     }
-    pub fn of(kind: ProviderKind) -> Self {
-        match kind {
+    /// The location kind for a connection's provider; `None` for a provider this app does not offer.
+    pub fn of(kind: ProviderKind) -> Option<Self> {
+        Some(match kind {
             ProviderKind::WebDav => Provider::Webdav,
             ProviderKind::Nextcloud => Provider::Nextcloud,
             ProviderKind::Dropbox => Provider::Dropbox,
             ProviderKind::OneDrive => Provider::Onedrive,
             ProviderKind::GoogleDrive => Provider::GoogleDrive,
-        }
+            _ => return None,
+        })
     }
 }
 
@@ -295,6 +297,7 @@ pub fn endpoint(address: &str, allow_http: bool) -> Result<cloudset::Endpoint, A
 
 /// Checks a new connection by reading its root, then stores it under a fresh credential ID. Returns the location to link.
 pub fn connect(connection: Connection) -> Result<crate::sync::Location, SyncError> {
+    let provider = Provider::of(connection.provider()).ok_or(SyncError::Protocol)?;
     let services = services()?;
     let pin = connection.certificate_pin();
     let client = Client::new(connection.clone(), ClientConfig::new(services.user_agent.clone()));
@@ -302,11 +305,11 @@ pub fn connect(connection: Connection) -> Result<crate::sync::Location, SyncErro
     let credential = uuid::Uuid::new_v4().to_string();
     services.credentials.save(&credential, &connection.to_bytes())?;
     let account = match connection.provider() {
-        ProviderKind::WebDav | ProviderKind::Nextcloud => format!("{} · {}", connection.username(), connection.host()),
-        _ => connection.username().to_owned(),
+        ProviderKind::WebDav | ProviderKind::Nextcloud => format!("{} · {}", connection.account(), connection.host()),
+        _ => connection.account().to_owned(),
     };
     let pinned = connection.certificate_pin().is_some();
-    Ok(crate::sync::Location::Cloud { provider: Provider::of(connection.provider()), account, credential, pinned })
+    Ok(crate::sync::Location::Cloud { provider, account, credential, pinned })
 }
 
 /// A server certificate the user confirmed (its SHA-256), for requests to `server`'s origin.

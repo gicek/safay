@@ -24,7 +24,7 @@ pub fn fetch(website: &str) -> Option<Vec<u8>> {
         if started.elapsed() > Duration::from_secs(u64::from(site_icon::HOST_TIMEOUT_SECONDS)) {
             return None;
         }
-        let http = HttpRequest { method: Method::Get, url: request.url.clone(), headers: Vec::new(), body: Vec::new() };
+        let http = HttpRequest::new(Method::Get, request.url.clone());
         let mut body = Vec::new();
         let mut step = match executor.execute_with_limit(http, None, request.max_bytes as usize) {
             Ok(response) => {

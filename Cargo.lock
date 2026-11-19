@@ -642,10 +642,11 @@ dependencies = [
 
 [[package]]
 name = "cloudset"
-version = "0.1.0"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf8bdae3c20a7b3b095caedcb36901e1b88353a3be55d92f539418837505276c"
 dependencies = [
  "base64 0.23.1",
- "cloudset",
  "httpdate",
  "percent-encoding",
  "quick-xml",

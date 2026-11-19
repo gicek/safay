@@ -2,7 +2,7 @@
 //! system's certificate verification. No redirects (3xx goes back to the core), no cookies, no cache, bodies read only up to
 //! the core's limit, fixed timeouts. Never logs URLs, headers or bodies.
 use safay_app::cloud::{Http, TransportError};
-use safay_app::cloudset::{CertificatePin, HttpRequest, HttpResponse, Method};
+use safay_app::cloudset::{CertificatePin, HttpRequest, HttpResponse};
 use std::{collections::HashMap, io::Read, sync::Mutex, time::Duration};
 
 pub struct Executor {
@@ -70,15 +70,7 @@ impl Executor {
             None => self.agent.clone(),
         };
         let url = request.url.clone();
-        let mut builder = ureq::http::Request::builder().method(match request.method {
-            Method::Get => "GET",
-            Method::Put => "PUT",
-            Method::Patch => "PATCH",
-            Method::Post => "POST",
-            Method::Delete => "DELETE",
-            Method::Propfind => "PROPFIND",
-            Method::Mkcol => "MKCOL",
-        });
+        let mut builder = ureq::http::Request::builder().method(request.method.as_str());
         builder = builder.uri(request.url.as_str());
         for (name, value) in &request.headers {
             builder = builder.header(name.as_str(), value.as_str());
@@ -94,7 +86,7 @@ impl Executor {
             _ => TransportError::Unreachable,
         })?;
         let status = response.status().as_u16();
-        let headers = response
+        let headers: Vec<(String, String)> = response
             .headers()
             .iter()
             .filter_map(|(name, value)| value.to_str().ok().map(|v| (name.as_str().to_owned(), v.to_owned())))
@@ -102,13 +94,14 @@ impl Executor {
         // Read at most limit + 1 bytes: the core reports anything longer as too large.
         let mut body = Vec::new();
         response.body_mut().as_reader().take(limit as u64 + 1).read_to_end(&mut body).map_err(|_| TransportError::Unreachable)?;
-        Ok(HttpResponse { status, headers, body })
+        Ok(HttpResponse::new(status).with_headers(headers).with_body(body))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use safay_app::cloudset::Method;
     use std::{
         io::{BufRead, BufReader, Write},
         net::TcpListener,
@@ -131,7 +124,7 @@ mod tests {
         address
     }
     fn get(url: String) -> HttpRequest {
-        HttpRequest { method: Method::Get, url, headers: vec![("X-Test".into(), "1".into())], body: Vec::new() }
+        HttpRequest::new(Method::Get, url).with_header("X-Test", "1")
     }
 
     #[test]
@@ -158,7 +151,7 @@ mod tests {
         let executor = Executor::new(Duration::from_secs(5), Duration::from_secs(5), 1024);
         for method in [Method::Propfind, Method::Mkcol] {
             let url = serve(b"HTTP/1.1 207 Multi-Status\r\nContent-Length: 0\r\n\r\n".to_vec());
-            let request = HttpRequest { method, url, headers: vec![("Depth".into(), "0".into())], body: b"<propfind/>".to_vec() };
+            let request = HttpRequest::new(method, url).with_header("Depth", "0").with_body(b"<propfind/>".to_vec());
             assert_eq!(executor.execute(request, None).unwrap().status, 207);
         }
     }
