@@ -21,7 +21,7 @@ marked *coded* are written and untested on a real system. The interface shows a 
 | Menu bar / tray panel | Yes | Not yet wired (NSH supports it) | Yes (StatusNotifierItem) |
 | Global shortcuts | Yes | Not yet wired (NSH supports them) | Yes (the GlobalShortcuts portal) |
 | Settings window | Yes | A dialog over the main window | A dialog over the main window |
-| Launch at login, background launch | Yes | Not yet | Not yet |
+| Launch at login, background launch | Yes | Not yet | Yes (XDG autostart; "Start in Tray") |
 | Select a QR code on screen; camera | Yes | Not yet | Yes (the Screenshot and Camera portals) |
 | Launchers (Alfred, Raycast, Tinycast) | Yes | — | — |
 | App updates | Yes (signed packages with an update source) | Not yet | Not yet |
@@ -42,8 +42,8 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
 
 - Checked on Arch Linux with Hyprland 0.56 (Omarchy) and GTK 4.24: the build, every test (`make ci`'s steps and
   `nsh test --target linux`), first launch, creating, locking and unlocking a vault, adding accounts by selecting a QR
-  code on screen and with the camera, the tray icon and its panel, the global shortcuts, and the window in tiled and
-  floating layouts. Other desktops are untested.
+  code on screen and with the camera, the tray icon and its panel, the global shortcuts, launching at login and in the
+  tray, and the window in tiled and floating layouts. Other desktops are untested.
 - Selecting a QR code on screen uses the desktop portal's interactive screenshot: the desktop's own tool picks the area
   (`slurp` on Hyprland, the screenshot tool on GNOME and KDE). Without a Screenshot portal, Safay says it can't take a
   screenshot.
@@ -64,7 +64,11 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
   replacing the last; a do-not-disturb mode hides them. They take the app's icon from its desktop entry, which has one
   when `<app ID>.png` sits beside the executable (packages, `make run`, `make preview`). The window's own toast is the
   same as on macOS.
-- Safay runs once: launching it again, or opening a `safay://` link, brings the running one forward.
+- Safay runs once: launching it again, or opening a `safay://` link, brings the running one forward, out of the tray too
+  (a second launch that finds the vault in use hands itself to the running Safay).
+- "Launch at Login" writes an XDG autostart entry, `~/.config/autostart/<app ID>.desktop`, which GNOME, Plasma and
+  systemd's xdg-autostart (Omarchy) start at login. "Start in Tray" makes the main window start hidden, with only the
+  tray icon, without showing it first.
 - The window buttons follow the desktop's `gtk-decoration-layout`. On a tiling desktop that also draws title bars on
   floating windows (Omarchy), a floating Safay shows two sets; `gsettings set org.gnome.desktop.wm.preferences
   button-layout 'appmenu:'` removes GTK's.
@@ -86,6 +90,6 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
 2. Windows: enable the desktop integration (NSH's tray, windows and global shortcuts work there), as Linux's
     `src/desktop_linux.rs` does, and turn on `supports::TRAY` and `GLOBAL_HOTKEYS`. Both: `SETTINGS_WINDOW`.
 3. Store shortcuts in a platform-neutral form (today they are macOS key codes and Carbon modifiers); turn on launch
-   at login (NSH's login item covers the Windows `Run` key and Linux autostart).
+   at login on Windows (NSH's login item covers its `Run` key).
 4. Windows Hello, only as a real key release through `KeyCredentialManager` or a TPM-backed key; never a yes/no check.
 5. Verify lock events, the clipboard, file dialogs and backup folders under sync clients on each system.

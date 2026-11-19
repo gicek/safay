@@ -38,6 +38,10 @@ fn main() -> impl std::process::Termination {
         loop {
             match DiskRepository::open(directory.clone()) {
                 Ok(repo) => break Box::new(repo),
+                // Linux: Safay is running (the launcher or its autostart entry started it again). It is told, and
+                // brings its main window back, out of the tray too; this launch ends.
+                #[cfg(target_os = "linux")]
+                Err(_) if attempts == 0 && safay::platform::linux::hand_to_running() => std::process::exit(0),
                 Err(_) if attempts < 50 => {
                     attempts += 1;
                     std::thread::sleep(std::time::Duration::from_millis(100));
@@ -62,6 +66,10 @@ fn main() -> impl std::process::Termination {
         }
     };
     safay::platform::install_network(preview);
+    // Linux: "Start in Tray" makes the main window start hidden, with only the tray icon, read before the window is made
+    // so it never flashes (macOS hides it once the preferences load, `desktop::apply`).
+    #[cfg(target_os = "linux")]
+    let start_hidden = controller.run(controller.epoch(), |s| Ok(s.preferences())).is_ok_and(|p| p.background_launch && p.tray_icon);
     // AppKit's traffic-light size, read here on the main thread for the title bar the engine thread sets up.
     #[cfg(target_os = "macos")]
     safay::platform::macos::traffic_light_height();
@@ -77,13 +85,22 @@ fn main() -> impl std::process::Termination {
     native::set_ui_sets(vec![nsh_base::registry(), safay::__nsh_native_module()]);
     let theme = nsh_base::Theme::from_json(include_str!("../theme.json")).expect("bundled theme");
     let code = native::run_app(
-        native::AppSource::Rust(
-            native::Root::of::<safay::App>()
+        native::AppSource::Rust({
+            let root = native::Root::of::<safay::App>()
                 .app_id(safay::platform::APP_ID)
                 .url_schemes([safay::platform::URL_SCHEME])
                 .tokens(theme.into_tokens())
-                .capabilities(safay::platform::capabilities()),
-        ),
+                .capabilities(safay::platform::capabilities());
+            #[cfg(target_os = "linux")]
+            let root = if start_hidden {
+                let mut window = nsh_core::desktop::MainWindowOptions::default();
+                window.default_visible = Some(false);
+                root.main_window(window)
+            } else {
+                root
+            };
+            root
+        }),
         native::AppOptions {
             title: "Safay".into(),
             app_id: safay::platform::APP_ID.into(),
@@ -95,6 +112,10 @@ fn main() -> impl std::process::Termination {
             // shortcuts ("An app id is required").
             #[cfg(target_os = "linux")]
             schemes: vec![safay::platform::URL_SCHEME.into()],
+            // Launching Safay again (the launcher, the autostart entry) reaches the running one, which brings its main
+            // window back even from the tray (`desktop::install`).
+            #[cfg(target_os = "linux")]
+            single_instance: true,
             login_item: true,
             cache: native::CacheOptions::off(),
             // The directory the vault opened in above: NSH keeps its own files there too.

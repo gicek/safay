@@ -345,20 +345,24 @@ fn general(s: Store) -> impl IntoElement {
                 .into_element(),
         ];
     // Starting without the main window needs the icon to get back to Safay: dimmed, and saying so, while it is hidden.
-    if look() == Look::Mac && crate::platform::supports::LOGIN_ITEM {
+    // Elsewhere the icon is in the tray.
+    if crate::platform::supports::LOGIN_ITEM {
+        let mac = look() == Look::Mac;
+        let start_title = if mac { "Start in Menu Bar" } else { "Start in Tray" };
         integration.push(
             row(
                 s,
-                "Start in Menu Bar",
+                start_title,
                 Some(Box::new(move || {
-                    s.label(if s.preferences.with(|p| p.tray_icon) {
-                        "When Safay starts, only the menu bar icon appears"
-                    } else {
-                        "Needs the menu bar icon"
+                    s.label(match (mac, s.preferences.with(|p| p.tray_icon)) {
+                        (true, true) => "When Safay starts, only the menu bar icon appears",
+                        (true, false) => "Needs the menu bar icon",
+                        (false, true) => "When Safay starts, only the tray icon appears",
+                        (false, false) => "Needs the tray icon",
                     })
                 })),
                 switch_control(
-                    move || s.label("Start in Menu Bar"),
+                    move || s.label(start_title),
                     move || s.preferences.get().background_launch,
                     move || s.busy.get() || !s.preferences.get().tray_icon,
                     move |v| s.update_preferences(move |p| p.background_launch = v),

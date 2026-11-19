@@ -41,8 +41,10 @@ struct Desktop {
 thread_local! {
     static DESKTOP: std::cell::Cell<Option<Desktop>> = const { std::cell::Cell::new(None) };
     static PANEL: RefCell<Option<WindowRef>> = const { RefCell::new(None) };
-    /// The main window was closed to the tray.
+    /// The main window was closed to the tray, or started there.
     static HIDDEN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// The preferences arrived once (the launch's own).
+    static LAUNCHED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 fn desktop() -> Option<Desktop> {
@@ -126,6 +128,14 @@ pub fn install(controller: Arc<Controller>, preview: bool) {
         platform::hyprland::bind_shortcuts(&bound);
     });
 
+    // Launching Safay again brings the main window forward, out of the tray too (the runner only raises a shown one).
+    spawn(async move {
+        loop {
+            let _ = next_second_instance().await;
+            open_main();
+        }
+    });
+
     // `safay://` links (the scheme `platform::URL_SCHEME`): any of them brings the main window forward. Nothing in a
     // link is read or acted on beyond that.
     spawn(async move {
@@ -146,6 +156,10 @@ pub fn apply(preferences: Preferences, language: Language) {
     }
     if d.preferences.get_untracked() != Some(preferences) {
         d.preferences.set(Some(preferences));
+    }
+    // "Start in Tray": the runner made the main window hidden (`main.rs`); it is in the tray from the start.
+    if !LAUNCHED.with(|l| l.replace(true)) && preferences.background_launch && preferences.tray_icon {
+        HIDDEN.with(|h| h.set(true));
     }
     // Hiding the icon while the main window is in the tray would leave no way back to Safay.
     if !preferences.tray_icon && HIDDEN.with(|h| h.replace(false)) {

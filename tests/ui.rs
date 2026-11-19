@@ -274,8 +274,8 @@ fn settings_show_default_global_shortcuts_and_login_options() {
     app.wait_for("⌥⌘Z").unwrap();
     app.wait_for("⌥⌘X").unwrap();
 }
-/// Linux has a tray, not a menu bar: its switch, the panel's account scope and its shortcut are named for it, and nothing
-/// for login items shows yet.
+/// Linux has a tray, not a menu bar: its switch, the panel's account scope, starting in it and its shortcut are named for
+/// it.
 #[cfg(target_os = "linux")]
 #[test]
 fn settings_offer_the_tray_icon_on_linux() {
@@ -294,6 +294,9 @@ fn settings_offer_the_tray_icon_on_linux() {
     app.press("role:button[Settings]").unwrap();
     app.wait_for("Tray Icon").unwrap();
     app.wait_for("Tray Accounts").unwrap();
+    app.wait_for("Launch at Login").unwrap();
+    app.wait_for("Start in Tray").unwrap();
+    app.wait_for("When Safay starts, only the tray icon appears").unwrap();
     let texts = app.screen().texts();
     for absent in ["Menu Bar Accounts", "Start in Menu Bar"] {
         assert!(!texts.contains(&absent), "{absent} shows on Linux");

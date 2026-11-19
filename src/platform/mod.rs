@@ -74,7 +74,7 @@ pub mod supports {
     /// System-wide shortcuts and their recorder.
     pub const GLOBAL_HOTKEYS: bool = cfg!(any(target_os = "macos", target_os = "linux"));
     /// Launch at login and background-only launch.
-    pub const LOGIN_ITEM: bool = cfg!(target_os = "macos");
+    pub const LOGIN_ITEM: bool = cfg!(any(target_os = "macos", target_os = "linux"));
     /// Hardware-protected key release (Touch ID; Windows Hello later).
     pub const BIOMETRIC: bool = cfg!(target_os = "macos");
     /// Settings in a window of its own (elsewhere a dialog over the main window).

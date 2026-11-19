@@ -96,3 +96,15 @@ fn foreground_fallback(controller: Arc<Controller>) {
         glib::ControlFlow::Continue
     });
 }
+/// Hands this launch to the Safay already running, as a second launch of a single-instance app does (GApplication's
+/// `command-line`, keyed on the app's id): the running one reports it to the app (`desktop::install`). Whether one
+/// was running and took it; when none is, the name is not kept, so the caller can wait for the instance lock.
+pub fn hand_to_running() -> bool {
+    let app = gio::Application::new(Some(super::APP_ID), gio::ApplicationFlags::HANDLES_COMMAND_LINE);
+    if app.register(None::<&gio::Cancellable>).is_err() || !app.is_remote() {
+        return false;
+    }
+    let args: Vec<String> = std::env::args().collect();
+    app.run_with_args(&args);
+    true
+}
