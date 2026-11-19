@@ -2080,7 +2080,9 @@ impl Store {
                     .await
                     .unwrap_or(Err(safay_app::sync::SyncError::Storage))
             } else if let Some(kept) = self.kept_nextcloud(&form) {
-                // The same server as a sign-in kept during this restore: reuse it; a revoked one signs in anew.
+                // The same server as a sign-in kept during this restore: reuse it; a revoked one signs in anew. Safay is
+                // already allowed, so the steps start at connecting to the account.
+                self.cloud_form.update(|f| f.allowed = true);
                 match blocking(move || cloud::reconnect(&kept)).await.unwrap_or(Err(safay_app::sync::SyncError::Storage)) {
                     Err(safay_app::sync::SyncError::SignIn) => {
                         self.restore_sign_ins.with(|k| k.invalid(Provider::Nextcloud));
