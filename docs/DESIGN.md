@@ -7,8 +7,8 @@ ring countdowns and grouped settings.
 ## One layout, native on each platform
 
 Layout, information architecture and behaviour are the same everywhere. Geometry and colour follow each platform; they
-are defined in `src/chrome.rs` and the three theme files, and pages read them through `chrome::look()`, which affects
-appearance only — never capabilities.
+are defined in `src/chrome.rs` and the three theme files, one per platform (`src/main.rs` loads it), and pages read them
+through `chrome::look()`, which affects appearance only — never capabilities. The accent is the same in all three.
 
 | | macOS (`theme.json`) | Windows (`theme-windows.json`) | Linux (`theme-linux.json`) |
 |---|---|---|---|

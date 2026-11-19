@@ -84,7 +84,14 @@ fn main() -> impl std::process::Termination {
         std::process::exit(1)
     }
     native::set_ui_sets(vec![nsh_base::registry(), safay::__nsh_native_module()]);
-    let theme = nsh_base::Theme::from_json(include_str!("../theme.json")).expect("bundled theme");
+    // Each desktop's palette (its grays and badge colors); the accent is the same in all three.
+    #[cfg(target_os = "macos")]
+    let theme = include_str!("../theme.json");
+    #[cfg(target_os = "windows")]
+    let theme = include_str!("../theme-windows.json");
+    #[cfg(target_os = "linux")]
+    let theme = include_str!("../theme-linux.json");
+    let theme = nsh_base::Theme::from_json(theme).expect("bundled theme");
     let code = native::run_app(
         native::AppSource::Rust({
             let root = native::Root::of::<safay::App>()

@@ -62,7 +62,13 @@
       "badge-6": "#2fb5c2",
       "badge-7": "#a2795a",
       "badge-foreground": "#ffffff",
-      "material": "#ebebed"
+      "material": "#ebebed",
+      "segment-track": "#e7e7e9",
+      "segment-selected": "#d5d5d8",
+      "segment-divider": "#d5d5d8",
+      "selection-inactive": "#dcdcdf",
+      "sidebar-plain": "#ebebed",
+      "sidebar-separator": "#dcdcdf"
     },
     "dark": {
       "foreground": "#ececec",
@@ -121,7 +127,13 @@
       "badge-6": "#3fc2cf",
       "badge-7": "#ad8566",
       "badge-foreground": "#ffffff",
-      "material": "#2e2e32"
+      "material": "#2e2e32",
+      "segment-track": "#3a3a3f",
+      "segment-selected": "#55555b",
+      "segment-divider": "#46464b",
+      "selection-inactive": "#46464b",
+      "sidebar-plain": "#2e2e32",
+      "sidebar-separator": "#1f1f23"
     }
   }
 }
