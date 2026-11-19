@@ -106,6 +106,7 @@ pub fn install(controller: Arc<Controller>, preview: bool) {
         set_tray(tray().icon(asset!("menubar-template.svg")).tooltip("Safay").on_click(move |_| toggle_panel()).menu([
             MenuItem::new(label("Open Safay")).on_select(open_main),
             MenuItem::new(label("Settings")).on_select(open_settings),
+            MenuItem::new(label("Check for Updates")).disabled(!platform::updates_configured()).on_select(platform::request_update_check),
             MenuItem::separator(),
             MenuItem::new(label("Quit")).on_select(platform::quit),
         ]));
@@ -200,6 +201,34 @@ pub fn open_main() {
         let main = main_window();
         main.show();
         main.focus();
+    });
+}
+
+/// Whether this engine's root set up the desktop integration: the app's own launcher does, NSH's test and preview
+/// runners do not.
+pub fn installed() -> bool {
+    desktop().is_some()
+}
+
+/// The update window: what `version` brings (`notes`, Markdown) and the choice to install it, in a window of its own
+/// with the desktop's title bar. Opening it again brings the open one forward.
+pub fn open_update(version: String, notes: Option<String>) {
+    let Some(d) = desktop() else { return };
+    d.owner.get().run(|| {
+        close_panel();
+        let mut attributes = WindowAttributes::default();
+        attributes.min_size = Some(Some(size(px(480.0), px(360.0))));
+        attributes.minimizable = Some(false);
+        attributes.maximizable = Some(false);
+        let (controller, preview) = (d.controller.get(), d.preview);
+        open_window(
+            window()
+                .id("update")
+                .title(move || i18n::tr(d.language.get(), "Software Update").to_string())
+                .default_size(size(px(560.0), px(440.0)))
+                .attributes(attributes)
+                .content(move || crate::update_window(controller.clone(), preview, version.clone(), notes.clone())),
+        );
     });
 }
 

@@ -892,6 +892,8 @@ fn updates(s: Store) -> impl IntoElement {
     use crate::platform::updates::Phase;
     // The update source is fixed per build, so whether this one updates itself is decided once.
     let configured = crate::platform::updates_configured();
+    // Installed where the user cannot write: new versions are offered as a download, never installed here.
+    let read_only = crate::platform::updates_read_only();
     let checks = move || s.preferences.with(|p| p.update_checks == Some(true));
     let phase = move || s.updates.get().unwrap_or_default();
     let busy = move || matches!(phase(), Phase::Checking | Phase::Downloading { .. } | Phase::Installing);
@@ -914,6 +916,7 @@ fn updates(s: Store) -> impl IntoElement {
         }
     };
     let action = move || match phase() {
+        Phase::Available { .. } if read_only => "Download",
         Phase::Available { .. } => "Download and Install",
         Phase::Ready { .. } => "Restart Now",
         _ => "Check Now",
@@ -935,11 +938,11 @@ fn updates(s: Store) -> impl IntoElement {
         row(
             s,
             "Download and Install Automatically",
-            help(s, "New versions install when you quit Safay"),
+            help(s, if read_only { crate::store::READ_ONLY_UPDATE } else { "New versions install when you quit Safay" }),
             switch_control(
                 move || s.label("Download and Install Automatically"),
-                move || s.preferences.with(|p| p.update_downloads),
-                move || !configured || !checks(),
+                move || s.preferences.with(|p| p.update_downloads) && !read_only,
+                move || !configured || !checks() || read_only,
                 move |v| s.update_preferences(move |p| p.update_downloads = v),
             ),
         )
@@ -950,6 +953,7 @@ fn updates(s: Store) -> impl IntoElement {
             Some(Box::new(status)),
             push_button(move || s.label(action()), Kind::Standard, false).disabled(move || !configured || busy()).on_press(move || {
                 match phase() {
+                    Phase::Available { .. } if read_only => s.open_update_download(),
                     Phase::Available { version, notes } => s.offer_update(version, notes),
                     Phase::Ready { .. } => s.restart_to_update(),
                     _ => s.check_updates(crate::store::Check::Manual),

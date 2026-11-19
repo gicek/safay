@@ -113,7 +113,9 @@ Packages go to `build/` at the repository root (untracked):
 | `make release` | `build/dist/` | Notarized app, zip and DMG, update archive and manifest: what is published |
 
 Release builds use the app ID `com.gicek.safay`; development builds use `com.gicek.safay.debug`, with their own data
-directory, keychain items and provisioning profile. `python3 scripts/package.py --out <folder>` writes elsewhere.
+directory, keychain items and provisioning profile. `python3 scripts/package.py --out <folder>` writes elsewhere. On
+Linux and Windows it writes the `Safay/` folder (the executable at its top) and its archive,
+`Safay-<version>-linux-<arch>.tar.gz` or `Safay-<version>-windows-<arch>.zip`, which is also the update archive.
 
 ### Local settings
 
@@ -159,7 +161,13 @@ writes into `build/dist/`:
 - `Safay-<version>-macos-<arch>.tar.gz`: the update archive;
 - `latest.json` and `latest.json.sig`: with an update source configured, the signed manifest with the version's
   update notes (below);
-- `Safay-<version>.env`: version, build and SHA-256 of each file.
+- `Safay-<version>-macos.env`: version, build and SHA-256 of each file.
+
+On Linux and Windows, `python3 scripts/release.py` runs the tests and writes that system's release archive and
+`Safay-<version>-<os>.env` into `build/dist/`; a release removes only its own system's earlier outputs. The manifest
+lists every platform's archive of the version found in `build/dist/`: copy the Linux and Windows archives there on the
+Mac before `make release` (or run `--manifest-only` afterwards), since the update-signing key stays on one machine. A
+system without the key writes no manifest and says so.
 
 The update notes follow the app's language. Each version's notes are its `CHANGELOG.md` section, translated item for
 item in `locales/release-notes/zh-Hans.md` and `zh-Hant.md` under the same `## [<version>]` heading; `make release`
@@ -168,16 +176,16 @@ stops when one of them is missing. The manifest carries the English section, the
 English where a translation is missing. `python3 scripts/release.py --notes` prints them as the manifest will carry
 them.
 
-`python3 scripts/release.py --manifest-only` writes the manifest again for the update archive already in `build/dist`,
-without building or notarizing, after the version's notes changed.
+`python3 scripts/release.py --manifest-only` writes the manifest again for the update archives already in `build/dist`,
+without building or notarizing: after the version's notes changed, or another system's archive was added.
 
 To see a version's notes in the update window before releasing, start a development package with
 `SAFAY_PREVIEW_UPDATE=<version> SAFAY_PREVIEW_NOTES=<file>`, the file holding the output of `release.py --notes`
 (`build/debug/Safay.app/Contents/MacOS/Safay --preview`). Switch the language in Settings to see each translation. Its
 "Install Update" simulates a download, so the progress and "Install and Relaunch" can be seen too.
 
-Nothing is uploaded. Releases are published on GitHub Releases: upload the DMG, the zip, the update archive,
-`latest.json` and `latest.json.sig` to the release. Release packages read their update manifest from
+Nothing is uploaded. Releases are published on GitHub Releases: upload the DMG, the zip, every platform's update
+archive, `latest.json` and `latest.json.sig` to the release. Release packages read their update manifest from
 `https://github.com/gicek/safay/releases/latest/download/latest.json`, so the newest release is always the update.
 
 Self-update is signed with Safay's Ed25519 update key. Its public key is `UPDATE_PUBLIC_KEY` in `scripts/package.py`;
@@ -187,7 +195,10 @@ backup of it. `make update-keygen KEY=<path outside the repository>` creates a k
 
 Development packages are a separate app (`<id>.debug`) and do not update from the release source. To test updating end
 to end, package one with `SAFAY_UPDATE_URL` pointing at a local update source and `SAFAY_UPDATE_PUBLIC_KEY` set to a
-throwaway key's public key, then run `Safay --update-check`: it checks, downloads and replaces without the UI.
+throwaway key's public key, then run `Safay --update-check`: it checks, downloads and replaces without the UI. On Linux
+and Windows the package is the folder `scripts/package.py` writes; the new version's archive and its manifest
+(`python3 scripts/nsh.py update-manifest`) can be served from this machine over plain HTTP, which debug builds accept
+for loopback only.
 
 ## Launcher integrations
 

@@ -131,3 +131,21 @@ pub fn hand_to_running() -> bool {
     }
     false
 }
+
+/// A restart (after an update): NSH starts the new process at once, naming the one it replaces in `NSH_RESTART_AFTER`
+/// for its runner to wait for, but that one holds the vault's instance lock until it exits, and `main` opens the vault
+/// before the runner starts. Waits for it here (at most NSH's limit), so this launch neither fails on the lock nor hands
+/// itself to the process that is going away. Whether this launch is such a restart.
+pub fn wait_for_replaced() -> bool {
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject};
+    let Some(pid) = nsh_core::restart::wait_for_pid() else { return false };
+    // SAFETY: plain calls; the handle is closed once waited on.
+    unsafe {
+        let process = OpenProcess(PROCESS_SYNCHRONIZE, 0, pid);
+        if !process.is_null() {
+            WaitForSingleObject(process, nsh_core::restart::WAIT_LIMIT.as_millis() as u32);
+            CloseHandle(process);
+        }
+    }
+    true
+}

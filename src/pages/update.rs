@@ -2,7 +2,14 @@
 //! and which version the user has, the version's notes (the manifest's Markdown, from CHANGELOG.md) in a box that
 //! scrolls, the choice to download and install future updates on their own, and the buttons. Installing stays in the
 //! window: the download's progress, then "Install and Relaunch".
-use crate::{components::*, i18n::Language, pages::unlock::check_box, platform::updates::Phase, store::Store};
+use crate::{
+    chrome::{Look, look},
+    components::*,
+    i18n::Language,
+    pages::unlock::check_box,
+    platform::updates::Phase,
+    store::Store,
+};
 use nsh_base::{TextViewLinks, TextViewPart, TextViewParts, text_view, theme};
 use nsh_core::{element::StyleRefinement, element::desktop::current_window, prelude::*};
 
@@ -66,14 +73,17 @@ pub fn page(s: Store, version: String, notes: Option<String>) -> impl IntoElemen
         }
     });
     let skippable = version_numbers(&version);
+    // Installed where the user cannot write: the update is a download, and nothing installs on its own.
+    let read_only = crate::platform::updates_read_only();
     let subtitle = s.fmt("Safay {} is now available—you have {}. Would you like to download it now?", &[&version, current]);
     provide_context(parts());
-    // The window has no title bar: everything but the notes and the controls drags it.
+    // On macOS the window has no title bar: everything but the notes and the controls drags it, below the traffic lights.
+    let mac = look() == Look::Mac;
     view()
         .flex_1()
-        .window_drag(true)
+        .window_drag(mac)
         .bg(move || tok("chrome"))
-        .pt(px(36.0))
+        .pt(px(if mac { 36.0 } else { 20.0 }))
         .px(px(24.0))
         .pb(px(20.0))
         .gap(px(16.0))
@@ -120,26 +130,33 @@ pub fn page(s: Store, version: String, notes: Option<String>) -> impl IntoElemen
                     }),
                 ),
         )
-        .child(
-            view().flex_row().self_start().window_drag(false).child(
-                nsh_base::checkbox()
-                    .checked(move || s.preferences.with(|p| p.update_checks == Some(true) && p.update_downloads))
-                    .on_change(move |v: &bool| {
-                        let v = *v;
-                        s.update_preferences(move |p| {
-                            if v {
-                                p.update_checks = Some(true);
-                            }
-                            p.update_downloads = v;
+        .child(when(
+            move || read_only,
+            move || text(move || s.label(crate::store::READ_ONLY_UPDATE)).text_size(px(12.0)).text_color(move || theme().muted_foreground),
+        ))
+        .child(when(
+            move || !read_only,
+            move || {
+                view().flex_row().self_start().window_drag(false).child(
+                    nsh_base::checkbox()
+                        .checked(move || s.preferences.with(|p| p.update_checks == Some(true) && p.update_downloads))
+                        .on_change(move |v: &bool| {
+                            let v = *v;
+                            s.update_preferences(move |p| {
+                                if v {
+                                    p.update_checks = Some(true);
+                                }
+                                p.update_downloads = v;
+                            })
                         })
-                    })
-                    .flex_row()
-                    .items_center()
-                    .gap(px(8.0))
-                    .indicator(check_box(move || s.preferences.with(|p| p.update_checks == Some(true) && p.update_downloads)))
-                    .child(text(move || s.label("Automatically download and install updates in the future")).text_size(px(13.0))),
-            ),
-        )
+                        .flex_row()
+                        .items_center()
+                        .gap(px(8.0))
+                        .indicator(check_box(move || s.preferences.with(|p| p.update_checks == Some(true) && p.update_downloads)))
+                        .child(text(move || s.label("Automatically download and install updates in the future")).text_size(px(13.0))),
+                )
+            },
+        ))
         .child(
             view()
                 .flex_row()
@@ -188,6 +205,7 @@ pub fn page(s: Store, version: String, notes: Option<String>) -> impl IntoElemen
                                 push_button(
                                     move || {
                                         s.label(match phase() {
+                                            _ if read_only => "Download",
                                             Phase::Ready { .. } => "Install and Relaunch",
                                             Phase::Failed(_) => "Try Again",
                                             _ => "Install Update",
@@ -197,6 +215,10 @@ pub fn page(s: Store, version: String, notes: Option<String>) -> impl IntoElemen
                                     false,
                                 )
                                 .on_press(move || match phase() {
+                                    _ if read_only => {
+                                        s.open_update_download();
+                                        close();
+                                    }
                                     Phase::Ready { .. } => s.restart_to_update(),
                                     _ => s.download_update(false),
                                 }),

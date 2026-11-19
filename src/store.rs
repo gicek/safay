@@ -1693,7 +1693,9 @@ impl Store {
             let skipped = move |version: &str| !manual && crate::pages::update::is_skipped(version, self.preferences.get().skipped_update);
             match phase {
                 Phase::Available { version, .. } if skipped(&version) => {}
-                Phase::Available { .. } if !manual && self.preferences.get().update_downloads => self.download_update(false),
+                Phase::Available { .. } if !manual && self.preferences.get().update_downloads && !updater.read_only() => {
+                    self.download_update(false)
+                }
                 Phase::Available { version, notes } => self.offer_update(version, notes),
                 Phase::Ready { version } => self.offer_update(version, updater.offered_notes()),
                 // The menus can ask while the main window is closed: the result shows as a desktop notice. Settings shows it
@@ -1708,23 +1710,36 @@ impl Store {
             }
         });
     }
-    /// Offers a newer version: the update window, with its notes (an alert where there is no desktop integration).
+    /// Offers a newer version: the update window, with its notes (an alert where there is no desktop integration:
+    /// Windows). Where Safay cannot replace itself, the offer is the download.
     pub fn offer_update(self, version: String, notes: Option<String>) {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         if crate::desktop::installed() {
             crate::desktop::open_update(version, notes);
             return;
         }
         let mut dialog = crate::alert::alert(self.fmt("Safay {} is available", &[&version]));
-        if let Some(notes) = notes.map(|n| crate::pages::update::notes_in(&n, self.language.get())).filter(|n| !n.is_empty()) {
-            dialog = dialog.description(notes);
+        let read_only = platform::updates_read_only();
+        // The notes, then why the offer is a download where it is one.
+        let notes = notes.map(|n| crate::pages::update::notes_in(&n, self.language.get())).filter(|n| !n.is_empty());
+        let reason = read_only.then(|| self.label(READ_ONLY_UPDATE).to_string());
+        let description: Vec<String> = notes.into_iter().chain(reason).collect();
+        if !description.is_empty() {
+            dialog = dialog.description(description.join("\n\n"));
         }
-        let chosen = dialog.cancel("later", self.label("Later")).action("download", self.label("Download and Install")).show();
+        let action = self.label(if read_only { "Download" } else { "Download and Install" });
+        let chosen = dialog.cancel("later", self.label("Later")).action("download", action).show();
         self.task(async move {
             if chosen.await == Some("download") {
-                self.download_update(true);
+                if read_only { self.open_update_download() } else { self.download_update(true) }
             }
         });
+    }
+    /// Where Safay cannot replace itself: opens the offered version's download in the browser.
+    pub fn open_update_download(self) {
+        if let Some(url) = platform::updates::updater().and_then(platform::updates::Updater::download_page) {
+            drop(open_url(url));
+        }
     }
     /// Downloads and verifies the offered version. `interactive`: then asks to restart now (it otherwise installs when
     /// the app quits).
@@ -1772,6 +1787,8 @@ impl Store {
         });
     }
 }
+/// Why Safay offers a download instead of installing (`platform::updates_read_only`).
+pub const READ_ONLY_UPDATE: &str = "Safay can’t replace itself where it’s installed. Download the new version and replace this copy, or update Safay the way you installed it.";
 /// Who asked for an update check.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Check {

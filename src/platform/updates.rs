@@ -1,10 +1,13 @@
-//! App self-update through NSH's `nsh-updater`: a signed manifest (`latest.json` + `.sig`), a
-//! downloaded archive checked against its SHA-256 and size, and the installed `.app` swapped in place. NSH's
-//! `nsh/updater` JS module is for TSX apps; a Rust app uses the crate and brings its own HTTP (`docs/dev/updater.md`).
+//! App self-update through NSH's `nsh-updater`: a signed manifest (`latest.json` + `.sig`) with an archive per platform
+//! (`macos-aarch64`, `linux-x86_64`, `windows-x86_64`), the download checked against its SHA-256 and size, and the
+//! installed app swapped in place: the `.app` on macOS, the app's folder on Linux and Windows. NSH's `nsh/updater` JS
+//! module is for TSX apps; a Rust app uses the crate and brings its own HTTP (`docs/dev/updater.md`).
 //!
 //! The source and the key come from the package, never from code: `scripts/package.py` writes
-//! `Contents/Resources/nsh/assets/nsh-updater.json` (`url`, `publicKey`, id, version) and `nsh/app.json`, which
-//! `Installation::current` requires; development builds have neither, so nothing here runs. Requests go only to that
+//! `nsh/assets/nsh-updater.json` (`url`, `publicKey`, id, version) and `nsh/app.json` into the package (under
+//! `Contents/Resources` on macOS, beside the executable elsewhere), which `Installation::current` requires; development
+//! builds have neither, so nothing here runs. An app where the user cannot write (a system location, a package
+//! manager's) is not replaced: the update is offered as a download instead ([`Updater::read_only`]). Requests go only to that
 //! URL and the archive it names (HTTPS, redirects HTTPS only, size limits); nothing about the vault is sent.
 //!
 //! One updater per process: the main window and Settings read [`state`] and call the actions; work runs on its own
@@ -73,6 +76,8 @@ pub trait Fetch: Send + Sync {
 pub struct Updater {
     config: Config,
     installation: Option<Installation>,
+    /// The installed app is somewhere the user cannot write: it is not downloaded, but offered as a download.
+    read_only: bool,
     downloads: PathBuf,
     fetch: Arc<dyn Fetch>,
     inner: Mutex<Inner>,
@@ -88,10 +93,20 @@ struct Inner {
 
 impl Updater {
     pub fn new(config: Config, installation: Option<Installation>, downloads: PathBuf, fetch: Arc<dyn Fetch>) -> Self {
-        Self { config, installation, downloads, fetch, inner: Mutex::new(Inner::default()) }
+        let read_only = installation.as_ref().is_some_and(|i| !i.can_install());
+        Self { config, installation, read_only, downloads, fetch, inner: Mutex::new(Inner::default()) }
     }
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
         self.inner.lock().unwrap_or_else(|e| e.into_inner())
+    }
+    /// Whether the installed app cannot be replaced (a location the user cannot write): updates are offered as a
+    /// download ([`Self::download_page`]), never downloaded here.
+    pub fn read_only(&self) -> bool {
+        self.read_only
+    }
+    /// The offered version's archive, for the user to download where Safay cannot replace itself.
+    pub fn download_page(&self) -> Option<String> {
+        self.lock().available.as_ref().map(|a| a.url.clone())
     }
     pub fn phase(&self) -> Phase {
         self.lock().phase.clone()
@@ -149,6 +164,9 @@ impl Updater {
     /// Blocking.
     pub fn download(&self) -> Phase {
         let Some(available) = self.lock().available.clone() else { return self.phase() };
+        if self.read_only {
+            return self.phase();
+        }
         // A manifest entry without a hash is a page to visit, not an archive (the app opens it instead).
         let Some(sha256) = available.sha256.clone() else { return self.phase() };
         if !self.begin() {
@@ -249,7 +267,7 @@ fn package_config() -> Option<(Vec<u8>, Config)> {
     Some((bytes, config))
 }
 
-/// The app's updater; `None` in builds without an update source (development, other desktops for now).
+/// The app's updater; `None` in builds without an update source (development and test builds).
 pub fn updater() -> Option<&'static Updater> {
     static UPDATER: OnceLock<Option<Updater>> = OnceLock::new();
     UPDATER
@@ -504,6 +522,37 @@ mod tests {
         assert_eq!(fs::read_to_string(root.join("run")).unwrap(), "new");
         // Installed once: nothing is left to install.
         assert_eq!(u.install(), Err(Failure::Install));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_app_where_the_user_cannot_write_is_offered_as_a_download() {
+        use std::os::unix::fs::PermissionsExt;
+        let (secret, public) = keys();
+        let dir = temp_dir("read-only");
+        let archive = app_archive(&dir, "new");
+        let parent = dir.join("system");
+        let root = parent.join("App");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("run"), "old").unwrap();
+        fs::set_permissions(&parent, fs::Permissions::from_mode(0o555)).unwrap();
+        let installation = Installation::directory(&root, &root.join("run")).unwrap();
+        let downloads = dir.join("downloads");
+        let server = server(&secret, "0.2.0", &archive, &archive);
+        let u = Updater::new(config(&public), Some(installation), downloads.clone(), Arc::new(server));
+        // Root writes anywhere: the case cannot be made there.
+        if !u.read_only() {
+            fs::set_permissions(&parent, fs::Permissions::from_mode(0o755)).unwrap();
+            let _ = fs::remove_dir_all(dir);
+            return;
+        }
+        assert!(matches!(u.check(), Phase::Available { .. }));
+        assert!(u.download_page().is_some_and(|url| url.ends_with(".tar.gz")));
+        // Nothing is downloaded or staged.
+        assert!(matches!(u.download(), Phase::Available { .. }));
+        assert!(!downloads.exists());
+        fs::set_permissions(&parent, fs::Permissions::from_mode(0o755)).unwrap();
         let _ = fs::remove_dir_all(dir);
     }
 

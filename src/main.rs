@@ -37,6 +37,9 @@ fn main() -> impl std::process::Termination {
             std::process::exit(1)
         };
         // After an update the new app starts while the old one is still quitting: wait briefly for its instance lock.
+        // Windows names the old process, which is waited for first; that launch is no second launch to hand over.
+        #[cfg(target_os = "windows")]
+        let restarted = safay::platform::windows::wait_for_replaced();
         let mut attempts = 0;
         loop {
             match DiskRepository::open(directory.clone()) {
@@ -46,7 +49,7 @@ fn main() -> impl std::process::Termination {
                 #[cfg(target_os = "linux")]
                 Err(_) if safay::platform::linux::hand_to_running() => std::process::exit(0),
                 #[cfg(target_os = "windows")]
-                Err(_) if safay::platform::windows::hand_to_running() => std::process::exit(0),
+                Err(_) if !restarted && safay::platform::windows::hand_to_running() => std::process::exit(0),
                 Err(_) if attempts < 50 => {
                     attempts += 1;
                     std::thread::sleep(std::time::Duration::from_millis(100));

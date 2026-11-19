@@ -432,6 +432,8 @@
   "Safay {} is available": "Safay {} 現已推出",
   "Later": "稍後",
   "Download and Install": "下載並安裝",
+  "Download": "下載",
+  "Safay can’t replace itself where it’s installed. Download the new version and replace this copy, or update Safay the way you installed it.": "Safay 無法取代目前安裝位置中的自身。請下載新版本取代這份副本，或依你當初安裝 Safay 的方式更新。",
   "Safay {} is ready to install": "Safay {} 已準備好安裝",
   "Restart now, or it installs when you quit Safay.": "立即重新啟動，或在結束 Safay 時安裝。",
   "Restart Now": "立即重新啟動",

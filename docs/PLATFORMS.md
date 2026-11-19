@@ -23,7 +23,7 @@ marked *coded* are written and untested on a real system. The interface shows a 
 | Launch at login, background launch | Yes | Not yet | Yes (XDG autostart; "Start in Tray") |
 | Select a QR code on screen; camera | Yes | Not yet | Yes (the Screenshot and Camera portals) |
 | Launchers (Alfred, Raycast, Tinycast) | Yes | — | — |
-| App updates | Yes (signed packages with an update source) | Not yet | Not yet |
+| App updates | Yes (signed packages with an update source) | Coded (the app's folder) | Yes (the app's folder) |
 
 On Windows and Linux, Settings opens as a dialog over the main window; macOS uses its own window.
 
@@ -64,6 +64,9 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
   them.
 - Safay runs once: launching it again or opening a `safay://` link brings the running one forward, from the tray too.
   "Launch at Login" writes an XDG autostart entry (`~/.config/autostart/<app ID>.desktop`).
+- Updates replace the folder the archive was unpacked to, where the user can write; installed elsewhere (a system
+  location, a package manager's), Safay offers the new version as a download instead. "Check for Updates" is in the
+  tray menu, and a new version opens the update window.
 - Dropbox, OneDrive and Google Drive sign in in the default browser. The provider redirects to its callback scheme,
   which the desktop entry claims; the link starts Safay again, which hands it to the running one. Leaving the page in
   Safay ends the sign-in; the browser tab stays open.
@@ -88,5 +91,7 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
    at login on Windows (NSH's login item covers its `Run` key).
 4. Windows Hello, only as a real key release through `KeyCredentialManager` or a TPM-backed key; never a yes/no check.
 5. Verify lock events, the clipboard, file dialogs and backup folders under sync clients on each system.
-6. Sign in to Dropbox, OneDrive and Google Drive with Safay's client IDs on both systems; on Windows, the callback
+6. Windows: update a release package end to end (its folder is replaced entry by entry; the restarted Safay waits for
+   the old process, `platform::windows::wait_for_replaced`).
+7. Sign in to Dropbox, OneDrive and Google Drive with Safay's client IDs on both systems; on Windows, the callback
    schemes are registered under `HKCU\Software\Classes` and a second launch hands its link over (`platform::windows`).

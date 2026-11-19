@@ -9,7 +9,11 @@ environment variables override them (docs/DEVELOPMENT.md). A release package wit
 a development package given `SAFAY_UPDATE_URL`, carries NSH's updater files (`nsh/app.json`,
 `nsh/assets/nsh-updater.json`), which `nsh-updater` requires to replace the app.
 
-Output: `build/debug/` (development) or `build/release/` (`--release`, which also writes
+Linux and Windows packages are a folder (`Safay/`, the executable at its top) and its archive, named as the update
+manifest reads it: `Safay-<version>-linux-<arch>.tar.gz`, `Safay-<version>-windows-<arch>.zip`. The updater replaces
+that folder wherever the user unpacked it.
+
+Output: `build/debug/` (development) or `build/release/` (`--release`, which on macOS also writes
 `Safay-<version>-macos-<arch>.zip`); `--out` picks another folder.
 """
 from pathlib import Path
@@ -93,6 +97,28 @@ def codesign(identity: str, path: Path, *, release: bool, entitlements: Path | N
     subprocess.run(command + [str(path)], check=True)
 
 
+def update_source(release: bool) -> str:
+    """The update manifest's URL a package carries: release packages update from the configured source. Development
+    packages are a separate app (`<id>.debug`) that the release manifest does not name: they carry an updater only for a
+    source set explicitly in SAFAY_UPDATE_URL (local end-to-end tests). Empty: no updater."""
+    update_url = settings()["update_url"] if release else os.environ.get("SAFAY_UPDATE_URL", "")
+    if update_url and not (os.environ.get("SAFAY_UPDATE_PUBLIC_KEY") or UPDATE_PUBLIC_KEY):
+        print("note: scripts/package.py has no UPDATE_PUBLIC_KEY yet; the updater files are left out")
+        return ""
+    return update_url
+
+
+def write_updater(resources: Path, bundle_id: str, version: str, update_url: str) -> None:
+    """NSH's updater files (`nsh-updater`) in the package's `nsh` folder: the source and key come from the package, never
+    from code; `app.json` and the config file are what `Installation::current` checks before it replaces the app."""
+    (resources / "assets").mkdir(parents=True, exist_ok=True)
+    (resources / "app.json").write_text(json.dumps({"id": bundle_id}), encoding="utf-8")
+    # SAFAY_UPDATE_PUBLIC_KEY is for local end-to-end tests with a throwaway key only.
+    public_key = os.environ.get("SAFAY_UPDATE_PUBLIC_KEY", UPDATE_PUBLIC_KEY)
+    config = {"id": bundle_id, "version": version, "url": update_url, "publicKey": public_key}
+    (resources / "assets/nsh-updater.json").write_text(json.dumps(config), encoding="utf-8")
+
+
 def bundle_id_of(metadata: dict, release: bool) -> str:
     """nsh.json's `id` for releases; development (debug) builds are the separate app `<id>.debug`, as `src/platform`'s
     `APP_ID`, with their own data directory, keychain items and provisioning profile."""
@@ -110,10 +136,7 @@ def package_macos(metadata: dict, exe: Path, out: Path, release: bool) -> Path:
     profile = find_profile(config["team"], bundle_id, release) if identity != "-" and config["team"] else None
     if identity != "-" and profile is None:
         print(f"note: no {'Developer ID' if release else 'development'} profile for {bundle_id} with iCloud; signing without iCloud")
-    # Release packages update from the configured source. Development packages are a separate app (`<id>.debug`) that the
-    # release manifest does not name: they carry an updater only for a source set explicitly in SAFAY_UPDATE_URL (local
-    # end-to-end tests).
-    update_url = config["update_url"] if release else os.environ.get("SAFAY_UPDATE_URL", "")
+    update_url = update_source(release)
     if update_url and identity == "-":
         print("note: an ad-hoc build is not offered updates; the updater files are left out")
         update_url = ""
@@ -167,18 +190,8 @@ def package_macos(metadata: dict, exe: Path, out: Path, release: bool) -> Path:
             print(f"note: the profile for {bundle_id} has no push capability; iCloud changes arrive without silent push")
         # The app creates its CloudKit container only when this key is present (src/platform/icloud.rs).
         info["SafayICloudContainer"] = ICLOUD_CONTAINER
-    if update_url and not (os.environ.get("SAFAY_UPDATE_PUBLIC_KEY") or UPDATE_PUBLIC_KEY):
-        print("note: scripts/package.py has no UPDATE_PUBLIC_KEY yet; the updater files are left out")
-        update_url = ""
     if update_url:
-        # NSH's updater (`nsh-updater`): the source and key come from the package, never from code; `app.json` and the
-        # config file are what `Installation::current` checks before it replaces the app.
-        updater = app / "Contents/Resources/nsh"
-        (updater / "assets").mkdir(parents=True)
-        (updater / "app.json").write_text(json.dumps({"id": bundle_id}), encoding="utf-8")
-        # SAFAY_UPDATE_PUBLIC_KEY is for local end-to-end tests with a throwaway key only.
-        public_key = os.environ.get("SAFAY_UPDATE_PUBLIC_KEY", UPDATE_PUBLIC_KEY)
-        (updater / "assets/nsh-updater.json").write_text(json.dumps({"id": bundle_id, "version": metadata["version"], "url": update_url, "publicKey": public_key}), encoding="utf-8")
+        write_updater(app / "Contents/Resources/nsh", bundle_id, metadata["version"], update_url)
     (app / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
 
     entitlements_file = None
@@ -226,7 +239,10 @@ def main() -> None:
             print(zip_app(app, out / f"{name}-{metadata['version']}-macos-{arch()}.zip"))
         return
     folder = out / name
-    folder.mkdir(exist_ok=True)
+    # Made afresh: a file an earlier build left would ship, and the updater would install it.
+    if folder.exists():
+        shutil.rmtree(folder)
+    folder.mkdir()
     shutil.copytree(root / "assets", folder / "assets/@safay", dirs_exist_ok=True)
     shutil.copy2(exe, folder / exe.name)
     for file in ["LICENSE", "THIRD_PARTY_NOTICES.md"]:
@@ -234,13 +250,15 @@ def main() -> None:
     app_id = bundle_id_of(metadata, args.release)
     shutil.copy2(root / metadata["icon"], folder / f"{app_id}.png")
     shutil.copy2(root / "assets/fonts/AtkinsonHyperlegibleMono-OFL.txt", folder / "AtkinsonHyperlegibleMono-OFL.txt")
+    if update_url := update_source(args.release):
+        write_updater(folder / "nsh", app_id, metadata["version"], update_url)
     if system == "Linux":
         (folder / f"{app_id}.desktop").write_text(f"[Desktop Entry]\nType=Application\nName={name}\nExec=safay\nIcon={app_id}\nCategories=Utility;Security;\nTerminal=false\nMimeType=x-scheme-handler/{metadata['schemes'][0]};\n", encoding="utf-8")
-        archive = out / f"{name}.tar.gz"
+        archive = out / f"{name}-{metadata['version']}-linux-{arch()}.tar.gz"
         with tarfile.open(archive, "w:gz") as output:
             output.add(folder, arcname=name)
     elif system == "Windows":
-        archive = out / f"{name}.zip"
+        archive = out / f"{name}-{metadata['version']}-windows-{arch()}.zip"
         with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as output:
             for file in folder.rglob("*"):
                 if file.is_file():

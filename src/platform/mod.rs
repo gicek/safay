@@ -115,13 +115,18 @@ pub mod supports {
     /// The OAuth sign-in page opens in the default browser, outside Safay (elsewhere a system sign-in window).
     pub const BROWSER_SIGN_IN: bool = cfg!(not(target_os = "macos"));
     /// Updating the app itself (NSH's `nsh-updater`; active only in packages that carry an update source).
-    pub const UPDATES: bool = cfg!(target_os = "macos");
+    pub const UPDATES: bool = true;
     /// Launchers (Alfred, Raycast, Tinycast) through AppleScript: the third-party plugin interface.
     pub const AUTOMATION: bool = cfg!(target_os = "macos");
 }
 /// Whether this build updates itself (fixed per build: the package carries an update source).
 pub fn updates_configured() -> bool {
     updates::updater().is_some()
+}
+/// Whether this build's updater cannot replace the app (installed where the user cannot write): new versions are offered
+/// as a download.
+pub fn updates_read_only() -> bool {
+    updates::updater().is_some_and(updates::Updater::read_only)
 }
 /// The updater's phase; `None` in builds that don't update themselves.
 pub fn update_phase() -> Option<updates::Phase> {

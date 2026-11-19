@@ -127,13 +127,16 @@ Remote storage receives only the encrypted vault and a metadata file with a devi
   trigger a sync. "Turn Off and Delete iCloud Backup" deletes the zone for all devices. Development packages use the
   CloudKit Development environment; only release packages use Production.
 
-### Updates (macOS)
+### Updates
 
 Updates use NSH's `nsh-updater`. The update source and the public key are written into the package and cannot be
 changed by code. The manifest must carry a valid Ed25519 signature from Safay's update key, name this app, and offer a
-higher version; the archive is checked against the manifest's SHA-256 and size while it streams, and the new app's code
-signature is verified before the bundle is replaced. Requests go only to the update source over HTTPS and carry no vault
-or device information. Automatic checks start only after the user agrees on the second launch.
+higher version; the archive is checked against the manifest's SHA-256 and size while it streams, and the new app must
+carry this app's ID and executable. On macOS its code signature is verified too before the bundle is replaced; Linux and
+Windows packages carry no code signature, so the manifest's signature and the archive's hash are what vouch for them.
+Safay replaces itself only where the user can write; installed elsewhere, it offers the new version as a download.
+Requests go only to the update source over HTTPS and carry no vault or device information. Automatic checks start only
+after the user agrees on the second launch.
 
 ## Launcher integration (macOS)
 

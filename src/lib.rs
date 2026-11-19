@@ -117,7 +117,9 @@ fn surface_root(s: Store, content: impl IntoElement) -> impl IntoElement {
         .child(content)
 }
 
-/// The quick panel's content over `controller`, with a store of its own.
+/// The quick panel's content over `controller`, with a store of its own: the demo's and the tests' (the panel window
+/// has its own, `panel_window`).
+#[cfg(any(test, debug_assertions))]
 fn quick_shell(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
     let s = Store::new(controller, fixture, Surface::Panel);
     effect(move || untracked(|| s.start()));
@@ -190,7 +192,7 @@ pub(crate) fn settings_window(controller: Arc<Controller>, preview: bool) -> imp
 }
 
 /// The update window's content (`desktop::open_update`), with a store of its own.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+#[cfg_attr(target_os = "windows", allow(dead_code))]
 pub(crate) fn update_window(controller: Arc<Controller>, preview: bool, version: String, notes: Option<String>) -> impl IntoElement {
     let s = Store::new(controller, preview, Surface::Update);
     effect(move || untracked(|| s.start()));
