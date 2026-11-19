@@ -251,9 +251,14 @@ fn backup_sheet_starts_off_and_offers_a_folder() {
     assert!(still.contains("no scroll view"), "{still}");
     app.press("role:button[Set Up]").unwrap();
     app.wait_for("Other Folder").unwrap();
-    // No CloudKit store in this build: iCloud is listed, disabled, with the reason.
-    app.wait_for("iCloud").unwrap();
-    app.wait_for("Not available in this build of Safay").unwrap();
+    // No CloudKit store in this build: iCloud is listed, disabled, with the reason. Linux never lists it.
+    if cfg!(target_os = "linux") {
+        assert!(!app.screen().texts().contains(&"iCloud"));
+        app.wait_for("A folder synced by another app").unwrap();
+    } else {
+        app.wait_for("iCloud").unwrap();
+        app.wait_for("Not available in this build of Safay").unwrap();
+    }
     app.press("role:button[Back]").unwrap();
     app.wait_for("Backup is off").unwrap();
 }
@@ -375,6 +380,7 @@ fn sidebar_follows_the_macos_release() {
 
 /// A server certificate the system does not trust: setup shows its fingerprint for the user to compare, and Cancel
 /// leaves the form as it was (the fixture's `self-signed.example.invalid` answers as such a server).
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 #[test]
 fn webdav_setup_shows_an_untrusted_certificate_for_confirmation() {
     let mut app = open();

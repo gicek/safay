@@ -213,6 +213,7 @@ pub struct Store {
     launcher_waiting: Signal<Option<(Uuid, std::time::Instant)>>,
     /// A code captured from the shortcut while locked, waiting for the vault to be unlocked with the master password: its
     /// text, its first issuer and since when.
+    #[cfg(target_os = "macos")]
     capture_waiting: Signal<Option<(Zeroizing<String>, String, std::time::Instant)>>,
     pub stage: Signal<Stage>,
     pub add_tab: Signal<AddTab>,
@@ -330,6 +331,7 @@ impl Store {
             auth_error: signal(None),
             auth_prompting: signal(false),
             launcher_waiting: signal(None),
+            #[cfg(target_os = "macos")]
             capture_waiting: signal(None),
             stage: signal(Stage::Welcome),
             add_tab: signal(AddTab::Scan),
@@ -894,6 +896,33 @@ impl Store {
                 Ok(Some(bytes)) if self.controller.get().epoch() == epoch => self.add_images(vec![bytes]).await,
                 Ok(_) => {}
                 Err(_) => self.error.set(Some(Error::Import)),
+            }
+        });
+    }
+    /// "Select on Screen" on Linux: the desktop's screenshot tool through its portal; the QR codes found join the scanned
+    /// list, as images do. A screenshot closed without one says nothing.
+    #[cfg(target_os = "linux")]
+    pub fn capture_screen(self) {
+        use platform::screenshot::Capture;
+        if self.fixture || self.busy.get() {
+            return;
+        }
+        self.status.set(None);
+        self.error.set(None);
+        let epoch = self.controller.get().epoch();
+        self.task(async move {
+            self.busy.set(true);
+            let capture = blocking(platform::screenshot::capture).await;
+            self.busy.set(false);
+            if self.controller.get().epoch() != epoch {
+                return;
+            }
+            let failed = |key: &str| self.status.set(Some(Status { tone: Tone::Error, text: self.label(key) }));
+            match capture {
+                Ok(Capture::Codes(text)) => self.append_scanned(&text),
+                Ok(Capture::NoCode) => failed("No QR code found"),
+                Ok(Capture::Cancelled) => {}
+                Ok(Capture::Failed) | Err(_) => failed("Can’t take a screenshot"),
             }
         });
     }

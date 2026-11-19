@@ -209,6 +209,19 @@ fn settings_sidebar(s: Store) -> impl IntoElement {
             }
         })
         .window_drag(window)
+        // Linux: the dialog's title, as its sheets have one, centered on the close button's row (12 pt down, 30 tall).
+        .child(when(
+            move || look() == Look::Linux && !window,
+            move || {
+                view()
+                    .h(px(30.0))
+                    .mt(px(-2.0))
+                    .mb(px(8.0))
+                    .px(px(10.0))
+                    .justify_center()
+                    .child(heading(move || s.label("Settings"), 15.0).number_of_lines(1))
+            },
+        ))
         .child(item(SettingsPage::General, Icon::Settings, "General"))
         .child(item(SettingsPage::Security, Icon::Lock, "Security"))
         .child(when(|| crate::platform::supports::GLOBAL_HOTKEYS, move || item(SettingsPage::Shortcuts, Icon::Keyboard, "Shortcuts")))

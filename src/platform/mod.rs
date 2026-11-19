@@ -21,12 +21,19 @@ pub mod windows;
 pub mod biometric;
 #[cfg(target_os = "macos")]
 pub mod camera;
+// The same interface on Linux, through the desktop portal and GStreamer.
+#[cfg(target_os = "linux")]
+#[path = "camera_linux.rs"]
+pub mod camera;
 #[cfg(target_os = "macos")]
 pub mod hotkeys;
 #[cfg(target_os = "macos")]
 pub mod icloud;
 #[cfg(target_os = "macos")]
 pub mod screen_capture;
+/// Linux's "Select on Screen": the desktop portal's screenshot (`screen_capture` is macOS's own selection).
+#[cfg(target_os = "linux")]
+pub mod screenshot;
 #[cfg(target_os = "macos")]
 pub mod symbols;
 #[cfg(target_os = "macos")]
@@ -68,10 +75,12 @@ pub mod supports {
     pub const BIOMETRIC: bool = cfg!(target_os = "macos");
     /// Settings in a window of its own (elsewhere a dialog over the main window).
     pub const SETTINGS_WINDOW: bool = cfg!(target_os = "macos");
-    /// Selecting a QR code on screen (macOS: the system's interactive screenshot, Screen Recording permission).
-    pub const SCREEN_CAPTURE: bool = cfg!(target_os = "macos");
-    /// Scanning with the camera (macOS: AVFoundation; needs the packaged app's camera usage description).
-    pub const CAMERA: bool = cfg!(target_os = "macos");
+    /// Selecting a QR code on screen (macOS: Safay's selection over a picture of each display, Screen Recording
+    /// permission; Linux: the desktop portal's interactive screenshot).
+    pub const SCREEN_CAPTURE: bool = cfg!(any(target_os = "macos", target_os = "linux"));
+    /// Scanning with the camera (macOS: AVFoundation, needs the packaged app's camera usage description; Linux: the
+    /// desktop portal's Camera and PipeWire).
+    pub const CAMERA: bool = cfg!(any(target_os = "macos", target_os = "linux"));
     /// Cloud storage backup: needs a system credential store (Linux's Secret Service is not wired yet).
     pub const CLOUD: bool = cfg!(any(target_os = "macos", target_os = "windows"));
     /// OAuth sign-in for Dropbox, OneDrive and Google Drive (macOS: `ASWebAuthenticationSession`; Windows not yet).

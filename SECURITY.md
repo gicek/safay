@@ -157,6 +157,11 @@ per app, who may send them. There is no local socket, port or other channel.
   while Safay is locked, the picked code is read first and imported only after Touch ID or the master password unlocks
   the vault; until then (two minutes at most) its text stays in memory and nothing is written. Camera frames are
   processed in memory only.
+- **Linux**: not sandboxed. Selecting a QR code on screen asks the desktop portal for an interactive screenshot: the
+  desktop's own tool picks the area (or takes the screen) and saves the picture where the desktop chooses; Safay reads
+  it once, deletes it at once, and keeps only the QR codes' text in memory. The camera is asked for through the portal,
+  which may show its own prompt; frames arrive over PipeWire and are processed in memory only, and the stream closes
+  with the preview.
 - **Windows / Linux**: see [Platforms](docs/PLATFORMS.md) for what is implemented; file permissions on Windows follow the
   user profile's ACLs.
 

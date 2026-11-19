@@ -155,7 +155,8 @@ pub fn DemoSettingsApp() -> impl IntoElement {
 }
 
 /// Opens one page for a capture: `SAFAY_DEMO_SCENE` = add-scan | add-key | add-text | export | import |
-/// backup | detail | change-password | auth | list | category | category-empty. Debug demo builds only.
+/// backup | detail | change-password | auth | list | category | category-empty | settings[-security|-shortcuts|-advanced|-about] |
+/// alert. Debug demo builds only.
 pub fn scene(s: crate::store::Store) {
     use crate::store::{AddTab, Sheet};
     let Ok(scene) = std::env::var("SAFAY_DEMO_SCENE") else { return };
@@ -193,6 +194,23 @@ pub fn scene(s: crate::store::Store) {
                 });
             }
             "change-password" => s.open_sheet(Sheet::ChangePassword),
+            // Windows and Linux: Settings in a dialog over the main window (macOS uses `DemoSettingsApp`).
+            "settings" | "settings-security" | "settings-shortcuts" | "settings-advanced" | "settings-about" => {
+                use crate::store::SettingsPage as P;
+                s.settings_page.set(match scene.as_str() {
+                    "settings-security" => P::Security,
+                    "settings-shortcuts" => P::Shortcuts,
+                    "settings-advanced" => P::Advanced,
+                    "settings-about" => P::About,
+                    _ => P::General,
+                });
+                s.open_sheet(Sheet::Settings);
+            }
+            "alert" => {
+                if let Some(id) = s.projection.with(|p| p.categories.iter().find(|c| c.name == "Work").map(|c| c.id)) {
+                    s.delete_category(id);
+                }
+            }
             "detail" => {
                 if let Some(id) = first("GitHub") {
                     s.open_sheet(Sheet::Detail(id))

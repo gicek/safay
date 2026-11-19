@@ -765,23 +765,27 @@ fn restore_locations(s: Store) -> impl IntoElement {
         s.status.set(None);
     };
     // iCloud, the cloud storage services this build can sign in to, Other Folder, Safay Exported File.
-    let mut cells = vec![
-        location_cell(
-            location_row(
-                s,
-                LocationIcon::Icloud,
-                "iCloud",
-                (!icloud).then_some("Not available in this build of Safay"),
-                move || idle() || !icloud,
-                move || {
-                    clear();
-                    s.choose_restore_icloud()
-                },
-            ),
-            || false,
-        )
-        .into_element(),
-    ];
+    let mut cells = Vec::new();
+    // Linux never has iCloud, so it has no cell there.
+    if !cfg!(target_os = "linux") {
+        cells.push(
+            location_cell(
+                location_row(
+                    s,
+                    LocationIcon::Icloud,
+                    "iCloud",
+                    (!icloud).then_some("Not available in this build of Safay"),
+                    move || idle() || !icloud,
+                    move || {
+                        clear();
+                        s.choose_restore_icloud()
+                    },
+                ),
+                || false,
+            )
+            .into_element(),
+        );
+    }
     if crate::platform::supports::CLOUD {
         use safay_app::cloud::Provider;
         for provider in [Provider::Dropbox, Provider::Onedrive, Provider::GoogleDrive, Provider::Nextcloud, Provider::Webdav] {

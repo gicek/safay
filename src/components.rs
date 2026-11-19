@@ -221,14 +221,6 @@ pub fn soft_shadow(y: f32, blur: f32, alpha: f32) -> BoxShadow {
 pub fn focus_ring(s: nsh_core::element::StyleRefinement) -> nsh_core::element::StyleRefinement {
     s.ring(px(1.0)).ring_inset().ring_color(move || theme().ring)
 }
-trait AlignIf: Sized {
-    fn text_align_center_if(self, center: bool) -> Self;
-}
-impl<T: Styled> AlignIf for T {
-    fn text_align_center_if(self, center: bool) -> Self {
-        if center { self.text_center() } else { self.text_left() }
-    }
-}
 pub fn divider() -> impl IntoElement + Styled {
     view().h(px(1.0)).bg(move || tok("separator")).opacity(0.7)
 }
@@ -735,7 +727,7 @@ pub fn segmented<T: Copy + PartialEq + 'static>(
 
 /// A modal sheet: a header bar, padded content and a footer bar, centered over a dimmed window. The content scrolls
 /// only when the window is too short for it, without bouncing (see [`overflow_scroll`]). macOS sheets and Windows
-/// content dialogs share the structure; Linux centers its title like libadwaita.
+/// content dialogs share the structure; on Linux the title starts at the leading edge, as the alerts' do.
 #[allow(clippy::too_many_arguments)]
 pub fn sheet(
     s: Store,
@@ -770,7 +762,6 @@ pub fn sheet_frame(
     footer: impl IntoElement,
     on_cancel: impl Fn() + 'static,
 ) -> impl IntoElement {
-    let centered = look() == Look::Linux;
     let mac = look() == Look::Mac;
     let on_cancel = std::rc::Rc::new(on_cancel);
     let escape = on_cancel.clone();
@@ -788,9 +779,7 @@ pub fn sheet_frame(
         })
         .child(
             modal_backdrop().p(px(24.0)).child(
-                modal_surface(view().role(nsh_core::AccessibilityRole::Alert))
-                    .w(px(width))
-                    .max_w(percentage(100.0))
+                fit_width(modal_surface(view().role(nsh_core::AccessibilityRole::Alert)).w(px(width)))
                     .max_h(move || window().height - px(48.0))
                     .overflow_hidden()
                     .on_press(move |_: &()| s.controller.get().activity())
@@ -804,10 +793,7 @@ pub fn sheet_frame(
                             // The header bar reads as the sheet's own white on macOS.
                             .bg(move || if mac { tok("sheet") } else { tok("chrome") })
                             .child(
-                                heading(title, if look() == Look::Windows { 17.0 } else { 15.0 })
-                                    .number_of_lines(1)
-                                    .flex_1()
-                                    .text_align_center_if(centered),
+                                heading(title, if look() == Look::Windows { 17.0 } else { 15.0 }).number_of_lines(1).flex_1().text_left(),
                             )
                             .child(trailing),
                     )
@@ -828,6 +814,11 @@ pub fn sheet_frame(
         )
 }
 
+/// A modal's widest: the window less the backdrop's 24 pt margins on Linux, whose tiling layouts give windows
+/// narrower than a dialog; elsewhere the backdrop's width.
+pub fn fit_width<E: Styled>(e: E) -> E {
+    if look() == Look::Linux { e.max_w(move || window().width - px(48.0)) } else { e.max_w(percentage(100.0)) }
+}
 /// What a modal dims the window with: black, stronger in dark mode, where a light wash would brighten it instead.
 pub fn scrim() -> AdaptiveColor {
     tok("scrim")

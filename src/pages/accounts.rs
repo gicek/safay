@@ -434,11 +434,13 @@ fn hand_arrow(w: f32, h: f32, path: &str) -> impl IntoElement + Styled {
 }
 /// The empty vault's first step: a curve from a note up to the toolbar's add button, in the content's top right corner.
 fn add_hint(s: Store) -> impl IntoElement {
-    // The add button's center is about 26pt from the content's right edge (`shell::toolbar`); the arrow ends under it.
+    // The add button's center is about 26pt from the content's right edge (`shell::toolbar`); the arrow ends under it,
+    // 28pt from this box's right edge. Linux: the button is 32pt wide and follows GTK's window buttons, so its center is
+    // their width plus the toolbar's 12pt and 16pt in from the edge.
     view()
         .absolute()
         .top(px(4.0))
-        .right(px(4.0))
+        .right(move || px(if look() == Look::Linux { nsh_core::element::desktop::title_bar().right.0 } else { 4.0 }))
         .w(px(400.0))
         .h(px(120.0))
         .pointer_events(nsh_core::PointerEvents::None)

@@ -77,11 +77,9 @@ pub fn configure(controller: Arc<Controller>) {
             if !reliable {
                 foreground_fallback(controller);
             }
-            if let Some(app) = gio::Application::default().and_then(|app| app.downcast::<gtk::Application>().ok()) {
-                for window in app.windows() {
-                    window.set_size_request(800, 600);
-                }
-            }
+            // No least window size on Linux: tiling compositors give a window the tile they choose and do not honor
+            // one, so content laid out wider than the tile is cut off at its right edge. The layout narrows instead
+            // (the sidebar folds away under 640 pt, dialogs fit the window).
         });
     });
 }

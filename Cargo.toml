@@ -58,6 +58,12 @@ nsh-platform-windows = { git = "https://github.com/longbridge/nsh", branch = "ma
 
 [target.'cfg(target_os = "linux")'.dependencies]
 nsh-platform-linux = { git = "https://github.com/longbridge/nsh", branch = "main", default-features = false, features = ["svg"] }
+# "Select on Screen" and "Use Camera" (src/platform/screenshot.rs, src/platform/camera_linux.rs): the desktop portal's
+# Screenshot and Camera, on zbus's own runtime; the camera's PipeWire stream read with GStreamer, as NSH's sound does.
+ashpd = { version = "=0.14.0", default-features = false, features = ["async-io", "camera", "screenshot"] }
+futures-executor = "=0.3.34"
+gstreamer = "=0.25.4"
+gstreamer-app = "=0.25.2"
 
 [dev-dependencies]
 ed25519-dalek = "=2.2.0"

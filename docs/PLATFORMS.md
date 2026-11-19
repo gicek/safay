@@ -1,9 +1,9 @@
 # Platforms
 
-macOS is the primary platform. Windows and Linux share every page and the whole core, but CI does not build them yet
-and Safay has not yet been run end to end on either; the parts below marked *coded* are written and untested on a real
-system. The interface shows a capability only where `platform::supports` (in `src/platform/mod.rs`) says the platform
-has it.
+macOS is the primary platform. Windows and Linux share every page and the whole core, but CI does not build them yet.
+Windows has not been run end to end; Linux has, on one system (see [Linux details](#linux-details)). The parts below
+marked *coded* are written and untested on a real system. The interface shows a capability only where
+`platform::supports` (in `src/platform/mod.rs`) says the platform has it.
 
 ## Capabilities
 
@@ -20,7 +20,7 @@ has it.
 | Secret clipboard | Yes | Coded (excluded from history and cloud clipboard) | Coded (password-manager hint, no PRIMARY) |
 | Menu bar / tray panel, global shortcuts, settings window | Yes | Not yet wired (NSH supports them) | Not yet wired (shortcuts via the GlobalShortcuts portal) |
 | Launch at login, background launch | Yes | Not yet | Not yet |
-| Select a QR code on screen; camera | Yes | Not yet | Not yet |
+| Select a QR code on screen; camera | Yes | Not yet | Yes (the Screenshot and Camera portals) |
 | Launchers (Alfred, Raycast, Tinycast) | Yes | — | — |
 | App updates | Yes (signed packages with an update source) | Not yet | Not yet |
 
@@ -36,6 +36,20 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
 - Cloud locations use the provider's app folder (`Safay`); choosing an arbitrary remote folder is not implemented.
 - Selecting a QR code on screen needs Screen Recording permission; the camera needs a packaged app.
 
+## Linux details
+
+- Checked on Arch Linux with Hyprland 0.56 (Omarchy) and GTK 4.24: the build, every test (`make ci`'s steps and
+  `nsh test --target linux`), first launch, creating, locking and unlocking a vault, adding accounts by selecting a QR
+  code on screen and with the camera, and the window in tiled and floating layouts. Other desktops are untested.
+- Selecting a QR code on screen uses the desktop portal's interactive screenshot: the desktop's own tool picks the area
+  (`slurp` on Hyprland, the screenshot tool on GNOME and KDE). Without a Screenshot portal, Safay says it can't take a
+  screenshot.
+- The camera goes through the Camera portal, which may ask for permission first, and PipeWire.
+- There is no least window size: tiling compositors give a window the tile they choose, so the layout narrows instead.
+- The window buttons follow the desktop's `gtk-decoration-layout`. On a tiling desktop that also draws title bars on
+  floating windows (Omarchy), a floating Safay shows two sets; `gsettings set org.gnome.desktop.wm.preferences
+  button-layout 'appmenu:'` removes GTK's.
+
 ## Known issues
 
 - With the Settings window over the main window, dragging in the Settings window's title-bar strip occasionally moves
@@ -48,7 +62,8 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
 
 ## Windows and Linux: next steps
 
-1. Run the build and `nsh test --target windows|linux` on real systems; check the title bar areas and window chrome.
+1. Run the build and `nsh test --target windows` on a real Windows system, and Linux on GNOME and KDE; check the title
+   bar areas and window chrome.
 2. Enable `src/desktop.rs` on both platforms (NSH's tray, windows and global shortcuts work there), dispatch the Dock
    and pointer calls per platform, and turn on `supports::TRAY`, `SETTINGS_WINDOW` and `GLOBAL_HOTKEYS`.
 3. Store shortcuts in a platform-neutral form (today they are macOS key codes and Carbon modifiers); turn on launch

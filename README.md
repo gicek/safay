@@ -13,7 +13,7 @@ renders native windows on macOS, Windows and Linux.
 | Platform | Get it |
 |---|---|
 | **macOS** 14 or later, Apple silicon | `Safay-<version>.dmg` from the [latest release](https://github.com/gicek/safay/releases/latest): open it and drag Safay to Applications. Signed and notarized. |
-| **Windows**, **Linux** | Not published yet. They build from the same code but have not been run end to end; see [Platforms](docs/PLATFORMS.md) and [Getting started](#getting-started). |
+| **Windows**, **Linux** | Not published yet. They build from the same code; Linux has been run end to end on one system, Windows not yet. See [Platforms](docs/PLATFORMS.md) and [Getting started](#getting-started). |
 
 On its second launch Safay asks whether to check for updates once a day; each new version then opens in its update
 window, or downloads and installs on its own if you choose. The other files on each release — the zip, the `.tar.gz` update archive and `latest.json` — are for the

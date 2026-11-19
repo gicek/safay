@@ -130,7 +130,7 @@ moving back to NSH. Review this list on every NSH upgrade.
 | Credential storage | `platform::credentials` (`keyring`) | macOS, Windows |
 | Secret clipboard (concealed, expiring) | `platform::clipboard` | all |
 | iCloud backup; silent pushes | `platform::icloud`; `platform::macos::enable_remote_push` (adds the push callback to NSH's app delegate class at runtime — recheck on every NSH upgrade) | macOS |
-| Camera and on-screen QR selection | `platform::camera`, `platform::screen_capture`, `scan` (the overlay) | macOS |
+| Camera and on-screen QR selection | macOS: `platform::camera`, `platform::screen_capture`, `scan` (the overlay). Linux: `platform::camera` (`camera_linux.rs`: the Camera portal, PipeWire and GStreamer) and `platform::screenshot` (the Screenshot portal, the desktop's own selection) | macOS, Linux |
 | QR decoding and generation | `platform::files` (`rqrr`, `qrcode`) | all |
 | SF Symbols | `platform::symbols` (rendered to template PNGs; SVG icons elsewhere) | macOS |
 | Lock on sleep, screen lock and user switch | `platform::macos::observe`, `platform::windows`, `platform::linux` | all |

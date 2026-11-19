@@ -280,9 +280,14 @@ fn overview(s: Store) -> impl IntoElement {
                         )
                         .child(
                             text(move || {
-                                s.projection
-                                    .with(|p| p.sync.location.as_ref().map(|l| location_detail(s, l)))
-                                    .unwrap_or_else(|| s.label("Keep an end-to-end encrypted backup in a folder or a cloud service"))
+                                s.projection.with(|p| p.sync.location.as_ref().map(|l| location_detail(s, l))).unwrap_or_else(|| {
+                                    // Linux has no cloud storage location yet (`supports::CLOUD`).
+                                    s.label(if cfg!(target_os = "linux") {
+                                        "Keep an end-to-end encrypted backup in a folder"
+                                    } else {
+                                        "Keep an end-to-end encrypted backup in a folder or a cloud service"
+                                    })
+                                })
                             })
                             .number_of_lines(2)
                             .text_size(px(12.0))
@@ -645,15 +650,19 @@ fn choose(s: Store) -> impl IntoElement {
     let row = move |kind: LocationIcon, title: &'static str, subtitle: Option<&'static str>, enabled: bool, press: Box<dyn Fn()>| {
         location_row(s, kind, title, subtitle, move || s.syncing.get() || !enabled, press).into_element()
     };
-    // iCloud needs a build signed with the iCloud entitlement; otherwise the row stays disabled with the reason.
+    // iCloud needs a build signed with the iCloud entitlement; otherwise the row stays disabled with the reason. Linux
+    // never has iCloud, so it has no row there.
     let icloud = safay_app::icloud::available();
-    let mut rows = vec![row(
-        LocationIcon::Icloud,
-        "iCloud",
-        (!icloud).then_some("Not available in this build of Safay"),
-        icloud,
-        Box::new(move || s.link_icloud()),
-    )];
+    let mut rows = Vec::new();
+    if !cfg!(target_os = "linux") {
+        rows.push(row(
+            LocationIcon::Icloud,
+            "iCloud",
+            (!icloud).then_some("Not available in this build of Safay"),
+            icloud,
+            Box::new(move || s.link_icloud()),
+        ));
+    }
     if crate::platform::supports::CLOUD {
         for provider in [Provider::Dropbox, Provider::Onedrive, Provider::GoogleDrive, Provider::Nextcloud, Provider::Webdav] {
             if oauth_configured(provider) {
@@ -664,7 +673,7 @@ fn choose(s: Store) -> impl IntoElement {
     rows.push(row(
         LocationIcon::Folder,
         "Other Folder",
-        Some("iCloud Drive or a folder synced by another app"),
+        Some(if cfg!(target_os = "linux") { "A folder synced by another app" } else { "iCloud Drive or a folder synced by another app" }),
         true,
         Box::new(move || s.choose_folder()),
     ));

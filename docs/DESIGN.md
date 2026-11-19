@@ -12,10 +12,11 @@ appearance only — never capabilities.
 
 | | macOS (`theme.json`) | Windows (`theme-windows.json`) | Linux (`theme-linux.json`) |
 |---|---|---|---|
-| Title bar | Hidden; a 52 pt toolbar row with the traffic lights over the sidebar | 48 pt, system caption buttons on the right | 46 pt header bar, window buttons where GTK reports them |
+| Title bar | Hidden; a 52 pt toolbar row with the traffic lights over the sidebar | 48 pt, system caption buttons on the right | 46 pt header bar, window buttons where GTK reports them; the toolbar names the scope ("All") beside the sidebar's "Safay", and adds with a 32 pt accent icon button |
 | Sidebar | 210 pt; floating on macOS 26, flush on 15 and earlier and on 27 and later; accent-filled selection | 240 pt, Mica tone, 3 pt accent bar on the selection | 220 pt, flush |
 | Controls | 30/36 pt, radius 6/8 | 32 pt, radius 4 | 34/38 pt, radius 6 |
-| Settings | Separate 760 × 520 window (⌘,) | Dialog over the main window | Dialog over the main window |
+| Settings | Separate 760 × 520 window (⌘,) | Dialog over the main window | Dialog over the main window, titled in its sidebar |
+| Dialog titles | Leading edge | Leading edge | Leading edge, as the alerts' |
 
 ## Colour and type
 
@@ -29,11 +30,11 @@ appearance only — never capabilities.
 
 ## Structure
 
-- **Main window**: sidebar and toolbar (title, lock, list/cards, search, add); a card grid (minimum 210 pt, 12 pt
-  gaps) or a 58 pt list. Minimum size 880 × 620. The sidebar is one list without section titles: All, then the
-  categories, with "New Category" (a folder with a plus) left of the sidebar toggle in its title bar; Import/Export,
-  Backup & Sync and Settings sit at its foot. An empty vault shows no buttons: hand-drawn arrows point from short notes
-  to the toolbar's add button and to "Import / Export".
+- **Main window**: sidebar and toolbar (title, lock, list/cards, search, add); a card grid (minimum 210 pt, 12 pt gaps)
+  or a 58 pt list. Minimum size 880 × 620 (macOS; none on Linux, whose tiling layouts choose the size). The sidebar is
+  one list without section titles: All, then the categories, with "New Category" (a folder with a plus) left of the
+  sidebar toggle in its title bar; Import/Export, Backup & Sync and Settings sit at its foot. An empty vault shows no
+  buttons: hand-drawn arrows point from short notes to the toolbar's add button and to "Import / Export".
 - **Account actions** use native context menus: copy, add to or remove from categories, details, QR code, move up/down,
   delete. Cards and rows can be dragged to reorder; categories too.
 - **Recently Deleted**: deleting asks nothing and moves the account to Recently Deleted, which the sidebar lists after

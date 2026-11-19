@@ -36,9 +36,7 @@ fn settings_dialog(s: Store) -> impl IntoElement {
     });
     nsh_base::dialog().animation(nsh_core::ModalAnimation::Fade).on_cancel(move |_: &()| s.close_sheet()).child(
         modal_backdrop().p(px(24.0)).child(
-            modal_surface(view().role(nsh_core::AccessibilityRole::Alert))
-                .w(px(760.0))
-                .max_w(percentage(100.0))
+            fit_width(modal_surface(view().role(nsh_core::AccessibilityRole::Alert)).w(px(760.0)))
                 .h(px(520.0))
                 .max_h(move || window().height - px(48.0))
                 .overflow_hidden()
@@ -566,7 +564,7 @@ fn scan_panel(s: Store) -> impl IntoElement {
                     })
                     .on_press(move || {
                         source.set(Some(Source::Screen));
-                        #[cfg(target_os = "macos")]
+                        #[cfg(any(target_os = "macos", target_os = "linux"))]
                         s.capture_screen();
                     })
                     .into_element()
@@ -655,6 +653,8 @@ fn scan_panel(s: Store) -> impl IntoElement {
                         }
                         // The hint for the source picked last.
                         match source.get() {
+                            // Linux: the desktop's own screenshot tool picks the area, or takes the whole screen.
+                            Some(Source::Screen) if cfg!(target_os = "linux") => s.label("Take a screenshot that shows the QR code"),
                             Some(Source::Screen) if screen_ready() => s.label("Drag to select the QR code on screen"),
                             Some(Source::Screen) => s.label("Needs Screen Recording permission the first time"),
                             Some(Source::Images) => s.label("You can choose several images at once"),
@@ -683,9 +683,9 @@ fn camera_view(
 ) -> impl IntoElement {
     let frame = signal(None::<String>);
     let ready = signal(false);
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     let _ = (camera_failed, migration);
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     {
         crate::platform::camera::start();
         cleanup(crate::platform::camera::stop);
@@ -696,6 +696,8 @@ fn camera_view(
                 camera_on.set(false);
                 let key = match error {
                     crate::platform::camera::CameraError::Denied => {
+                        // Linux has no common settings page to send the user to: the portal asks again next time.
+                        #[cfg(target_os = "macos")]
                         drop(open_url("x-apple.systempreferences:com.apple.preference.security?Privacy_Camera"));
                         "Camera access not allowed"
                     }
@@ -759,7 +761,10 @@ fn camera_view(
 fn screen_ready() -> bool {
     #[cfg(target_os = "macos")]
     return crate::platform::screen_capture::has_permission();
-    #[cfg(not(target_os = "macos"))]
+    // Linux: the portal asks for any permission itself, while the screenshot is taken.
+    #[cfg(target_os = "linux")]
+    return true;
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     false
 }
 fn source_card(

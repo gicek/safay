@@ -9,10 +9,14 @@
 
   ```sh
   sudo apt-get install libgtk-4-dev libwebkitgtk-6.0-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-    gstreamer1.0-plugins-base gstreamer1.0-plugins-good clang libclang-dev
+    gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-pipewire clang libclang-dev
   # Native UI tests under a virtual display:
   sudo apt-get install xvfb xauth at-spi2-core libxtst6 dbus-x11
   ```
+
+  On Arch Linux: `gtk4 webkitgtk-6.0 gstreamer gst-plugins-base gst-plugins-good gst-plugin-pipewire clang`. Selecting a
+  QR code on screen and the camera also need `xdg-desktop-portal` with a backend that has Screenshot (on Hyprland,
+  `xdg-desktop-portal-hyprland` with `grim` and `slurp`).
 - Node.js 22 or later, only for the Raycast extension (`integrations/raycast`).
 
 Development builds optimize dependencies (including NSH and Argon2id) and leave Safay's own crates unoptimized; without

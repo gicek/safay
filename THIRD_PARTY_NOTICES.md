@@ -44,6 +44,9 @@ Versions below are exact pins. Cargo.lock records the full production build grap
 | objc2-av-foundation, objc2-core-media, objc2-core-video | 0.3.2 | Zlib OR Apache-2.0 OR MIT | macOS camera scanning (AVFoundation capture, pixel buffers) |
 | objc2-cloud-kit | 0.3.2 | Zlib OR Apache-2.0 OR MIT | macOS iCloud backup (CloudKit private database); replace the iCloud store adapter |
 | windows-sys | 0.61.2 | MIT OR Apache-2.0 | Windows session events and sensitive clipboard |
+| ashpd | 0.14.0 | MIT | Linux desktop portal requests (Screenshot, Camera) on zbus; replace the screen selection and camera adapters |
+| gstreamer, gstreamer-app | 0.25.4, 0.25.2 | MIT OR Apache-2.0 | Linux camera scanning (the portal's PipeWire stream); the same versions NSH uses for sound |
+| futures-executor | 0.3.34 | MIT OR Apache-2.0 | Waiting for Linux portal requests on a worker thread |
 
 All registry dependencies are sourced from crates.io at `https://crates.io/crates/<name>/<version>`. Exact licenses below come from resolved crate metadata. Platform-specific dependencies must be re-enumerated on their target before public distribution. This file does not reproduce every third-party license text; installers must ship them alongside.
 

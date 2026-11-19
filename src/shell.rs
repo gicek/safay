@@ -352,7 +352,8 @@ fn toolbar(s: Store) -> impl IntoElement {
                         .and_then(|id| {
                             s.projection.with(|p| p.categories.iter().find(|c| c.id == id).map(|c| SharedString::from(c.name.clone())))
                         })
-                        .unwrap_or_else(|| "Safay".into())
+                        // Linux: the sidebar's header already names the app, so the toolbar names the scope.
+                        .unwrap_or_else(|| if look() == Look::Linux && !collapsed() { s.label("All") } else { "Safay".into() })
                 },
                 15.0,
             )
@@ -441,9 +442,15 @@ fn search_field(s: Store) -> impl IntoElement {
         }
     });
     let (focused, blurred) = (editing.clone(), editing);
-    view()
-        .window_drag(false)
-        .w(move || px(if window().width.0 >= 960.0 { 240.0 } else { 180.0 }))
+    let field = view().window_drag(false);
+    // Linux: tiling layouts give the window any width, so the field takes what the title leaves (120 to 240 pt) rather
+    // than truncating the title.
+    let field = if look() == Look::Linux {
+        field.flex_1().min_w(px(120.0)).max_w(px(240.0))
+    } else {
+        field.w(move || px(if window().width.0 >= 960.0 { 240.0 } else { 180.0 }))
+    };
+    field
         .h(px(if mac { GLASS } else { 32.0 }))
         .flex_row()
         .items_center()
@@ -519,6 +526,24 @@ fn add_button(s: Store) -> impl IntoElement {
             .on_press(move || s.open_sheet(Sheet::Add))
             .child(crate::icons::icon_bold(Icon::Plus).size(px(22.0)))
             .into_element(),
-        _ => push_button(move || s.label("Add"), Kind::Primary, false).on_press(move || s.open_sheet(Sheet::Add)).into_element(),
+        // Linux: GTK's window buttons sit right after it, so a square icon button the size of the toolbar's other
+        // controls, filled with the accent as the primary action, rather than a text button beside a round close button.
+        Look::Linux => nsh_base::button()
+            .accessibility_label(move || Some(s.label("Add")))
+            .size(px(32.0))
+            .rounded(px(chrome::control_radius(false)))
+            .items_center()
+            .justify_center()
+            .bg(move || theme().primary)
+            .text_color(move || theme().primary_foreground)
+            .hover(|st| st.opacity(0.9))
+            .focus(focus_ring)
+            .active(|st| st.scale(0.95))
+            .on_press(move || s.open_sheet(Sheet::Add))
+            .child(crate::icons::icon_bold(Icon::Plus).size(px(18.0)))
+            .into_element(),
+        Look::Windows => {
+            push_button(move || s.label("Add"), Kind::Primary, false).on_press(move || s.open_sheet(Sheet::Add)).into_element()
+        }
     }
 }
