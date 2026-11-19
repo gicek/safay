@@ -10,6 +10,7 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 - The export list and the "Account Details" header show each account's site icon instead of its initials.
 - The countdown in "Account Details" stays in place as the seconds change.
 - An update that can't be installed shows an error as soon as it downloads, instead of failing quietly when you quit.
+- The camera preview in "Add Account" no longer flickers.
 
 ## [1.2.0] - 2026-11-18
 

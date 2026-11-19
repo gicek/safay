@@ -691,7 +691,10 @@ fn camera_view(
     camera_failed: Signal<bool>,
     migration: impl Fn() -> Option<(i64, i64)> + Copy + 'static,
 ) -> impl IntoElement {
-    let frame = signal(None::<String>);
+    // The preview in two layers that take turns: a frame loads into the hidden one and shows once it has loaded, so the
+    // shown image never changes its source and never blanks while a frame decodes (one image did, every frame).
+    let layers = [signal(None::<String>), signal(None::<String>)];
+    let shown = signal(0_usize);
     let ready = signal(false);
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     let _ = (camera_failed, migration);
@@ -720,7 +723,7 @@ fn camera_view(
                 ready.set(poll.ready);
             }
             if poll.frame.is_some() {
-                frame.set(poll.frame);
+                layers[1 - shown.get_untracked()].set(poll.frame);
             }
             if let Some(text) = poll.result
                 && text.lines().any(|l| otpauth::parse_scan_result(l, &placeholders()).accounts.iter().any(|a| a.is_valid()))
@@ -739,10 +742,25 @@ fn camera_view(
         .bg(move || theme().foreground.opacity(0.05))
         .items_center()
         .justify_center()
-        .child(when(
-            move || frame.with(|f| f.is_some()),
-            move || image(move || frame.get().unwrap_or_default()).absolute().inset(px(0.0)).overflow_hidden(),
-        ))
+        .children([0, 1].map(|i| {
+            let layer = layers[i];
+            when(
+                move || layer.with(|f| f.is_some()),
+                move || {
+                    image(move || layer.get().unwrap_or_default())
+                        .absolute()
+                        .inset(px(0.0))
+                        .overflow_hidden()
+                        .opacity(move || if shown.get() == i { 1.0_f32 } else { 0.0 })
+                        .on_load(move |_: &Size<DevicePixels>| {
+                            if shown.get_untracked() != i {
+                                shown.set(i);
+                            }
+                        })
+                },
+            )
+            .into_element()
+        }))
         .child(when(
             move || !ready.get(),
             move || {
