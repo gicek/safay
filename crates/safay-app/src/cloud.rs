@@ -1,7 +1,8 @@
 //! Cloud storage backup (SECURITY.md, Network): `cloudset` builds every request; this module only runs its state machines
 //! with an injected HTTP executor and keeps the serialized connection in an injected credential store (the system
-//! keychain in the app, memory in tests). Remote files are the folder backend's: `Safay/vault.safayvault` and
-//! `Safay/vault.metadata.json`, only ciphertext and non-secret metadata.
+//! keychain in the app, memory in tests). Remote files are the folder backend's, `vault.safayvault` and
+//! `vault.metadata.json`, only ciphertext and non-secret metadata: at the root of Safay's app folder, or in a `Safay`
+//! folder on WebDAV and Nextcloud ([`backup_folder`]).
 use crate::sync::{Backend, Expect, Remote, SyncError};
 use cloudset::{
     BoxOperation, Client, ClientConfig, CloudError, Connection, HttpRequest, HttpResponse, Precondition, ProviderKind, RemotePath,
@@ -145,20 +146,30 @@ impl CloudBackend {
         Ok((Client::new(connection, ClientConfig::new(services.user_agent.clone())), pin))
     }
 }
-fn path(name: &str) -> RemotePath {
-    RemotePath::parse(&format!("{DEFAULT_FOLDER}/{name}")).expect("static path")
+/// The folder that holds the backup. A sign-in limited to the app's own folder (Dropbox "Apps › Safay", OneDrive's app
+/// folder, Google Drive's "My Drive › Safay") already points at Safay's folder, so the backup lives at its root; a
+/// sign-in that reaches the whole account (WebDAV, Nextcloud) keeps it in a `Safay` folder at the root.
+fn backup_folder(connection: &Connection) -> RemotePath {
+    match connection.access_scope() {
+        Some(cloudset::AccessScope::AppFolder) => RemotePath::root(),
+        _ => RemotePath::parse(DEFAULT_FOLDER).expect("static path"),
+    }
+}
+fn path(folder: &RemotePath, name: &str) -> RemotePath {
+    folder.join(name).expect("static file name")
 }
 impl Backend for CloudBackend {
     fn read(&self) -> Result<Option<Remote>, SyncError> {
         let services = services()?;
         let (client, pin) = self.client(&services)?;
-        let Some(file) = run(&services, Some(&self.credential), client.read(path(VAULT_FILE_NAME)), pin.clone())? else {
+        let folder = backup_folder(client.connection());
+        let Some(file) = run(&services, Some(&self.credential), client.read(path(&folder, VAULT_FILE_NAME)), pin.clone())? else {
             return Ok(None);
         };
         if !vault::is_valid_envelope(&file.data) {
             return Err(SyncError::Corrupt);
         }
-        let device = run(&services, Some(&self.credential), client.read(path(METADATA_FILE_NAME)), pin)
+        let device = run(&services, Some(&self.credential), client.read(path(&folder, METADATA_FILE_NAME)), pin)
             .ok()
             .flatten()
             .and_then(|m| BackupMetadata::device_name(&m.data));
@@ -168,18 +179,26 @@ impl Backend for CloudBackend {
     fn write(&self, data: &[u8], metadata: &BackupMetadata, expect: &Expect) -> Result<Option<RemoteVersion>, SyncError> {
         let services = services()?;
         let (client, pin) = self.client(&services)?;
+        let folder = backup_folder(client.connection());
         // The folder may exist already; any other failure surfaces on the write itself.
-        let _ =
-            run(&services, Some(&self.credential), client.create_dir(RemotePath::parse(DEFAULT_FOLDER).expect("static path")), pin.clone());
+        if !folder.is_root() {
+            let _ = run(&services, Some(&self.credential), client.create_dir(folder.clone()), pin.clone());
+        }
         let precondition = match expect {
             Expect::Any => Precondition::None,
             Expect::Absent => Precondition::Absent,
             Expect::Unchanged(RemoteVersion::Revision { value }) => Precondition::Matches(Revision::new(value.clone())),
             Expect::Unchanged(RemoteVersion::ModifiedAt { .. }) => Precondition::None,
         };
-        let entry = run(&services, Some(&self.credential), client.write(path(VAULT_FILE_NAME), data.to_vec(), precondition), pin.clone())?;
+        let entry =
+            run(&services, Some(&self.credential), client.write(path(&folder, VAULT_FILE_NAME), data.to_vec(), precondition), pin.clone())?;
         // Metadata is only for display; a failed write does not fail the backup.
-        let _ = run(&services, Some(&self.credential), client.write(path(METADATA_FILE_NAME), metadata.encode(), Precondition::None), pin);
+        let _ = run(
+            &services,
+            Some(&self.credential),
+            client.write(path(&folder, METADATA_FILE_NAME), metadata.encode(), Precondition::None),
+            pin,
+        );
         Ok(entry.revision.map(|r| RemoteVersion::Revision { value: r.as_str().to_owned() }))
     }
 }

@@ -65,7 +65,9 @@ so a development build never touches a release build's data:
 | `instance.lock` | Keeps a second Safay process from writing |
 
 Exports are encrypted files of the same format with their own salt, marked `"app": "safay"`. A backup location holds
-`Safay/vault.safayvault` (the vault as is) and `Safay/vault.metadata.json` (device name and time).
+`vault.safayvault` (the vault as is) and `vault.metadata.json` (device name and time): in a `Safay` folder inside the
+chosen folder or the WebDAV and Nextcloud account, and at the root of Safay's app folder on Dropbox, OneDrive and Google
+Drive, which is already named Safay. iCloud keeps them in one CloudKit record.
 
 ## Backup and sync
 
