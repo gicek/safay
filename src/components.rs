@@ -202,8 +202,19 @@ pub fn show_menu(s: Store, items: Vec<nsh_core::element::desktop::MenuItem>, at:
         Some(at) => nsh_core::element::desktop::popup_menu_at(items, at),
         None => nsh_core::element::desktop::popup_menu(items),
     };
+    // Linux: the tray panel stays open while its menu has the keyboard (`desktop::menu_open`).
+    #[cfg(target_os = "linux")]
+    let panel = s.surface == crate::store::Surface::Panel;
+    #[cfg(target_os = "linux")]
+    if panel {
+        crate::desktop::menu_open(true);
+    }
     s.task(async move {
         let _ = answer.await;
+        #[cfg(target_os = "linux")]
+        if panel {
+            crate::desktop::menu_open(false);
+        }
     });
 }
 /// A neutral drop shadow; box shadows take packed colors, so it is the same in both appearances.

@@ -54,6 +54,12 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
   closing the main window keeps Safay in the tray. Wayland lets no app place a window: on Hyprland the panel opens at
   the focused monitor's top right, under its bar (a window rule over Hyprland's socket); elsewhere where the compositor
   puts it, usually the center. The panel is at least 430 pt tall and the list scrolls past nine rows.
+- The panel closes on Escape, when another window takes the keyboard and, on Hyprland, on a click outside it (a
+  left-click bind over Hyprland's socket, switched on only while the panel shows and consuming nothing); elsewhere a
+  click on the bare desktop leaves it open. Its menus keep it open and take its color scheme.
+- Recording a shortcut takes the keys from NSH's key events by their logical key. On Hyprland the shortcuts' own binds
+  are off while the editor records, so one of them can be recorded again; Escape stops recording without closing
+  Settings.
 - Global shortcuts go through the GlobalShortcuts portal, which knows an app outside a sandbox by its desktop entry: the
   runner writes `<app ID>.desktop` in `~/.local/share/applications` (it also opens `safay://` links). Plasma and GNOME
   48+ bind the keys, possibly asking first; Hyprland's portal binds none, so Safay binds them over Hyprland's socket,

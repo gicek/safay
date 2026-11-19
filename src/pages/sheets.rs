@@ -29,12 +29,22 @@ pub fn sheets(s: Store) -> impl IntoElement {
 }
 /// Windows and Linux: the Settings panes in a dialog over the main window (macOS uses a window).
 fn settings_dialog(s: Store) -> impl IntoElement {
-    on_key_with("escape", KeyOptions { when: nsh_core::keymap::When::Always, ..Default::default() }, move |_| {
-        if s.auth.get().is_none() {
+    // Escape while a shortcut is recorded stops recording only (`settings::recorder`), as on macOS.
+    let cancel = move || {
+        if s.recording.get().is_some() {
+            s.recording.set(None);
+            #[cfg(target_os = "linux")]
+            crate::desktop::pause_shortcuts(false);
+        } else {
             s.close_sheet()
         }
+    };
+    on_key_with("escape", KeyOptions { when: nsh_core::keymap::When::Always, ..Default::default() }, move |_| {
+        if s.auth.get().is_none() {
+            cancel()
+        }
     });
-    nsh_base::dialog().animation(nsh_core::ModalAnimation::Fade).on_cancel(move |_: &()| s.close_sheet()).child(
+    nsh_base::dialog().animation(nsh_core::ModalAnimation::Fade).on_cancel(move |_: &()| cancel()).child(
         modal_backdrop().p(px(24.0)).child(
             fit_width(modal_surface(view().role(nsh_core::AccessibilityRole::Alert)).w(px(760.0)))
                 .h(px(520.0))

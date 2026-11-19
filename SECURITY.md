@@ -162,7 +162,9 @@ per app, who may send them. There is no local socket, port or other channel.
   it once, deletes it at once, and keeps only the QR codes' text in memory. The camera is asked for through the portal,
   which may show its own prompt; frames arrive over PipeWire and are processed in memory only, and the stream closes
   with the preview. On Hyprland, Safay talks to Hyprland's socket only to read the monitors' layout and its binds, set
-  the tray panel's window rule and bind the global shortcuts' keys to the portal's shortcuts. A captured code's result
+  the tray panel's window rule, bind the global shortcuts' keys to the portal's shortcuts and, while the panel shows, a
+  left-click bind that closes the panel when the pointer is outside it (it reads the pointer's position only then, and
+  the click still reaches what is under it). A captured code's result
   shows as a desktop notification naming its issuer, never a secret.
 - **Windows / Linux**: see [Platforms](docs/PLATFORMS.md) for what is implemented; file permissions on Windows follow the
   user profile's ACLs.

@@ -88,6 +88,40 @@ pub fn bind_shortcuts(keystrokes: &[String]) {
     }
 }
 
+/// While `on`, a click outside the window titled `title` (the tray panel) closes it, as a click anywhere else closes a
+/// menu bar panel on macOS. Wayland tells no app of clicks outside its windows, and a click on the desktop moves no
+/// focus, so no blur closes the panel there. On Hyprland a left-click bind that consumes nothing (the click still
+/// reaches the desktop or the window under it) checks the pointer against the panel and asks the panel to close. The
+/// bind is made once a Hyprland session (a Lua global) and only switched on and off. Does nothing outside Hyprland.
+pub fn close_on_outside_click(title: &str, on: bool) {
+    let Some(socket) = socket() else { return };
+    let title = title.replace(['\\', '"'], "");
+    let lua = if on {
+        format!(
+            "safay_click_title = \"{title}\" \
+             if not safay_click then safay_click = hl.bind(\"mouse:272\", function() \
+               local w = hl.get_windows({{ title = safay_click_title }})[1] \
+               if not w then safay_click:set_enabled(false) return end \
+               local c = hl.get_cursor_pos() \
+               if c.x < w.at.x or c.y < w.at.y or c.x >= w.at.x + w.size.x or c.y >= w.at.y + w.size.y then \
+                 hl.dispatch(hl.dsp.window.close({{ window = \"address:\" .. w.address }})) \
+               end \
+             end, {{ non_consuming = true }}) end \
+             safay_click:set_enabled(true)"
+        )
+    } else {
+        "if safay_click then safay_click:set_enabled(false) end".to_owned()
+    };
+    drop(request(&socket, &format!("eval {lua}")));
+}
+
+/// Unbinds the keys this app bound (`bind_shortcuts`), so the next keystroke reaches the app: the shortcut editor records
+/// while they are off. Does nothing outside Hyprland.
+pub fn unbind_shortcuts() {
+    let Some(socket) = socket() else { return };
+    drop(request(&socket, "eval for _, k in ipairs(safay_keys or {}) do hl.unbind(k) end safay_keys = {}"));
+}
+
 /// The modifier bits and key of every bind Hyprland has.
 fn bound_keys(binds: &str) -> Vec<(i64, String)> {
     let Ok(serde_json::Value::Array(binds)) = serde_json::from_str(binds) else { return Vec::new() };

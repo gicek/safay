@@ -108,3 +108,44 @@ pub fn hand_to_running() -> bool {
     app.run_with_args(&args);
     true
 }
+
+/// Gives the window titled `title` the app's color scheme for its menus: NSH styles a menu dark under `.nsh-dark`, a class
+/// it gives a window of the app's own only when the app's environment changes, not as the window opens. The tray panel
+/// opened while the main window is in the tray saw no change, and its menus came out light in a dark app. The scheme is
+/// GTK's own `gtk-application-prefer-dark-theme`, which NSH keeps as the app's, and the class follows it while the window
+/// lives. The window is made on the main thread after it is asked for: it is looked for there for a moment.
+pub fn follow_scheme(title: &'static str) {
+    glib::MainContext::default().invoke(move || {
+        let mut tries = 0;
+        glib::timeout_add_local(Duration::from_millis(30), move || {
+            tries += 1;
+            let window = gio::Application::default()
+                .and_then(|app| app.downcast::<gtk::Application>().ok())
+                .and_then(|app| app.windows().into_iter().find(|w| w.title().as_deref() == Some(title)));
+            let Some(window) = window else {
+                return if tries < 40 { glib::ControlFlow::Continue } else { glib::ControlFlow::Break };
+            };
+            let Some(settings) = gtk::Settings::default() else { return glib::ControlFlow::Break };
+            let apply = |window: &gtk::Window, settings: &gtk::Settings| {
+                let dark = settings.is_gtk_application_prefer_dark_theme();
+                window.remove_css_class(if dark { "nsh-light" } else { "nsh-dark" });
+                window.add_css_class(if dark { "nsh-dark" } else { "nsh-light" });
+            };
+            apply(&window, &settings);
+            let weak = window.downgrade();
+            let handler = settings.connect_gtk_application_prefer_dark_theme_notify(move |settings| {
+                if let Some(window) = weak.upgrade() {
+                    apply(&window, settings);
+                }
+            });
+            // The handler goes with the window.
+            let handler = std::cell::Cell::new(Some(handler));
+            window.connect_destroy(move |_| {
+                if let (Some(handler), Some(settings)) = (handler.take(), gtk::Settings::default()) {
+                    settings.disconnect(handler);
+                }
+            });
+            glib::ControlFlow::Break
+        });
+    });
+}

@@ -500,6 +500,17 @@ fn recorder(s: Store, which: u8) -> impl IntoElement {
         })
     };
     let mac = look() == Look::Mac;
+    // Linux: the view that takes the keys while recording (below); a pointer press gives a button no keyboard focus.
+    #[cfg(target_os = "linux")]
+    let keys = element_ref();
+    // Linux: a recorder that goes while recording (the dialog closed) stops it, and the shortcuts' keys work again.
+    #[cfg(target_os = "linux")]
+    cleanup(move || {
+        if untracked(recording) {
+            s.recording.set(None);
+            crate::desktop::pause_shortcuts(false);
+        }
+    });
     // macOS: the recorder, a 130×24 capsule with its clear button inside.
     let field = button()
         .accessibility_label(move || Some(s.label(if recording() { "Type shortcut" } else { "Record Shortcut" })))
@@ -525,6 +536,11 @@ fn recorder(s: Store, which: u8) -> impl IntoElement {
                 return;
             }
             s.recording.set(Some(which));
+            #[cfg(target_os = "linux")]
+            {
+                crate::desktop::pause_shortcuts(true);
+                keys.focus();
+            }
             // The key arrives on AppKit's main thread; it is applied here, on the engine thread.
             #[cfg(target_os = "macos")]
             {
@@ -554,23 +570,34 @@ fn recorder(s: Store, which: u8) -> impl IntoElement {
             .text_size(px(12.5))
             .text_color(move || if current().is_some() || recording() { theme().foreground } else { theme().muted_foreground }),
         );
-    // Linux: NSH's key events while recording (macOS records through AppKit, above). The desktop's own shortcuts reach
-    // it first and never get here.
+    // Linux: NSH's key events while recording (macOS records through AppKit, above), on a focusable view that takes the
+    // keyboard as recording starts. The desktop's own shortcuts reach it first and never get here.
     #[cfg(target_os = "linux")]
-    let field =
-        view().flex_1().child(field).capture_keys(move || if recording() { KeyCapture::All } else { KeyCapture::None }).on_key_down(
-            move |event: &nsh_core::KeyEvent| {
-                if !recording() || event.repeat {
-                    return;
+    let field = view()
+        .flex_1()
+        .focusable(true)
+        .element_ref(&keys)
+        .child(field)
+        .capture_keys(move || if recording() { KeyCapture::All } else { KeyCapture::None })
+        // Leaving the recorder stops recording, and the shortcuts' keys work again.
+        .on_blur(move |_: &()| {
+            if recording() {
+                s.recording.set(None);
+                crate::desktop::pause_shortcuts(false);
+            }
+        })
+        .on_key_down(move |event: &nsh_core::KeyEvent| {
+            if !recording() || event.repeat {
+                return;
+            }
+            if let Some(result) = crate::platform::hotkeys::recorded(&event.key, &event.code, event.modifiers) {
+                s.recording.set(None);
+                crate::desktop::pause_shortcuts(false);
+                if let Some(next) = result {
+                    store(next)
                 }
-                if let Some(result) = crate::platform::hotkeys::recorded(&event.code, event.modifiers) {
-                    s.recording.set(None);
-                    if let Some(next) = result {
-                        store(next)
-                    }
-                }
-            },
-        );
+            }
+        });
     view().w(px(if mac { 130.0 } else { 150.0 })).flex_row().items_center().gap(px(4.0)).child(field).child(when(
         move || current().is_some() && !recording(),
         move || {

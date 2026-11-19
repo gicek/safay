@@ -45,6 +45,12 @@ thread_local! {
     static HIDDEN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// The preferences arrived once (the launch's own).
     static LAUNCHED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// The shortcuts' keystrokes as last registered, to bind again after the editor records.
+    static KEYSTROKES: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    /// When the panel last closed: a click on the tray icon closes it first (outside it), and must not open it again.
+    static PANEL_CLOSED: std::cell::Cell<Option<std::time::Instant>> = const { std::cell::Cell::new(None) };
+    /// A menu of the panel's is open: the panel stays while it has the keyboard.
+    static MENU_OPEN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 fn desktop() -> Option<Desktop> {
@@ -126,6 +132,7 @@ pub fn install(controller: Arc<Controller>, preview: bool) {
         }
         let bound: Vec<String> = keys.into_iter().flatten().collect();
         platform::hyprland::bind_shortcuts(&bound);
+        KEYSTROKES.with(|k| *k.borrow_mut() = bound);
     });
 
     // Launching Safay again brings the main window forward, out of the tray too (the runner only raises a shown one).
@@ -207,12 +214,18 @@ pub fn toggle_panel() {
         close_panel();
         return;
     }
+    if PANEL_CLOSED.with(std::cell::Cell::get).is_some_and(|at| at.elapsed() < std::time::Duration::from_millis(300)) {
+        return;
+    }
     // At the focused monitor's top right on Hyprland; elsewhere where the compositor puts it.
     platform::hyprland::place_at_top_right(PANEL_TITLE, f64::from(PANEL_WIDTH));
     d.owner.get().run(|| {
-        // A popup: no frame, closed by Escape and when it loses the focus. It follows its content's height.
+        // A popup: no frame, closed by Escape and when it loses the focus. It follows its content's height. On Wayland a
+        // menu the panel opens takes the keyboard from its window, which would close the panel with the menu: the blur
+        // that closes it is the panel's own, below, which a menu's leaves alone.
         let mut attributes = WindowAttributes::default();
         attributes.size_to_content = Some(SizeToContent::Height);
+        attributes.close_on_blur = Some(false);
         let (controller, preview) = (d.controller.get(), d.preview);
         let opened = open_window(
             window()
@@ -223,12 +236,54 @@ pub fn toggle_panel() {
                 .attributes(attributes)
                 .on_open_change(|_| {
                     PANEL.with(|p| p.borrow_mut().take());
+                    PANEL_CLOSED.with(|at| at.set(Some(std::time::Instant::now())));
+                    platform::hyprland::close_on_outside_click(PANEL_TITLE, false);
                 })
                 .content(move || crate::panel_window(controller.clone(), preview)),
         );
         if let Some(panel) = opened {
+            // Its menus in the app's scheme, with the main window shown or not.
+            platform::linux::follow_scheme(PANEL_TITLE);
+            platform::hyprland::close_on_outside_click(PANEL_TITLE, true);
+            panel.on_focus_change(|focused| {
+                if !focused && !MENU_OPEN.with(std::cell::Cell::get) {
+                    close_panel();
+                }
+            });
             PANEL.with(|p| *p.borrow_mut() = Some(panel));
         }
+    });
+}
+
+/// The shortcut editor records (`true`) or stops: while it records, the keys this app bound on Hyprland are off, so a
+/// keystroke one of them holds (the shortcut being recorded again) reaches the editor instead of the compositor.
+pub fn pause_shortcuts(paused: bool) {
+    if paused {
+        platform::hyprland::unbind_shortcuts();
+    } else {
+        KEYSTROKES.with(|k| platform::hyprland::bind_shortcuts(&k.borrow()));
+    }
+}
+
+/// A menu of the panel opens (`true`) or closes: while it is open, the panel losing the keyboard to it keeps it open.
+/// Once it closes the panel takes the keyboard back, and a blur in the next moment is still the menu's: a compositor whose
+/// focus follows the pointer gives the keyboard to the window under it as the menu goes, which would close the panel the
+/// user just chose in.
+pub fn menu_open(open: bool) {
+    // A click on the menu, which may reach past the panel, is not one outside it.
+    if PANEL.with(|p| p.borrow().is_some()) {
+        platform::hyprland::close_on_outside_click(PANEL_TITLE, !open);
+    }
+    if open {
+        MENU_OPEN.with(|m| m.set(true));
+        return;
+    }
+    if let Some(panel) = PANEL.with(|p| p.borrow().clone()) {
+        panel.focus();
+    }
+    let Some(d) = desktop() else { return };
+    d.owner.get().run(|| {
+        set_timeout(std::time::Duration::from_millis(400), || MENU_OPEN.with(|m| m.set(false)));
     });
 }
 

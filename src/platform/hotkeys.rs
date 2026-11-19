@@ -120,32 +120,35 @@ fn key_name(key: u16) -> &'static str {
 /// What the shortcut editor recorded: `None` cancelled (Escape), `Some(None)` cleared (Delete), or the new shortcut.
 pub type Recorded = Option<Option<safay_app::preferences::Hotkey>>;
 
-/// The shortcut editor's key press on Linux, from NSH's key event (`code` is the DOM's physical key, `KeyZ`): Escape
-/// cancels, Backspace or Delete clears, a lone modifier or a key without Super, Ctrl or Alt waits for the next press
-/// (`None`), and a key outside the stored names is not taken either.
+/// The shortcut editor's key press on Linux, from NSH's key event: its logical `key` (`"k"`, `"Escape"`), and its
+/// physical `code` (`"KeyK"`) only where the key names no letter or digit (Shift+1 types `!`). The logical key follows
+/// the layout in use, as the shortcut's keystroke does; a virtual keyboard's codes can name other keys. Escape cancels,
+/// Backspace or Delete clears, a lone modifier or a key without Super, Ctrl or Alt waits for the next press (`None`),
+/// and a key outside the stored names is not taken either.
 #[cfg(target_os = "linux")]
-pub fn recorded(code: &str, modifiers: nsh_core::keymap::Modifiers) -> Option<Recorded> {
-    match code {
+pub fn recorded(key: &str, code: &str, modifiers: nsh_core::keymap::Modifiers) -> Option<Recorded> {
+    match key {
         "Escape" => return Some(None),
         "Backspace" | "Delete" => return Some(Some(None)),
         _ => {}
     }
-    let name = if let Some(letter) = code.strip_prefix("Key") {
-        letter
-    } else if let Some(digit) = code.strip_prefix("Digit") {
-        digit
-    } else {
-        match code {
-            "Space" => "Space",
-            "Enter" => "↩",
-            "Tab" => "⇥",
-            "ArrowLeft" => "←",
-            "ArrowRight" => "→",
-            "ArrowDown" => "↓",
-            "ArrowUp" => "↑",
-            "F1" | "F2" | "F3" | "F4" | "F5" | "F6" => code,
-            _ => return None,
-        }
+    let mut chars = key.chars();
+    let letter = match (chars.next(), chars.next()) {
+        (Some(c), None) if c.is_ascii_alphanumeric() => Some(c.to_ascii_uppercase().to_string()),
+        _ => None,
+    };
+    let name = match (letter, key) {
+        (Some(letter), _) => letter,
+        (None, " ") => "Space".to_owned(),
+        (None, "Enter") => "↩".to_owned(),
+        (None, "Tab") => "⇥".to_owned(),
+        (None, "ArrowLeft") => "←".to_owned(),
+        (None, "ArrowRight") => "→".to_owned(),
+        (None, "ArrowDown") => "↓".to_owned(),
+        (None, "ArrowUp") => "↑".to_owned(),
+        (None, "F1" | "F2" | "F3" | "F4" | "F5" | "F6") => key.to_owned(),
+        // A symbol Shift typed: the key under it.
+        (None, _) => code.strip_prefix("Key").or_else(|| code.strip_prefix("Digit"))?.to_owned(),
     };
     let key = (0..=u16::from(u8::MAX)).find(|k| key_name(*k) == name)?;
     let mut bits = 0;
@@ -239,16 +242,31 @@ mod tests {
     fn linux_key_presses_become_the_stored_form() {
         let held = |cmd, alt, ctrl, shift| nsh_core::keymap::Modifiers { cmd, alt, ctrl, shift };
         // Super+Alt+Z is ⌥⌘Z's stored form, and reads back as Linux writes it.
-        let z = recorded("KeyZ", held(true, true, false, false));
+        let z = recorded("z", "KeyZ", held(true, true, false, false));
         assert_eq!(z, Some(Some(Some(Hotkey { key: 6, modifiers: 0x100 | 0x800 }))));
         assert_eq!(label(Hotkey { key: 6, modifiers: 0x100 | 0x800 }), "Super+Alt+Z");
         assert_eq!(label(Hotkey { key: 123, modifiers: 0x1000 | 0x200 }), "Ctrl+Shift+Left");
-        assert_eq!(recorded("Digit7", held(false, false, true, false)), Some(Some(Some(Hotkey { key: 26, modifiers: 0x1000 }))));
+        assert_eq!(recorded("7", "Digit7", held(false, false, true, false)), Some(Some(Some(Hotkey { key: 26, modifiers: 0x1000 }))));
+        // The logical key wins over a code that names another one (a virtual keyboard's), and Shift's capital too.
+        assert_eq!(
+            recorded("k", "Escape", held(false, true, true, false)),
+            Some(Some(Some(Hotkey { key: 40, modifiers: 0x800 | 0x1000 })))
+        );
+        assert_eq!(recorded("K", "KeyK", held(false, false, true, true)), Some(Some(Some(Hotkey { key: 40, modifiers: 0x200 | 0x1000 }))));
+        // Shift+1 types "!": the key under it.
+        assert_eq!(
+            recorded("!", "Digit1", held(false, false, true, true)),
+            Some(Some(Some(Hotkey { key: 18, modifiers: 0x200 | 0x1000 })))
+        );
+        assert_eq!(
+            recorded("ArrowLeft", "ArrowLeft", held(true, false, false, false)),
+            Some(Some(Some(Hotkey { key: 123, modifiers: 0x100 })))
+        );
         // Escape cancels, Backspace clears; Shift alone, a lone modifier and an unnamed key wait for another press.
-        assert_eq!(recorded("Escape", held(false, false, false, false)), Some(None));
-        assert_eq!(recorded("Backspace", held(false, false, false, false)), Some(Some(None)));
-        assert_eq!(recorded("KeyA", held(false, false, false, true)), None);
-        assert_eq!(recorded("AltLeft", held(false, true, false, false)), None);
-        assert_eq!(recorded("F12", held(true, false, false, false)), None);
+        assert_eq!(recorded("Escape", "Escape", held(false, false, false, false)), Some(None));
+        assert_eq!(recorded("Backspace", "Backspace", held(false, false, false, false)), Some(Some(None)));
+        assert_eq!(recorded("a", "KeyA", held(false, false, false, true)), None);
+        assert_eq!(recorded("Alt", "AltLeft", held(false, true, false, false)), None);
+        assert_eq!(recorded("F12", "F12", held(true, false, false, false)), None);
     }
 }
