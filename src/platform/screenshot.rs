@@ -1,11 +1,12 @@
 //! Linux "Select on Screen": the desktop portal's Screenshot, interactive, so the desktop's own screenshot tool lets the
-//! user pick the area (GNOME, KDE) or takes the screen (compositors without a picker). Wayland gives an app no way to
+//! user pick the area (`slurp` on Hyprland, GNOME's and KDE's tools) or takes the screen. Wayland gives an app no way to
 //! cover the screen with its own selection as macOS's `crate::scan` does. The picture the portal saves is read once and
-//! deleted at once; only the 2FA QR codes found in it are kept, as text.
+//! deleted at once; only the text of the QR codes found in it is kept, and the caller keeps the 2FA ones.
 use safay_app::Zeroizing;
 use std::{
     io::Cursor,
     path::{Path, PathBuf},
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 /// How a capture ended.
@@ -20,8 +21,20 @@ pub enum Capture {
     Failed,
 }
 
+/// One screenshot at a time: a second request while the desktop's tool is up (the shortcut pressed twice) is dropped.
+static TAKING: AtomicBool = AtomicBool::new(false);
+
 /// Takes the screenshot and finds its QR codes. Blocks until the user is done: call off the main thread.
 pub fn capture() -> Capture {
+    if TAKING.swap(true, Ordering::SeqCst) {
+        return Capture::Cancelled;
+    }
+    let capture = take();
+    TAKING.store(false, Ordering::SeqCst);
+    capture
+}
+
+fn take() -> Capture {
     use ashpd::desktop::screenshot::Screenshot;
     let response = futures_executor::block_on(async {
         let request = Screenshot::request().interactive(true).modal(true).send().await?;
@@ -38,8 +51,12 @@ pub fn capture() -> Capture {
     drop(std::fs::remove_file(&path));
     let Some(gray) = gray else { return Capture::Failed };
     let mut prepared = rqrr::PreparedImage::prepare(gray);
-    let texts: Vec<String> = prepared.detect_grids().iter().filter_map(|grid| grid.decode().ok().map(|(_, text)| text)).collect();
-    if texts.is_empty() { Capture::NoCode } else { Capture::Codes(Zeroizing::new(texts.join("\n"))) }
+    let texts: Vec<Zeroizing<String>> =
+        prepared.detect_grids().iter().filter_map(|grid| grid.decode().ok().map(|(_, text)| Zeroizing::new(text))).collect();
+    if texts.is_empty() {
+        return Capture::NoCode;
+    }
+    Capture::Codes(Zeroizing::new(texts.iter().map(|t| t.as_str()).collect::<Vec<_>>().join("\n")))
 }
 
 /// A `file://` URI's local path, percent-decoded; `None` for any other URI.

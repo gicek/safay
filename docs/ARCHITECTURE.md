@@ -134,8 +134,8 @@ moving back to NSH. Review this list on every NSH upgrade.
 | QR decoding and generation | `platform::files` (`rqrr`, `qrcode`) | all |
 | SF Symbols | `platform::symbols` (rendered to template PNGs; SVG icons elsewhere) | macOS |
 | Lock on sleep, screen lock and user switch | `platform::macos::observe`, `platform::windows`, `platform::linux` | all |
-| Placing the tray panel (Wayland lets no app place a window) and closing it on a click outside; binding the global shortcuts' keys (Hyprland's portal binds none) | `platform::hyprland` (a window rule and binds over Hyprland's socket) | Linux on Hyprland |
-| The tray panel's menus in the app's color scheme (NSH gives a new window the scheme's class only when the environment changes) | `platform::linux::follow_scheme` | Linux |
+| Placing the tray panel (Wayland lets no app place a window) and closing it on a click outside; binding the global shortcuts' keys (Hyprland's portal binds none) | `platform::hyprland` (a window rule and binds over Hyprland's socket; the binds name NSH's private portal shortcut ids — recheck on every NSH upgrade) | Linux on Hyprland |
+| Windows' color-scheme class for their menus, as each opens (NSH gives it only when the environment changes; recheck on every NSH upgrade) | `platform::linux::follow_scheme` | Linux |
 | Dock policy at runtime | `platform::macos` | macOS |
 | Closing the menu bar panel on clicks in other apps; pointer position | `platform::macos` | macOS |
 | Roman-only input in password and key fields | `platform::macos::roman_input_only` | macOS |

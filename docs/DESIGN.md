@@ -12,7 +12,7 @@ appearance only — never capabilities.
 
 | | macOS (`theme.json`) | Windows (`theme-windows.json`) | Linux (`theme-linux.json`) |
 |---|---|---|---|
-| Title bar | Hidden; a 52 pt toolbar row with the traffic lights over the sidebar | 48 pt, system caption buttons on the right | 46 pt header bar, window buttons where GTK reports them; the toolbar names the scope ("All") beside the sidebar's "Safay", and adds with a 32 pt accent icon button |
+| Title bar | Hidden; a 52 pt toolbar row with the traffic lights over the sidebar | 48 pt, system caption buttons on the right | 46 pt header bar, window buttons where GTK reports them; the toolbar title names the scope ("All") and the add button is a 32 pt accent icon |
 | Sidebar | 210 pt; floating on macOS 26, flush on 15 and earlier and on 27 and later; accent-filled selection | 240 pt, Mica tone, 3 pt accent bar on the selection | 220 pt, flush |
 | Controls | 30/36 pt, radius 6/8 | 32 pt, radius 4 | 34/38 pt, radius 6 |
 | Settings | Separate 760 × 520 window (⌘,) | Dialog over the main window | Dialog over the main window, titled in its sidebar |

@@ -909,9 +909,9 @@ impl Store {
         }
         self.status.set(None);
         self.error.set(None);
+        self.busy.set(true);
         let epoch = self.controller.get().epoch();
         self.task(async move {
-            self.busy.set(true);
             let capture = blocking(platform::screenshot::capture).await;
             self.busy.set(false);
             if self.controller.get().epoch() != epoch {
@@ -926,8 +926,8 @@ impl Store {
             }
         });
     }
-    /// The capture shortcut and the tray panel's screenshot button on Linux, in macOS's order (`capture_and_import`
-    /// above): the desktop's screenshot tool first, with no window of Safay's in the way; the code is imported at once
+    /// The capture shortcut and the tray panel's screenshot button on Linux, in macOS's order (its `capture_and_import`,
+    /// below): the desktop's screenshot tool first, with no window of Safay's in the way; the code is imported at once
     /// and the result shows as a desktop notification. While locked, the panel unlocks first; the shortcut selects first
     /// and the code waits for the lock screen's unlock (two minutes at most). There is no Touch ID here.
     #[cfg(target_os = "linux")]

@@ -766,8 +766,7 @@ fn restore_locations(s: Store) -> impl IntoElement {
     };
     // iCloud, the cloud storage services this build can sign in to, Other Folder, Safay Exported File.
     let mut cells = Vec::new();
-    // Linux never has iCloud, so it has no cell there.
-    if !cfg!(target_os = "linux") {
+    if crate::platform::supports::ICLOUD {
         cells.push(
             location_cell(
                 location_row(

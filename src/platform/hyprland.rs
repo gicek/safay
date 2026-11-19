@@ -1,12 +1,22 @@
-//! Placing the tray's quick panel and binding the global shortcuts' keys on Hyprland. Wayland lets no app place its windows and neither GTK 4 nor NSH can, so
-//! elsewhere the compositor puts the panel where it likes (most center it). Hyprland takes window rules over its IPC
-//! socket: before the panel opens, a rule floats it at the top right of the focused monitor, under the bar's reserved
-//! area, as a menu bar panel sits. The rule matches only the panel's title and the app's class, and is replaced each
-//! time. Nothing is read from Hyprland but the monitors' layout.
+//! Hyprland's part of the Linux desktop integration, over its IPC socket. Wayland lets no app place its windows or see
+//! clicks outside them, and Hyprland's portal registers global shortcuts without binding any key; Hyprland takes window
+//! rules, binds and Lua for each:
+//!
+//! - the tray panel opens at the focused monitor's top right, under the bar (a window rule matching the panel's title
+//!   and the app's class, set just before it opens);
+//! - while it shows, a left-click bind that consumes nothing closes it when the pointer is outside it;
+//! - each global shortcut is bound to its key, again after a config reload (which drops binds), and unbound as Safay
+//!   quits.
+//!
+//! What Safay keeps in Hyprland's Lua state is named after the app's id, so a debug and a release build do not touch each
+//! other's. Requests other than placing the panel go to one worker thread in order, off the engine thread. Outside
+//! Hyprland, or when its socket does not answer, nothing happens. Read from Hyprland: the monitors' layout, its binds,
+//! the pointer's position on a click while the panel shows, and its config-reload events.
 use std::{
-    io::{Read, Write},
+    io::{BufRead, BufReader, Read, Write},
     os::unix::net::UnixStream,
     path::PathBuf,
+    sync::{Mutex, OnceLock, mpsc},
     time::Duration,
 };
 
@@ -22,17 +32,41 @@ pub fn place_at_top_right(title: &str, width: f64) {
     let class = super::APP_ID.replace('.', "\\\\.");
     let title = title.replace(['\\', '"'], "");
     let rule = format!(
-        "eval hl.window_rule({{ name = \"safay-panel\", enabled = true, match = {{ class = \"^({class})$\", title = \"^({title})$\" }}, \
-         float = true, move = \"{x} {y}\" }})"
+        "eval hl.window_rule({{ name = \"{}\", enabled = true, match = {{ class = \"^({class})$\", title = \"^({title})$\" }}, \
+         float = true, move = \"{x} {y}\" }})",
+        lua_name("panel")
     );
     drop(request(&socket, &rule));
 }
 
 /// Hyprland's request socket for this session.
 fn socket() -> Option<PathBuf> {
+    socket_named(".socket.sock")
+}
+/// Hyprland's socket `name` (`.socket.sock` takes requests, `.socket2.sock` tells events).
+fn socket_named(name: &str) -> Option<PathBuf> {
     let signature = std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE")?;
     let runtime = std::env::var_os("XDG_RUNTIME_DIR")?;
-    Some(PathBuf::from(runtime).join("hypr").join(signature).join(".socket.sock"))
+    Some(PathBuf::from(runtime).join("hypr").join(signature).join(name))
+}
+
+/// A Lua global (or rule name) of this app's, `safay_<base>_<app id>`.
+fn lua_name(base: &str) -> String {
+    format!("safay_{base}_{}", super::APP_ID.replace('.', "_"))
+}
+
+/// A request for the worker thread.
+type Job = Box<dyn FnOnce() + Send>;
+
+/// Runs `f` on the worker thread, after what was queued before it.
+fn later(f: impl FnOnce() + Send + 'static) {
+    static WORKER: OnceLock<Mutex<mpsc::Sender<Job>>> = OnceLock::new();
+    let worker = WORKER.get_or_init(|| {
+        let (sender, jobs) = mpsc::channel::<Job>();
+        std::thread::spawn(move || jobs.into_iter().for_each(|job| job()));
+        Mutex::new(sender)
+    });
+    drop(worker.lock().unwrap_or_else(|e| e.into_inner()).send(Box::new(f)));
 }
 
 /// One request, answered once the compositor closes the connection; at most a second and 1 MB.
@@ -62,64 +96,125 @@ fn top_right(monitors: &str, width: f64) -> Option<(i64, i64)> {
     Some((x.round() as i64, (top + EDGE).round() as i64))
 }
 
-/// Binds each of the app's global shortcuts (NSH keystrokes, `alt+cmd+z`) to its key on Hyprland, whose portal
-/// registers shortcuts but binds no key (`bind = …, global, <app id>:<id>` in the user's config otherwise). The keys this
-/// app bound before in this Hyprland session (a Lua global, gone with a config reload, as the binds) are unbound first;
-/// a key the user's config already binds is left to it. Does nothing outside Hyprland.
+/// The global shortcuts' keystrokes as last bound, to bind again after a recording or a config reload.
+static KEYSTROKES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Binds each of the app's global shortcuts (NSH keystrokes, `alt+cmd+z`) to its key (`bind = …, global, <app id>:<id>`
+/// otherwise in the user's config), in place of the ones it bound before; a key the user's config binds is left to it.
+/// Bound again after each config reload.
 pub fn bind_shortcuts(keystrokes: &[String]) {
+    if socket().is_none() {
+        return;
+    }
+    *KEYSTROKES.lock().unwrap_or_else(|e| e.into_inner()) = keystrokes.to_vec();
+    watch_reloads();
+    later(bind_now);
+}
+
+/// Binds the keystrokes last given to `bind_shortcuts` again (after the shortcut editor recorded).
+pub fn rebind_shortcuts() {
+    if socket().is_some() {
+        later(bind_now);
+    }
+}
+
+/// Unbinds the shortcuts' keys this app bound, so the next keystroke reaches the app: the shortcut editor records while
+/// they are off.
+pub fn unbind_shortcuts() {
+    if socket().is_some() {
+        later(|| {
+            if let Some(socket) = socket() {
+                drop(request(&socket, &unbind_lua()));
+            }
+        });
+    }
+}
+
+/// As Safay quits: its binds would outlive it, taking keys for shortcuts no one serves. At once, on the caller's thread.
+pub fn release() {
+    if let Some(socket) = socket() {
+        let click = lua_name("click");
+        drop(request(&socket, &format!("eval {} if {click} then {click}:set_enabled(false) end", unbind_lua())));
+    }
+}
+
+fn unbind_lua() -> String {
+    let keys = lua_name("keys");
+    format!("for _, k in ipairs({keys} or {{}}) do hl.unbind(k) end {keys} = {{}}")
+}
+
+fn bind_now() {
     let Some(socket) = socket() else { return };
-    if request(&socket, "eval for _, k in ipairs(safay_keys or {}) do hl.unbind(k) end safay_keys = {}").is_none() {
+    if request(&socket, &format!("eval {}", unbind_lua())).is_none() {
         return;
     }
     let taken = request(&socket, "j/binds").map(|binds| bound_keys(&binds)).unwrap_or_default();
+    let keys = lua_name("keys");
     let mut lua = String::new();
-    for keystroke in keystrokes {
+    for keystroke in KEYSTROKES.lock().unwrap_or_else(|e| e.into_inner()).iter() {
         let Ok(shortcut) = nsh_core::desktop::Shortcut::parse(keystroke, true) else { continue };
-        let Some((keys, modmask, key)) = hyprland_keys(&shortcut) else { continue };
+        let Some((combo, modmask, key)) = hyprland_keys(&shortcut) else { continue };
         if taken.iter().any(|(m, k)| *m == modmask && k.eq_ignore_ascii_case(&key)) {
             continue;
         }
-        // NSH's id for it on the portal (`global_shortcut::portal_id`): its label, lowercase, Win as Super.
+        // NSH's id for it on the portal (`global_shortcut::portal_id`, private: recheck on each NSH upgrade): its label,
+        // lowercase, Win as Super.
         let id = shortcut.label().to_lowercase().replace("win+", "super+");
-        lua.push_str(&format!("hl.bind(\"{keys}\", hl.dsp.global(\"{}:{id}\")) table.insert(safay_keys, \"{keys}\") ", super::APP_ID));
+        lua.push_str(&format!("hl.bind(\"{combo}\", hl.dsp.global(\"{}:{id}\")) table.insert({keys}, \"{combo}\") ", super::APP_ID));
     }
     if !lua.is_empty() {
         drop(request(&socket, &format!("eval {lua}")));
     }
 }
 
+/// Follows Hyprland's events: a config reload drops the binds, which are made again. Started once.
+fn watch_reloads() {
+    static WATCHING: OnceLock<()> = OnceLock::new();
+    WATCHING.get_or_init(|| {
+        let Some(path) = socket_named(".socket2.sock") else { return };
+        std::thread::spawn(move || {
+            let Ok(events) = UnixStream::connect(path) else { return };
+            for line in BufReader::new(events).lines() {
+                let Ok(line) = line else { return };
+                if line.starts_with("configreloaded>>") {
+                    later(bind_now);
+                }
+            }
+        });
+    });
+}
+
 /// While `on`, a click outside the window titled `title` (the tray panel) closes it, as a click anywhere else closes a
-/// menu bar panel on macOS. Wayland tells no app of clicks outside its windows, and a click on the desktop moves no
-/// focus, so no blur closes the panel there. On Hyprland a left-click bind that consumes nothing (the click still
-/// reaches the desktop or the window under it) checks the pointer against the panel and asks the panel to close. The
-/// bind is made once a Hyprland session (a Lua global) and only switched on and off. Does nothing outside Hyprland.
+/// menu bar panel on macOS: a click on the bare desktop moves no focus, so no blur would. The bind consumes nothing (the
+/// click still reaches what is under it), checks the pointer against the panel and asks the panel to close. It is made
+/// once a Hyprland session and only switched on and off.
 pub fn close_on_outside_click(title: &str, on: bool) {
-    let Some(socket) = socket() else { return };
+    if socket().is_none() {
+        return;
+    }
     let title = title.replace(['\\', '"'], "");
+    let (click, target) = (lua_name("click"), lua_name("click_title"));
     let lua = if on {
         format!(
-            "safay_click_title = \"{title}\" \
-             if not safay_click then safay_click = hl.bind(\"mouse:272\", function() \
-               local w = hl.get_windows({{ title = safay_click_title }})[1] \
-               if not w then safay_click:set_enabled(false) return end \
+            "{target} = \"{title}\" \
+             if not {click} then {click} = hl.bind(\"mouse:272\", function() \
+               local w = hl.get_windows({{ title = {target} }})[1] \
+               if not w then {click}:set_enabled(false) return end \
                local c = hl.get_cursor_pos() \
                if c.x < w.at.x or c.y < w.at.y or c.x >= w.at.x + w.size.x or c.y >= w.at.y + w.size.y then \
                  hl.dispatch(hl.dsp.window.close({{ window = \"address:\" .. w.address }})) \
                end \
              end, {{ non_consuming = true }}) end \
-             safay_click:set_enabled(true)"
+             {click}:set_enabled(true)"
         )
     } else {
-        "if safay_click then safay_click:set_enabled(false) end".to_owned()
+        format!("if {click} then {click}:set_enabled(false) end")
     };
-    drop(request(&socket, &format!("eval {lua}")));
-}
-
-/// Unbinds the keys this app bound (`bind_shortcuts`), so the next keystroke reaches the app: the shortcut editor records
-/// while they are off. Does nothing outside Hyprland.
-pub fn unbind_shortcuts() {
-    let Some(socket) = socket() else { return };
-    drop(request(&socket, "eval for _, k in ipairs(safay_keys or {}) do hl.unbind(k) end safay_keys = {}"));
+    later(move || {
+        if let Some(socket) = socket() {
+            drop(request(&socket, &format!("eval {lua}")));
+        }
+    });
 }
 
 /// The modifier bits and key of every bind Hyprland has.

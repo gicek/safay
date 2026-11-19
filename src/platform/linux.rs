@@ -1,4 +1,6 @@
-//! logind and desktop screen-lock notifications. Unsupported sessions fail closed on focus loss.
+//! Linux system services NSH does not offer: locking on logind's and the desktop's screen-lock notifications
+//! (unsupported sessions fail closed on focus loss), whether the desktop has a tray, handing a second launch to the
+//! running Safay, and the windows' color-scheme class for their menus.
 use nsh_platform_linux::gtk4::{self as gtk, gio, glib, prelude::*};
 use safay_app::controller::Controller;
 use std::{cell::RefCell, sync::Arc, time::Duration};
@@ -96,10 +98,39 @@ fn foreground_fallback(controller: Arc<Controller>) {
         glib::ControlFlow::Continue
     });
 }
+/// Whether a name on the session bus has an owner (a running service or app).
+fn bus_name_owned(name: &str) -> bool {
+    let Ok(bus) = gio::bus_get_sync(gio::BusType::Session, None::<&gio::Cancellable>) else { return false };
+    bus.call_sync(
+        Some("org.freedesktop.DBus"),
+        "/org/freedesktop/DBus",
+        "org.freedesktop.DBus",
+        "NameHasOwner",
+        Some(&(name,).to_variant()),
+        None,
+        gio::DBusCallFlags::NONE,
+        500,
+        None::<&gio::Cancellable>,
+    )
+    .ok()
+    .and_then(|reply| reply.get::<(bool,)>())
+    .is_some_and(|(owned,)| owned)
+}
+
+/// Whether the desktop shows tray icons now (a StatusNotifierWatcher runs: Plasma, Waybar, Quickshell, GNOME's
+/// AppIndicator extension). Without one, a window hidden in the tray could not be brought back.
+pub fn has_tray() -> bool {
+    bus_name_owned("org.kde.StatusNotifierWatcher")
+}
+
 /// Hands this launch to the Safay already running, as a second launch of a single-instance app does (GApplication's
-/// `command-line`, keyed on the app's id): the running one reports it to the app (`desktop::install`). Whether one
-/// was running and took it; when none is, the name is not kept, so the caller can wait for the instance lock.
+/// `command-line`, keyed on the app's id): the running one reports it to the app (`desktop::install`). Whether one was
+/// running and took it. Only a name another process already owns is joined, so this never takes it from a Safay that
+/// is still starting.
 pub fn hand_to_running() -> bool {
+    if !bus_name_owned(super::APP_ID) {
+        return false;
+    }
     let app = gio::Application::new(Some(super::APP_ID), gio::ApplicationFlags::HANDLES_COMMAND_LINE);
     if app.register(None::<&gio::Cancellable>).is_err() || !app.is_remote() {
         return false;
@@ -109,43 +140,31 @@ pub fn hand_to_running() -> bool {
     true
 }
 
-/// Gives the window titled `title` the app's color scheme for its menus: NSH styles a menu dark under `.nsh-dark`, a class
-/// it gives a window of the app's own only when the app's environment changes, not as the window opens. The tray panel
-/// opened while the main window is in the tray saw no change, and its menus came out light in a dark app. The scheme is
-/// GTK's own `gtk-application-prefer-dark-theme`, which NSH keeps as the app's, and the class follows it while the window
-/// lives. The window is made on the main thread after it is asked for: it is looked for there for a moment.
-pub fn follow_scheme(title: &'static str) {
-    glib::MainContext::default().invoke(move || {
-        let mut tries = 0;
-        glib::timeout_add_local(Duration::from_millis(30), move || {
-            tries += 1;
-            let window = gio::Application::default()
-                .and_then(|app| app.downcast::<gtk::Application>().ok())
-                .and_then(|app| app.windows().into_iter().find(|w| w.title().as_deref() == Some(title)));
-            let Some(window) = window else {
-                return if tries < 40 { glib::ControlFlow::Continue } else { glib::ControlFlow::Break };
-            };
-            let Some(settings) = gtk::Settings::default() else { return glib::ControlFlow::Break };
-            let apply = |window: &gtk::Window, settings: &gtk::Settings| {
-                let dark = settings.is_gtk_application_prefer_dark_theme();
-                window.remove_css_class(if dark { "nsh-light" } else { "nsh-dark" });
-                window.add_css_class(if dark { "nsh-dark" } else { "nsh-light" });
-            };
-            apply(&window, &settings);
-            let weak = window.downgrade();
-            let handler = settings.connect_gtk_application_prefer_dark_theme_notify(move |settings| {
-                if let Some(window) = weak.upgrade() {
-                    apply(&window, settings);
+/// Gives every window of the app its color scheme's class (`nsh-dark`, `nsh-light`), as each opens and as the scheme
+/// changes: NSH styles menus by it, and gives it to a window of the app's own only when the app's environment changes,
+/// so a window opened without one (the tray panel) would show light menus in a dark app. The scheme is GTK's
+/// `gtk-application-prefer-dark-theme`, which NSH keeps as the app's. Installed once; recheck on each NSH upgrade.
+pub fn follow_scheme() {
+    glib::MainContext::default().invoke(|| {
+        let (Some(app), Some(settings)) =
+            (gio::Application::default().and_then(|app| app.downcast::<gtk::Application>().ok()), gtk::Settings::default())
+        else {
+            return;
+        };
+        fn apply(window: &gtk::Window, dark: bool) {
+            window.remove_css_class(if dark { "nsh-light" } else { "nsh-dark" });
+            window.add_css_class(if dark { "nsh-dark" } else { "nsh-light" });
+        }
+        app.connect_window_added(|_, window| {
+            apply(window, gtk::Settings::default().is_some_and(|s| s.is_gtk_application_prefer_dark_theme()));
+        });
+        let weak = app.downgrade();
+        settings.connect_gtk_application_prefer_dark_theme_notify(move |settings| {
+            if let Some(app) = weak.upgrade() {
+                for window in app.windows() {
+                    apply(&window, settings.is_gtk_application_prefer_dark_theme());
                 }
-            });
-            // The handler goes with the window.
-            let handler = std::cell::Cell::new(Some(handler));
-            window.connect_destroy(move |_| {
-                if let (Some(handler), Some(settings)) = (handler.take(), gtk::Settings::default()) {
-                    settings.disconnect(handler);
-                }
-            });
-            glib::ControlFlow::Break
+            }
         });
     });
 }

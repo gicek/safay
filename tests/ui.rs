@@ -251,8 +251,8 @@ fn backup_sheet_starts_off_and_offers_a_folder() {
     assert!(still.contains("no scroll view"), "{still}");
     app.press("role:button[Set Up]").unwrap();
     app.wait_for("Other Folder").unwrap();
-    // No CloudKit store in this build: iCloud is listed, disabled, with the reason. Linux never lists it.
-    if cfg!(target_os = "linux") {
+    // No CloudKit store in this build: iCloud is listed, disabled, with the reason, where it is listed at all.
+    if !safay::platform::supports::ICLOUD {
         assert!(!app.screen().texts().contains(&"iCloud"));
         app.wait_for("A folder synced by another app").unwrap();
     } else {

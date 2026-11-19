@@ -1,6 +1,6 @@
 //! iCloud through the UI with the in-memory CloudKit store (its own test binary: the store is process-wide).
 //! Only synthetic data; nothing reaches iCloud.
-//! Linux never offers iCloud, so these tests do not build there.
+//! Not built where iCloud is not listed (`platform::supports::ICLOUD`: Linux).
 #![cfg(not(target_os = "linux"))]
 use nsh_core::{
     clipboard::MemoryClipboard,

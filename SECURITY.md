@@ -157,15 +157,12 @@ per app, who may send them. There is no local socket, port or other channel.
   while Safay is locked, the picked code is read first and imported only after Touch ID or the master password unlocks
   the vault; until then (two minutes at most) its text stays in memory and nothing is written. Camera frames are
   processed in memory only.
-- **Linux**: not sandboxed. Selecting a QR code on screen asks the desktop portal for an interactive screenshot: the
-  desktop's own tool picks the area (or takes the screen) and saves the picture where the desktop chooses; Safay reads
-  it once, deletes it at once, and keeps only the QR codes' text in memory. The camera is asked for through the portal,
-  which may show its own prompt; frames arrive over PipeWire and are processed in memory only, and the stream closes
-  with the preview. On Hyprland, Safay talks to Hyprland's socket only to read the monitors' layout and its binds, set
-  the tray panel's window rule, bind the global shortcuts' keys to the portal's shortcuts and, while the panel shows, a
-  left-click bind that closes the panel when the pointer is outside it (it reads the pointer's position only then, and
-  the click still reaches what is under it). A captured code's result
-  shows as a desktop notification naming its issuer, never a secret.
+- **Linux**: not sandboxed. "Select on Screen" asks the desktop portal for an interactive screenshot, which the desktop
+  saves where it chooses; Safay reads it once, deletes it at once and keeps only the QR codes' text in memory. Camera
+  frames come over PipeWire and stay in memory; the stream closes with the preview. On Hyprland, Safay uses Hyprland's
+  socket only to read the monitors' layout and binds, place the tray panel, bind the global shortcuts' keys, and, while
+  the panel shows, close it on a click outside (the click still reaches what is under it). A captured code's
+  notification names its issuer, never a secret.
 - **Windows / Linux**: see [Platforms](docs/PLATFORMS.md) for what is implemented; file permissions on Windows follow the
   user profile's ACLs.
 

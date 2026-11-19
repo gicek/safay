@@ -41,7 +41,7 @@ fn main() -> impl std::process::Termination {
                 // Linux: Safay is running (the launcher or its autostart entry started it again). It is told, and
                 // brings its main window back, out of the tray too; this launch ends.
                 #[cfg(target_os = "linux")]
-                Err(_) if attempts == 0 && safay::platform::linux::hand_to_running() => std::process::exit(0),
+                Err(_) if safay::platform::linux::hand_to_running() => std::process::exit(0),
                 Err(_) if attempts < 50 => {
                     attempts += 1;
                     std::thread::sleep(std::time::Duration::from_millis(100));
@@ -69,7 +69,8 @@ fn main() -> impl std::process::Termination {
     // Linux: "Start in Tray" makes the main window start hidden, with only the tray icon, read before the window is made
     // so it never flashes (macOS hides it once the preferences load, `desktop::apply`).
     #[cfg(target_os = "linux")]
-    let start_hidden = controller.run(controller.epoch(), |s| Ok(s.preferences())).is_ok_and(|p| p.background_launch && p.tray_icon);
+    let start_hidden = controller.run(controller.epoch(), |s| Ok(s.preferences())).is_ok_and(|p| p.background_launch && p.tray_icon)
+        && safay::platform::linux::has_tray();
     // AppKit's traffic-light size, read here on the main thread for the title bar the engine thread sets up.
     #[cfg(target_os = "macos")]
     safay::platform::macos::traffic_light_height();

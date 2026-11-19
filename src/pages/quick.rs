@@ -49,8 +49,7 @@ fn content(s: Store) -> impl IntoElement {
         }))
         .child(when(move || s.projection.with(|p| p.exists), move || footer(s, capture_after_unlock)))
 }
-/// The panel closes while the user selects; the main window runs the capture and shows the result (Linux: in its Add
-/// Account sheet, where the user saves what was found).
+/// The panel closes while the user selects; the main window runs the capture and reports the result on the desktop.
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 fn start_capture() {
     crate::desktop::close_panel();

@@ -6,7 +6,7 @@ use base64::Engine;
 use gstreamer::{self as gst, prelude::*};
 use safay_app::Zeroizing;
 use std::{
-    os::fd::IntoRawFd,
+    os::fd::{AsRawFd, OwnedFd},
     sync::{
         Mutex,
         atomic::{AtomicU64, Ordering},
@@ -46,9 +46,28 @@ struct Shared {
 }
 static SHARED: Mutex<Option<Shared>> = Mutex::new(None);
 static FRAMES: AtomicU64 = AtomicU64::new(0);
-/// Which session is current: a session that finishes starting after `stop()` (or a newer `start()`) shuts itself down.
-static GENERATION: AtomicU64 = AtomicU64::new(0);
-static PIPELINE: Mutex<Option<gst::Pipeline>> = Mutex::new(None);
+/// Which session is current, and its stream once it plays. Both change under the one lock, so a session that finishes
+/// starting after `stop()` (or a newer `start()`) sees it and shuts itself down instead of keeping the camera on.
+static STREAM: Mutex<(u64, Option<Stream>)> = Mutex::new((0, None));
+
+/// A playing camera: the pipeline and the portal's PipeWire remote, which `pipewiresrc` duplicates and so is this
+/// process's to close, once the pipeline has stopped.
+struct Stream {
+    pipeline: gst::Pipeline,
+    _remote: OwnedFd,
+}
+impl Stream {
+    /// Stops the pipeline, then closes the remote. Stopping waits for the streaming thread: off the caller's thread.
+    fn close(self) {
+        std::thread::spawn(move || {
+            let _ = self.pipeline.set_state(gst::State::Null);
+        });
+    }
+}
+
+fn with_stream<R>(f: impl FnOnce(&mut (u64, Option<Stream>)) -> R) -> R {
+    f(&mut STREAM.lock().unwrap_or_else(|e| e.into_inner()))
+}
 
 /// The preview and decoding size; the camera's picture is scaled into it with borders, keeping its shape.
 const WIDTH: usize = 640;
@@ -59,27 +78,35 @@ fn with_shared<R>(f: impl FnOnce(&mut Shared) -> R) -> R {
     f(guard.get_or_insert_with(Shared::default))
 }
 
-/// Starts the camera (the portal asks for access the first time). Results arrive through `poll()`.
+/// Starts the camera (the portal asks for access the first time), closing any earlier one. Results arrive through
+/// `poll()`.
 pub fn start() {
     with_shared(|s| *s = Shared { running: true, ..Default::default() });
-    let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+    let generation = next_session();
     // The portal's dialog and opening the camera can take seconds: off the main thread.
-    std::thread::spawn(move || match open() {
-        Ok(pipeline) => {
-            let current = GENERATION.load(Ordering::SeqCst) == generation && with_shared(|s| s.running);
-            if current {
-                watch(pipeline.clone(), generation);
-                *PIPELINE.lock().unwrap_or_else(|e| e.into_inner()) = Some(pipeline);
-            } else {
-                let _ = pipeline.set_state(gst::State::Null);
+    std::thread::spawn(move || {
+        let opened = open();
+        with_stream(|(current, stream)| match opened {
+            Ok(opened) if *current == generation => {
+                watch(&opened.pipeline, generation);
+                *stream = Some(opened);
             }
-        }
-        Err(error) => {
-            if GENERATION.load(Ordering::SeqCst) == generation {
-                fail(error);
-            }
-        }
+            Ok(late) => late.close(),
+            Err(error) if *current == generation => fail(error),
+            Err(_) => {}
+        });
     });
+}
+
+/// Begins a new session: the current one's stream, if any, closes. Its number.
+fn next_session() -> u64 {
+    with_stream(|(current, stream)| {
+        *current += 1;
+        if let Some(stream) = stream.take() {
+            stream.close();
+        }
+        *current
+    })
 }
 
 fn fail(error: CameraError) {
@@ -90,7 +117,7 @@ fn fail(error: CameraError) {
 }
 
 /// Asks the portal for the camera, then plays its PipeWire stream into an app sink.
-fn open() -> Result<gst::Pipeline, CameraError> {
+fn open() -> Result<Stream, CameraError> {
     use ashpd::desktop::camera::Camera;
     let fd = futures_executor::block_on(async {
         let camera = Camera::new().await.map_err(|_| CameraError::Unavailable)?;
@@ -106,12 +133,11 @@ fn open() -> Result<gst::Pipeline, CameraError> {
         camera.open_pipe_wire_remote(Default::default()).await.map_err(|_| CameraError::Unavailable)
     })?;
     gst::init().map_err(|_| CameraError::Unavailable)?;
-    // PipeWire takes the remote's descriptor over (`pw_context_connect_fd`), so it is handed on, not kept here.
     let description = format!(
         "pipewiresrc fd={} always-copy=true ! videoconvert ! videoscale add-borders=true \
          ! video/x-raw,format=BGRx,width={WIDTH},height={HEIGHT},pixel-aspect-ratio=1/1 \
          ! appsink name=frames max-buffers=1 drop=true sync=false emit-signals=false",
-        fd.into_raw_fd()
+        fd.as_raw_fd()
     );
     let pipeline = gst::parse::launch(&description)
         .map_err(|_| CameraError::Unavailable)?
@@ -128,25 +154,31 @@ fn open() -> Result<gst::Pipeline, CameraError> {
             })
             .build(),
     );
-    if pipeline.set_state(gst::State::Playing).is_err() {
-        let _ = pipeline.set_state(gst::State::Null);
+    let stream = Stream { pipeline, _remote: fd };
+    if stream.pipeline.set_state(gst::State::Playing).is_err() {
+        stream.close();
         return Err(CameraError::Unavailable);
     }
-    Ok(pipeline)
+    Ok(stream)
 }
 
 /// Reports a stream that fails later (the camera unplugged or taken by another app) as unavailable.
-fn watch(pipeline: gst::Pipeline, generation: u64) {
+fn watch(pipeline: &gst::Pipeline, generation: u64) {
     let Some(bus) = pipeline.bus() else { return };
     std::thread::spawn(move || {
-        while GENERATION.load(Ordering::SeqCst) == generation && with_shared(|s| s.running) {
+        let current = || with_stream(|(current, _)| *current == generation);
+        while current() {
             if bus.timed_pop_filtered(gst::ClockTime::from_mseconds(200), &[gst::MessageType::Error, gst::MessageType::Eos]).is_none() {
                 continue;
             }
-            if GENERATION.load(Ordering::SeqCst) == generation {
-                fail(CameraError::Unavailable);
-                stop_pipeline();
-            }
+            with_stream(|(current, stream)| {
+                if *current == generation {
+                    fail(CameraError::Unavailable);
+                    if let Some(stream) = stream.take() {
+                        stream.close();
+                    }
+                }
+            });
             return;
         }
     });
@@ -154,18 +186,8 @@ fn watch(pipeline: gst::Pipeline, generation: u64) {
 
 /// Stops and releases the camera; the preview disappears.
 pub fn stop() {
-    GENERATION.fetch_add(1, Ordering::SeqCst);
+    next_session();
     with_shared(|s| *s = Shared::default());
-    stop_pipeline();
-}
-
-fn stop_pipeline() {
-    if let Some(pipeline) = PIPELINE.lock().unwrap_or_else(|e| e.into_inner()).take() {
-        // Stopping waits for the streaming thread: off the main thread.
-        std::thread::spawn(move || {
-            let _ = pipeline.set_state(gst::State::Null);
-        });
-    }
 }
 
 pub fn poll() -> Poll {

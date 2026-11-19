@@ -281,11 +281,10 @@ fn overview(s: Store) -> impl IntoElement {
                         .child(
                             text(move || {
                                 s.projection.with(|p| p.sync.location.as_ref().map(|l| location_detail(s, l))).unwrap_or_else(|| {
-                                    // Linux has no cloud storage location yet (`supports::CLOUD`).
-                                    s.label(if cfg!(target_os = "linux") {
-                                        "Keep an end-to-end encrypted backup in a folder"
-                                    } else {
+                                    s.label(if crate::platform::supports::CLOUD {
                                         "Keep an end-to-end encrypted backup in a folder or a cloud service"
+                                    } else {
+                                        "Keep an end-to-end encrypted backup in a folder"
                                     })
                                 })
                             })
@@ -650,11 +649,10 @@ fn choose(s: Store) -> impl IntoElement {
     let row = move |kind: LocationIcon, title: &'static str, subtitle: Option<&'static str>, enabled: bool, press: Box<dyn Fn()>| {
         location_row(s, kind, title, subtitle, move || s.syncing.get() || !enabled, press).into_element()
     };
-    // iCloud needs a build signed with the iCloud entitlement; otherwise the row stays disabled with the reason. Linux
-    // never has iCloud, so it has no row there.
+    // iCloud needs a build signed with the iCloud entitlement; otherwise the row stays disabled with the reason.
     let icloud = safay_app::icloud::available();
     let mut rows = Vec::new();
-    if !cfg!(target_os = "linux") {
+    if crate::platform::supports::ICLOUD {
         rows.push(row(
             LocationIcon::Icloud,
             "iCloud",
@@ -673,7 +671,11 @@ fn choose(s: Store) -> impl IntoElement {
     rows.push(row(
         LocationIcon::Folder,
         "Other Folder",
-        Some(if cfg!(target_os = "linux") { "A folder synced by another app" } else { "iCloud Drive or a folder synced by another app" }),
+        Some(if crate::platform::supports::ICLOUD {
+            "iCloud Drive or a folder synced by another app"
+        } else {
+            "A folder synced by another app"
+        }),
         true,
         Box::new(move || s.choose_folder()),
     ));

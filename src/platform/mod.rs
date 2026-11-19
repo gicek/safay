@@ -85,6 +85,9 @@ pub mod supports {
     /// Scanning with the camera (macOS: AVFoundation, needs the packaged app's camera usage description; Linux: the
     /// desktop portal's Camera and PipeWire).
     pub const CAMERA: bool = cfg!(any(target_os = "macos", target_os = "linux"));
+    /// iCloud backup is listed among the locations: macOS has it (in a signed package); Windows lists it as unavailable;
+    /// Linux, which never has it, does not list it.
+    pub const ICLOUD: bool = cfg!(not(target_os = "linux"));
     /// Cloud storage backup: needs a system credential store (Linux's Secret Service is not wired yet).
     pub const CLOUD: bool = cfg!(any(target_os = "macos", target_os = "windows"));
     /// OAuth sign-in for Dropbox, OneDrive and Google Drive (macOS: `ASWebAuthenticationSession`; Windows not yet).

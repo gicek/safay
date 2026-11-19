@@ -1,10 +1,10 @@
 //! The Linux desktop integration, on NSH's desktop API (`nsh_core::element::desktop`): the tray icon (a
-//! StatusNotifierItem, which Plasma, Waybar, Quickshell and GNOME's AppIndicator extension host) and the quick panel it
-//! opens. The same functions as macOS's `desktop.rs`, for the parts Linux has: there is no Dock, no global shortcut yet,
-//! and no desktop notice.
+//! StatusNotifierItem) and its quick panel, the global shortcuts, and desktop notifications. The same functions as
+//! macOS's `desktop.rs` for the parts Linux has; there is no Dock.
 //!
 //! Wayland lets no app place its windows: on Hyprland the panel opens at the top right of the focused monitor
-//! (`platform::hyprland`), elsewhere where the compositor puts it (most center it), never under the icon. While the icon shows, closing the main window only hides it: Safay stays in the tray until "Quit".
+//! (`platform::hyprland`), elsewhere where the compositor puts it. While the icon shows in a tray, closing the main
+//! window only hides it: Safay stays there until "Quit".
 //!
 //! Everything here runs on the engine thread. Windows and handlers are made under the root's owner, so they outlive
 //! the window whose button or menu asked for them.
@@ -15,7 +15,8 @@ use crate::{
 use nsh_core::{
     desktop::{SizeToContent, WindowAttributes, WindowKind},
     element::desktop::{
-        MenuItem, WindowRef, main_window, open_window, register_global_shortcut, set_tray, tray, unregister_all_global_shortcuts, window,
+        MenuItem, WindowRef, main_window, on_app_quit, open_window, register_global_shortcut, set_tray, tray,
+        unregister_all_global_shortcuts, window,
     },
     prelude::*,
 };
@@ -45,12 +46,11 @@ thread_local! {
     static HIDDEN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// The preferences arrived once (the launch's own).
     static LAUNCHED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-    /// The shortcuts' keystrokes as last registered, to bind again after the editor records.
-    static KEYSTROKES: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
     /// When the panel last closed: a click on the tray icon closes it first (outside it), and must not open it again.
     static PANEL_CLOSED: std::cell::Cell<Option<std::time::Instant>> = const { std::cell::Cell::new(None) };
-    /// A menu of the panel's is open: the panel stays while it has the keyboard.
-    static MENU_OPEN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// A menu of the panel's is open, or closed a moment ago: the panel's blur is the menu's then. Counted, so an
+    /// earlier menu's delayed end leaves a newer one alone.
+    static MENU: std::cell::Cell<(bool, u64)> = const { std::cell::Cell::new((false, 0)) };
 }
 
 fn desktop() -> Option<Desktop> {
@@ -67,11 +67,14 @@ pub fn install(controller: Arc<Controller>, preview: bool) {
         language: signal(Language::default()),
     };
     DESKTOP.with(|slot| slot.set(Some(d)));
+    // The panel's menus in the app's color scheme, with the main window shown or not.
+    platform::linux::follow_scheme();
 
-    // While the icon shows, the close button hides the main window and Safay stays in the tray; without the icon it
-    // closes, which quits.
+    // While the icon shows in a tray, the close button hides the main window and Safay stays there; otherwise it closes,
+    // which quits. A desktop with no tray (GNOME without its AppIndicator extension) would leave a hidden window no way
+    // back.
     let main = main_window();
-    let shown = move || d.preferences.with(|p| p.is_some_and(|p| p.tray_icon));
+    let shown = move || d.preferences.with(|p| p.is_some_and(|p| p.tray_icon)) && platform::linux::has_tray();
     effect(move || {
         let mut attributes = WindowAttributes::default();
         attributes.close_on_press = Some(!shown());
@@ -130,10 +133,9 @@ pub fn install(controller: Arc<Controller>, preview: bool) {
                 drop(register_global_shortcut(keystroke, action));
             }
         }
-        let bound: Vec<String> = keys.into_iter().flatten().collect();
-        platform::hyprland::bind_shortcuts(&bound);
-        KEYSTROKES.with(|k| *k.borrow_mut() = bound);
+        platform::hyprland::bind_shortcuts(&keys.into_iter().flatten().collect::<Vec<_>>());
     });
+    on_app_quit(|| async { platform::hyprland::release() });
 
     // Launching Safay again brings the main window forward, out of the tray too (the runner only raises a shown one).
     spawn(async move {
@@ -165,7 +167,7 @@ pub fn apply(preferences: Preferences, language: Language) {
         d.preferences.set(Some(preferences));
     }
     // "Start in Tray": the runner made the main window hidden (`main.rs`); it is in the tray from the start.
-    if !LAUNCHED.with(|l| l.replace(true)) && preferences.background_launch && preferences.tray_icon {
+    if !LAUNCHED.with(|l| l.replace(true)) && preferences.background_launch && preferences.tray_icon && platform::linux::has_tray() {
         HIDDEN.with(|h| h.set(true));
     }
     // Hiding the icon while the main window is in the tray would leave no way back to Safay.
@@ -175,9 +177,9 @@ pub fn apply(preferences: Preferences, language: Language) {
 }
 
 /// A result of capturing a QR code from the shortcut or the tray panel, shown as a desktop notification (macOS shows its
-/// own card). A newer one replaces the one on screen. Only already-localized result text is shown, never secrets.
-pub fn notice(tone: crate::store::Tone, text: String) {
-    let _ = tone;
+/// own card, tinted by `_tone`). A newer one replaces the one on screen. Only already-localized result text is shown,
+/// never secrets.
+pub fn notice(_tone: crate::store::Tone, text: String) {
     let Some(d) = desktop() else { return };
     d.owner.get().run(|| {
         let mut notification = nsh_core::notifications::Notification::new("capture", "Safay", text);
@@ -222,7 +224,7 @@ pub fn toggle_panel() {
     d.owner.get().run(|| {
         // A popup: no frame, closed by Escape and when it loses the focus. It follows its content's height. On Wayland a
         // menu the panel opens takes the keyboard from its window, which would close the panel with the menu: the blur
-        // that closes it is the panel's own, below, which a menu's leaves alone.
+        // that closes it is the panel's own (`panel_blurred`), which a menu's leaves alone.
         let mut attributes = WindowAttributes::default();
         attributes.size_to_content = Some(SizeToContent::Height);
         attributes.close_on_blur = Some(false);
@@ -237,19 +239,14 @@ pub fn toggle_panel() {
                 .on_open_change(|_| {
                     PANEL.with(|p| p.borrow_mut().take());
                     PANEL_CLOSED.with(|at| at.set(Some(std::time::Instant::now())));
+                    // A menu open as the panel closed never says it ended.
+                    MENU.with(|m| m.set((false, m.get().1 + 1)));
                     platform::hyprland::close_on_outside_click(PANEL_TITLE, false);
                 })
                 .content(move || crate::panel_window(controller.clone(), preview)),
         );
         if let Some(panel) = opened {
-            // Its menus in the app's scheme, with the main window shown or not.
-            platform::linux::follow_scheme(PANEL_TITLE);
             platform::hyprland::close_on_outside_click(PANEL_TITLE, true);
-            panel.on_focus_change(|focused| {
-                if !focused && !MENU_OPEN.with(std::cell::Cell::get) {
-                    close_panel();
-                }
-            });
             PANEL.with(|p| *p.borrow_mut() = Some(panel));
         }
     });
@@ -261,7 +258,7 @@ pub fn pause_shortcuts(paused: bool) {
     if paused {
         platform::hyprland::unbind_shortcuts();
     } else {
-        KEYSTROKES.with(|k| platform::hyprland::bind_shortcuts(&k.borrow()));
+        platform::hyprland::rebind_shortcuts();
     }
 }
 
@@ -270,21 +267,35 @@ pub fn pause_shortcuts(paused: bool) {
 /// focus follows the pointer gives the keyboard to the window under it as the menu goes, which would close the panel the
 /// user just chose in.
 pub fn menu_open(open: bool) {
+    let Some(panel) = PANEL.with(|p| p.borrow().clone()) else { return };
     // A click on the menu, which may reach past the panel, is not one outside it.
-    if PANEL.with(|p| p.borrow().is_some()) {
-        platform::hyprland::close_on_outside_click(PANEL_TITLE, !open);
-    }
+    platform::hyprland::close_on_outside_click(PANEL_TITLE, !open);
+    let turn = MENU.with(|m| {
+        let turn = m.get().1 + 1;
+        m.set((true, turn));
+        turn
+    });
     if open {
-        MENU_OPEN.with(|m| m.set(true));
         return;
     }
-    if let Some(panel) = PANEL.with(|p| p.borrow().clone()) {
-        panel.focus();
-    }
+    panel.focus();
     let Some(d) = desktop() else { return };
     d.owner.get().run(|| {
-        set_timeout(std::time::Duration::from_millis(400), || MENU_OPEN.with(|m| m.set(false)));
+        set_timeout(std::time::Duration::from_millis(400), move || {
+            MENU.with(|m| {
+                if m.get().1 == turn {
+                    m.set((false, turn));
+                }
+            })
+        });
     });
+}
+
+/// The panel lost the keyboard: it closes, unless a menu of its own took it.
+pub fn panel_blurred() {
+    if !MENU.with(|m| m.get().0) {
+        close_panel();
+    }
 }
 
 /// Closes the panel (its own buttons that leave it, opening another window).
