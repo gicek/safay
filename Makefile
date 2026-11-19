@@ -50,10 +50,18 @@ build: ## Debug build (cargo build)
 build-release: ## Release build of the binary only (no bundle; see package-release)
 	$(CARGO) build --release --locked
 
-run: ## Run with the real local vault (debug build; development data directory)
+# Linux: the desktop entry NSH's runner writes takes its icon from `<app ID>.png` beside the executable, where a package
+# puts it (scripts/package.py): notifications, the launcher and window lists show it.
+ifeq ($(UNAME),Linux)
+DEBUG_ICON := target/debug/$(shell $(PYTHON) -c 'import json; print(json.load(open("nsh.json"))["id"])').debug.png
+$(DEBUG_ICON): assets/icon.png
+	@mkdir -p $(dir $@) && cp $< $@
+endif
+
+run: $(DEBUG_ICON) ## Run with the real local vault (debug build; development data directory)
 	$(CARGO) run --locked
 
-preview: ## Run with an in-memory vault, discarded on quit; never touches the keychain
+preview: $(DEBUG_ICON) ## Run with an in-memory vault, discarded on quit; never touches the keychain
 	$(CARGO) run --locked -- --preview
 
 ##@ Checks and tests

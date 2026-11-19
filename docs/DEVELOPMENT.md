@@ -63,6 +63,9 @@ The app must be started through its own launcher (`make run`, `make preview`, or
 not run `src/main.rs`: it shows a notice instead of opening a vault, and has no tray, settings window or global
 shortcuts. The `previews/` entry points exist only in debug builds and keep everything in memory.
 
+On Linux the app runs once per app ID, so `make run` and `make preview` cannot run side by side (the second brings the
+first forward), and both put the icon beside the debug executable for the desktop entry the runner writes.
+
 ## Testing
 
 Tests run in layers: pure logic and the golden vectors (`cargo test`), the application in NSH's headless engine

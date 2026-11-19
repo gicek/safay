@@ -60,6 +60,11 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
   leaving any key the user's config binds. The defaults are Super+Alt+Z, X and A (macOS's ⌥⌘ keys). The capture shortcut
   and the tray panel's screenshot button follow macOS's order: select first, import at once, and say so in a desktop
   notification; while locked the code waits for the lock screen's unlock.
+- Desktop notifications go to the desktop's notification service (`org.freedesktop.Notifications`), silent, a newer one
+  replacing the last; a do-not-disturb mode hides them. They take the app's icon from its desktop entry, which has one
+  when `<app ID>.png` sits beside the executable (packages, `make run`, `make preview`). The window's own toast is the
+  same as on macOS.
+- Safay runs once: launching it again, or opening a `safay://` link, brings the running one forward.
 - The window buttons follow the desktop's `gtk-decoration-layout`. On a tiling desktop that also draws title bars on
   floating windows (Omarchy), a floating Safay shows two sets; `gsettings set org.gnome.desktop.wm.preferences
   button-layout 'appmenu:'` removes GTK's.
