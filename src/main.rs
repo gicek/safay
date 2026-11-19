@@ -22,7 +22,10 @@ fn main() -> impl std::process::Termination {
     if args == ["--update-check"] {
         std::process::exit(safay::platform::updates::command_line_check())
     }
-    if !args.is_empty() && !preview {
+    // The system starts Safay with a link of a scheme it claims (a web sign-in's callback, `safay://`); the runner hands
+    // it to the app, or this launch to the Safay already running.
+    let link = matches!(args.as_slice(), [arg] if safay::platform::is_app_link(arg));
+    if !args.is_empty() && !preview && !link {
         eprintln!("Unknown option.");
         std::process::exit(2)
     }
@@ -38,10 +41,12 @@ fn main() -> impl std::process::Termination {
         loop {
             match DiskRepository::open(directory.clone()) {
                 Ok(repo) => break Box::new(repo),
-                // Linux: Safay is running (the launcher or its autostart entry started it again). It is told, and
-                // brings its main window back, out of the tray too; this launch ends.
+                // Safay is running (the launcher, its autostart entry or a link started it again). It is told, and
+                // brings its main window back (on Linux out of the tray too) and takes the link; this launch ends.
                 #[cfg(target_os = "linux")]
                 Err(_) if safay::platform::linux::hand_to_running() => std::process::exit(0),
+                #[cfg(target_os = "windows")]
+                Err(_) if safay::platform::windows::hand_to_running() => std::process::exit(0),
                 Err(_) if attempts < 50 => {
                     attempts += 1;
                     std::thread::sleep(std::time::Duration::from_millis(100));
@@ -96,7 +101,7 @@ fn main() -> impl std::process::Termination {
         native::AppSource::Rust({
             let root = native::Root::of::<safay::App>()
                 .app_id(safay::platform::APP_ID)
-                .url_schemes([safay::platform::URL_SCHEME])
+                .url_schemes(safay::platform::url_schemes())
                 .tokens(theme.into_tokens())
                 .capabilities(safay::platform::capabilities());
             #[cfg(target_os = "linux")]
@@ -115,11 +120,12 @@ fn main() -> impl std::process::Termination {
             size: (980, 680),
             #[cfg(target_os = "macos")]
             keep_alive_on_close: true,
-            // Linux: the runner writes the app's desktop entry (named after its id, opening `safay://` links). The
-            // desktop portal knows an app outside a sandbox only by that entry: without it, it refuses the global
-            // shortcuts ("An app id is required").
-            #[cfg(target_os = "linux")]
-            schemes: vec![safay::platform::URL_SCHEME.into()],
+            // The runner registers the schemes with the system so their links start Safay: on Linux in the app's
+            // desktop entry (named after its id), on Windows under the user's classes. The Linux desktop portal knows an
+            // app outside a sandbox only by that entry: without it, it refuses the global shortcuts ("An app id is
+            // required").
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            schemes: safay::platform::url_schemes(),
             // Launching Safay again (the launcher, the autostart entry) reaches the running one, which brings its main
             // window back even from the tray (`desktop::install`).
             #[cfg(target_os = "linux")]

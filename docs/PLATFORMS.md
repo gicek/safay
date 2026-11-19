@@ -12,7 +12,7 @@ marked *coded* are written and untested on a real system. The interface shows a 
 | Vault, accounts, categories, codes, import and export | Yes | Coded | Coded |
 | Folder backup | Yes | Coded | Coded |
 | WebDAV and Nextcloud backup | Yes | Coded (Credential Manager) | Yes (the Secret Service: GNOME Keyring, KWallet) |
-| Dropbox, OneDrive, Google Drive | Yes | Not yet (OAuth sign-in) | Not yet |
+| Dropbox, OneDrive, Google Drive | Yes | Coded (sign-in in the browser) | Coded (sign-in in the browser) |
 | iCloud | Yes | — | — |
 | Touch ID / hardware-protected unlock | Touch ID | Planned: Windows Hello key release | Not planned (no common hardware key API) |
 | Lock on sleep, screen lock, user switch | Yes | Coded (`WM_WTSSESSION_CHANGE`, power broadcasts) | Coded (logind, screensaver) |
@@ -33,7 +33,8 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
   a floating sidebar on macOS 26, a flush sidebar on 15 and earlier and on 27 and later.
 - iCloud and push notifications need a package signed with a provisioning profile for the app ID
   ([Development](DEVELOPMENT.md#signing-and-icloud)); ad-hoc packages show iCloud as unavailable.
-- Dropbox, OneDrive and Google Drive appear only when the build has OAuth client IDs (`cloud-keys.toml`).
+- Dropbox, OneDrive and Google Drive appear only when the build has OAuth client IDs (`cloud-keys.toml`), on every
+  system.
 - Cloud locations use the provider's app folder (`Safay`); choosing an arbitrary remote folder is not implemented.
 - Selecting a QR code on screen needs Screen Recording permission; the camera needs a packaged app.
 
@@ -53,16 +54,19 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
   focused monitor's top right and closes on a click outside it; elsewhere the compositor places it, and only Escape or
   another window taking the keyboard closes it.
 - Global shortcuts: the GlobalShortcuts portal knows an app outside a sandbox by its desktop entry, which the runner
-  writes (`~/.local/share/applications/<app ID>.desktop`; it also opens `safay://` links). Plasma and GNOME 48+ bind the
-  keys; Hyprland's portal binds none, so Safay binds them over its socket (again after a config reload, and off when it
-  quits), leaving keys the user's config binds and lifting them while a shortcut is recorded. Defaults: Super+Alt+Z, X
-  and A. Capturing follows macOS: select, import, then a desktop notification.
+  writes (`~/.local/share/applications/<app ID>.desktop`; it also opens `safay://` links and sign-in callbacks). Plasma
+  and GNOME 48+ bind the keys; Hyprland's portal binds none, so Safay binds them over its socket (again after a config
+  reload, and off when it quits), leaving keys the user's config binds and lifting them while a shortcut is recorded.
+  Defaults: Super+Alt+Z, X and A. Capturing follows macOS: select, import, then a desktop notification.
 - Hyprland: the panel's placement, outside clicks and key binds use its socket's Lua requests (`eval`), which older
   releases without Lua configuration lack; there they do nothing.
 - Notifications go to the desktop's notification service, silent, a newer one replacing the last; do-not-disturb hides
   them.
 - Safay runs once: launching it again or opening a `safay://` link brings the running one forward, from the tray too.
   "Launch at Login" writes an XDG autostart entry (`~/.config/autostart/<app ID>.desktop`).
+- Dropbox, OneDrive and Google Drive sign in in the default browser. The provider redirects to its callback scheme,
+  which the desktop entry claims; the link starts Safay again, which hands it to the running one. Leaving the page in
+  Safay ends the sign-in; the browser tab stays open.
 
 ## Known issues
 
@@ -84,3 +88,5 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
    at login on Windows (NSH's login item covers its `Run` key).
 4. Windows Hello, only as a real key release through `KeyCredentialManager` or a TPM-backed key; never a yes/no check.
 5. Verify lock events, the clipboard, file dialogs and backup folders under sync clients on each system.
+6. Sign in to Dropbox, OneDrive and Google Drive with Safay's client IDs on both systems; on Windows, the callback
+   schemes are registered under `HKCU\Software\Classes` and a second launch hands its link over (`platform::windows`).

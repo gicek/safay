@@ -386,7 +386,7 @@
   "The WebDAV address of the folder, for example https://example.com/remote.php/webdav/": "要使用的文件夹的 WebDAV 地址，例如 https://example.com/remote.php/webdav/",
   "For example https://cloud.example.com. You’ll sign in and allow Safay in your browser.": "例如 https://cloud.example.com。随后在浏览器中登录并允许 Safay 访问。",
   "Connect": "连接",
-  "Sign in to Nextcloud in the browser window that opened and allow Safay. Safay continues automatically.": "请在打开的浏览器窗口中登录 Nextcloud 并允许 Safay 访问，完成后 Safay 会自动继续。",
+  "Sign in to {} in the browser window that opened and allow Safay. Safay continues automatically.": "请在打开的浏览器窗口中登录 {} 并允许 Safay 访问，完成后 Safay 会自动继续。",
   "Unencrypted connection": "未加密连接",
   "Your password is sent over HTTP in plain text. Only continue on a network you trust.": "密码会通过 HTTP 明文传输。请只在你信任的网络中继续。",
   "Use Unencrypted Connection": "使用未加密连接",

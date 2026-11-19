@@ -49,17 +49,37 @@ pub enum Signed {
     /// The page could not be shown, or the system reported an error.
     Failed,
 }
-/// Opens the provider's sign-in page; the receiver gets how it ended. Without `supports::OAUTH` it fails at once.
+/// Opens the provider's sign-in page; the receiver gets how it ended. macOS shows it in an
+/// `ASWebAuthenticationSession` (`web_auth`); elsewhere NSH's web sign-in session opens it in the default browser and
+/// takes the callback, a link of a scheme Safay claims ([`url_schemes`]), as the session's end. On the engine thread,
+/// under an owner that lasts the sign-in (`Store::task`).
 pub fn web_sign_in(url: &str, callback_scheme: &str) -> std::sync::mpsc::Receiver<Signed> {
     #[cfg(target_os = "macos")]
-    return web_auth::start(url, callback_scheme);
+    {
+        web_auth::start(url, callback_scheme)
+    }
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = (url, callback_scheme);
+        use nsh_core::{auth_session::AuthSessionOutcome, prelude::*};
         let (sender, receiver) = std::sync::mpsc::channel();
-        let _ = sender.send(Signed::Failed);
+        let session = open_auth_session(nsh_core::auth_session::AuthSessionRequest::new(url, callback_scheme));
+        spawn(async move {
+            drop(sender.send(match session.await {
+                Ok(AuthSessionOutcome::Completed(callback)) => Signed::Callback(callback),
+                Ok(_) => Signed::Closed,
+                Err(_) => Signed::Failed,
+            }));
+        });
         receiver
     }
+}
+/// Closes the web sign-in in progress, if any (the user left its page; a page in the browser stays open, and its
+/// callback no longer ends a session).
+pub fn cancel_web_sign_in() {
+    #[cfg(target_os = "macos")]
+    web_auth::cancel();
+    #[cfg(not(target_os = "macos"))]
+    nsh_core::prelude::close_auth_session();
 }
 
 use std::sync::Mutex;
@@ -89,8 +109,11 @@ pub mod supports {
     pub const ICLOUD: bool = cfg!(not(target_os = "linux"));
     /// Cloud storage backup: its sign-ins go to the system credential store (Linux: the Secret Service).
     pub const CLOUD: bool = true;
-    /// OAuth sign-in for Dropbox, OneDrive and Google Drive (macOS: `ASWebAuthenticationSession`; Windows not yet).
-    pub const OAUTH: bool = cfg!(target_os = "macos");
+    /// OAuth sign-in for Dropbox, OneDrive and Google Drive (macOS: `ASWebAuthenticationSession`; Linux and Windows:
+    /// the default browser, through NSH's web sign-in session). Listed only in builds with the service's client ID.
+    pub const OAUTH: bool = true;
+    /// The OAuth sign-in page opens in the default browser, outside Safay (elsewhere a system sign-in window).
+    pub const BROWSER_SIGN_IN: bool = cfg!(not(target_os = "macos"));
     /// Updating the app itself (NSH's `nsh-updater`; active only in packages that carry an update source).
     pub const UPDATES: bool = cfg!(target_os = "macos");
     /// Launchers (Alfred, Raycast, Tinycast) through AppleScript: the third-party plugin interface.
@@ -190,6 +213,27 @@ pub fn quit() {
 pub const APP_ID: &str = if cfg!(debug_assertions) { "com.gicek.safay.debug" } else { "com.gicek.safay" };
 /// The URL scheme the app claims (`safay://`); a link of it brings the main window forward.
 pub const URL_SCHEME: &str = "safay";
+/// The URL schemes the app claims: [`URL_SCHEME`], and on Linux and Windows the OAuth services' callback schemes of
+/// this build, so their callbacks reach the web sign-in ([`web_sign_in`]; macOS's session takes its callbacks itself).
+/// Lower case, as URLs have them.
+pub fn url_schemes() -> Vec<String> {
+    let mut schemes = vec![URL_SCHEME.to_owned()];
+    if supports::BROWSER_SIGN_IN {
+        use safay_app::cloud::Provider;
+        for provider in [Provider::Dropbox, Provider::Onedrive, Provider::GoogleDrive] {
+            let Some(client) = crate::pages::backup::oauth_client(provider) else { continue };
+            let scheme = client.callback_scheme();
+            if !scheme.is_empty() && !schemes.contains(&scheme) {
+                schemes.push(scheme);
+            }
+        }
+    }
+    schemes
+}
+/// Whether a command-line argument is a link of a scheme the app claims (the system starts the app with one).
+pub fn is_app_link(arg: &str) -> bool {
+    arg.split_once(':').is_some_and(|(scheme, _)| url_schemes().iter().any(|s| s.eq_ignore_ascii_case(scheme)))
+}
 /// The app's private data directory (named by [`APP_ID`]): separate from the other build's.
 pub fn data_directory() -> Option<std::path::PathBuf> {
     use std::path::PathBuf;

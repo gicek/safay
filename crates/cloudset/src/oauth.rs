@@ -53,6 +53,11 @@ impl OAuthClient {
         self.folder_name = Some(name.into());
         self
     }
+
+    /// The redirect's URL scheme, which the app claims to receive the callback; empty for an unparsable redirect.
+    pub fn callback_scheme(&self) -> String {
+        Url::parse(&self.redirect_uri).map(|url| url.scheme().to_owned()).unwrap_or_default()
+    }
 }
 
 /// An access token counts as expired this long before it actually expires, so it does not lapse mid-request.
@@ -207,7 +212,7 @@ impl Authorization {
 
     /// Scheme of the callback URL (required by `ASWebAuthenticationSession`).
     pub fn callback_scheme(&self) -> String {
-        Url::parse(&self.client.redirect_uri).map(|url| url.scheme().to_owned()).unwrap_or_default()
+        self.client.callback_scheme()
     }
 
     /// Whether a callback belongs to this authorization (URL matches the registered one, `state` matches), without

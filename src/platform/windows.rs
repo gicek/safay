@@ -86,3 +86,48 @@ fn foreground_fallback(controller: Arc<Controller>) {
         std::thread::sleep(Duration::from_millis(100));
     }
 }
+
+/// Hands this launch to the Safay already running (a second launch: the Start menu, a sign-in's callback link) and
+/// whether it took it. It speaks the NSH runner's own hand-over (nsh-platform-windows `linking`): the window marked with
+/// the property `nsh.app.<app id>` takes the launch's arguments and directory as `SecondInstance` JSON in a `WM_COPYDATA`
+/// of kind "NSHI", then shows itself, comes to the front, and passes on the links among the arguments. NSH does this
+/// itself only after the vault is opened, which the running Safay holds. Recheck on every NSH upgrade.
+pub fn hand_to_running() -> bool {
+    use windows_sys::Win32::System::DataExchange::COPYDATASTRUCT;
+    /// `COPYDATASTRUCT::dwData` of a forwarded launch ("NSHI").
+    const COPY_INSTANCE: usize = 0x4E53_4849;
+    let id: String = super::APP_ID.chars().map(|c| if c.is_ascii_alphanumeric() || c == '.' || c == '-' { c } else { '_' }).collect();
+    let property: Vec<u16> = format!("nsh.app.{id}").encode_utf16().chain([0]).collect();
+    let data = nsh_core::single_instance::SecondInstance::current().to_json().to_string().into_bytes();
+    unsafe extern "system" fn each(window: HWND, search: LPARAM) -> windows_sys::core::BOOL {
+        // SAFETY: `search` is the property and result pair below, alive for the enumeration.
+        let search = unsafe { &mut *(search as *mut (*const u16, HWND)) };
+        // SAFETY: a plain read of a window's property, named by a NUL-terminated string.
+        if unsafe { !GetPropW(window, search.0).is_null() } {
+            search.1 = window;
+            return 0;
+        }
+        1
+    }
+    // The running Safay may still be opening its window: look for it for up to 5 s.
+    for _ in 0..50 {
+        let mut search: (*const u16, HWND) = (property.as_ptr(), std::ptr::null_mut());
+        // SAFETY: `each` only uses `search`, which outlives the enumeration.
+        unsafe { EnumWindows(Some(each), &mut search as *mut _ as LPARAM) };
+        let window = search.1;
+        if !window.is_null() {
+            let copy = COPYDATASTRUCT { dwData: COPY_INSTANCE, cbData: data.len() as u32, lpData: data.as_ptr() as *mut _ };
+            let mut result = 0usize;
+            // SAFETY: plain calls on another process's window; `copy` and `data` outlive the synchronous send.
+            unsafe {
+                let mut pid = 0u32;
+                GetWindowThreadProcessId(window, &mut pid);
+                AllowSetForegroundWindow(pid);
+                SendMessageTimeoutW(window, WM_COPYDATA, 0, &copy as *const _ as LPARAM, SMTO_ABORTIFHUNG, 5000, &mut result);
+            }
+            return result == 1;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    false
+}

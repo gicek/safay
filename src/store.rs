@@ -241,8 +241,8 @@ pub struct Store {
     /// The cloud storage connection sheet was opened from the first-run restore page: connecting looks for a backup
     /// there instead of linking the location.
     pub cloud_restore: Signal<bool>,
-    /// Counts WebDAV and Nextcloud connection attempts: leaving the setup starts a new count, so a running attempt
-    /// drops what it gets back.
+    /// Counts cloud connection attempts: leaving the setup starts a new count, so a running attempt drops what it gets
+    /// back.
     cloud_attempt: Signal<u64>,
     /// Cloud sign-ins made during first-run restore, reused when the service is chosen again (memory only).
     restore_sign_ins: Stored<safay_app::cloud::RestoreSignIns<CloudForm>>,
@@ -459,10 +459,7 @@ impl Store {
         if self.cloud_restore.get() {
             self.leave_cloud_setup();
             self.cloud_restore.set(false);
-        } else if matches!(
-            self.backup_page.get(),
-            BackupPage::Setup(safay_app::cloud::Provider::Webdav | safay_app::cloud::Provider::Nextcloud)
-        ) {
+        } else if matches!(self.backup_page.get(), BackupPage::Setup(_)) {
             self.leave_cloud_setup();
         }
         self.reset_transient();
@@ -1987,8 +1984,7 @@ impl Store {
         self.cloud_form.update(|f| f.untrusted = None);
     }
     pub fn leave_cloud_setup(self) {
-        #[cfg(target_os = "macos")]
-        platform::web_auth::cancel();
+        platform::cancel_web_sign_in();
         self.cloud_attempt.update(|a| *a = a.wrapping_add(1));
         self.cloud_form.set(CloudForm::default());
         self.status.set(None);
@@ -2211,16 +2207,24 @@ impl Store {
                 return;
             }
         };
-        let outcome = platform::web_sign_in(authorization.url(), &authorization.callback_scheme());
         self.cloud_form.update(|f| {
             f.working = true;
             f.waiting = true;
             f.error = None;
         });
         let epoch = self.controller.get().epoch();
+        self.cloud_attempt.update(|a| *a = a.wrapping_add(1));
+        let attempt = self.cloud_attempt.get();
+        // Not locked meanwhile, and the user has not left the setup.
+        let current = move || self.controller.get().epoch() == epoch && self.cloud_attempt.get() == attempt;
         self.task(async move {
             use platform::Signed;
+            // Started in the task, under the window content's owner: what it spawns outlives the pressed button.
+            let outcome = platform::web_sign_in(authorization.url(), &authorization.callback_scheme());
             let signed = blocking(move || outcome.recv().unwrap_or(Signed::Failed)).await.unwrap_or(Signed::Failed);
+            if !current() {
+                return;
+            }
             let callback = match signed {
                 Signed::Callback(callback) => callback,
                 // Closed by the user: back to the form, nothing stored.
@@ -2240,7 +2244,11 @@ impl Store {
             };
             self.cloud_form.update(|f| f.waiting = false);
             let result = blocking(move || safay_app::cloud::oauth_complete(&authorization, &callback)).await;
-            if self.controller.get().epoch() != epoch {
+            if !current() {
+                // Signed in after the user left or Safay locked: the sign-in stored for it is revoked and removed.
+                if let Ok(Ok(safay_app::sync::Location::Cloud { credential, .. })) = result {
+                    drop(blocking(move || safay_app::cloud::forget(&credential)).await);
+                }
                 return;
             }
             match result {

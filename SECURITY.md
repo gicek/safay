@@ -96,9 +96,12 @@ Remote storage receives only the encrypted vault and a metadata file with a devi
 
 ### Cloud accounts
 
-- Dropbox, OneDrive and Google Drive use OAuth 2.0 with PKCE as a public client, in the system's authentication session
-  (`ASWebAuthenticationSession`), with access to the app's own folder only. `state` and the callback are verified by
-  the core. Nextcloud uses Login Flow v2, with the login page, polling and result required to share an origin.
+- Dropbox, OneDrive and Google Drive use OAuth 2.0 with PKCE as a public client, with access to the app's own folder
+  only: on macOS in the system's authentication session (`ASWebAuthenticationSession`), on Linux and Windows in the
+  default browser, whose callback comes back as a link of the provider's scheme that Safay claims. Any app can open such
+  a link, or claim the scheme too: only a sign-in in progress takes one, the code is useless without the PKCE verifier
+  that never leaves Safay, and `state` and the callback are verified by the core. Nextcloud uses Login Flow v2, with the
+  login page, polling and result required to share an origin.
 - Credentials (the serialized connection, including tokens or app passwords) are stored only in the system credential
   store (Keychain, Windows Credential Manager, the Secret Service on Linux); `sync.json` holds the entry's ID and a
   display name. Turning a backup off revokes the token where the provider supports it and deletes the entry.

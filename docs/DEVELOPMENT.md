@@ -132,7 +132,9 @@ meaning override it.
 
 Dropbox, OneDrive and Google Drive need public OAuth client IDs registered for Safay, in an untracked
 `cloud-keys.toml` (`[dropbox] app_key`, `[microsoft] client_id`, `[google] client_id`). `build.rs` compiles them in;
-services without one are hidden.
+services without one are hidden. Every system uses the same redirect URIs, which each client registers: Dropbox
+`db-<app key>://2/token`, Microsoft `msal<client id>://auth` (a "Mobile and desktop applications" platform), Google
+`com.googleusercontent.apps.<id>:/oauth2redirect` (an iOS client).
 
 ### Signing and iCloud
 

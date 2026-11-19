@@ -799,6 +799,8 @@ fn oauth_setup(s: Store, provider: Provider) -> impl IntoElement {
                 ),
         )
         .child(progress_steps(steps, phase))
+        // macOS signs in in a window of its own; elsewhere the page is in the browser.
+        .child(when(move || crate::platform::supports::BROWSER_SIGN_IN, move || browser_note(s, provider)))
         .child(when(
             move || s.cloud_form.with(|f| f.error.is_some()),
             move || {
@@ -809,6 +811,19 @@ fn oauth_setup(s: Store, provider: Provider) -> impl IntoElement {
                 )
             },
         ))
+}
+/// While a sign-in waits in the browser: where to go, and that Safay goes on by itself.
+fn browser_note(s: Store, provider: Provider) -> impl IntoElement {
+    when(
+        move || s.cloud_form.with(|f| f.waiting),
+        move || {
+            text(move || {
+                s.fmt("Sign in to {} in the browser window that opened and allow Safay. Safay continues automatically.", &[provider.name()])
+            })
+            .text_size(px(12.0))
+            .text_color(move || theme().muted_foreground)
+        },
+    )
 }
 /// Steps that become progress: `phase()` is the current step, from 1 (0: not started); earlier steps are checked, the
 /// current one spins.
@@ -888,127 +903,126 @@ fn server_setup(s: Store, provider: Provider) -> impl IntoElement {
         .gap(px(18.0))
         .child(pairing_header(s, provider))
         // Once connecting, the form gives way to the steps (they become progress); Nextcloud signs in in the browser.
-        .child(when(
-            move || s.cloud_form.with(|f| f.working),
-            move || {
-                let mut steps: Vec<Box<dyn Fn() -> SharedString>> = Vec::new();
-                if provider == Provider::Nextcloud {
-                    steps.push(Box::new(move || s.label("Get the sign-in page from your server")));
-                    steps.push(Box::new(move || s.fmt("Sign in to {} and allow Safay", &[provider.name()])));
-                    steps.push(Box::new(move || s.fmt("Connect to your {} account", &[provider.name()])));
-                } else {
-                    steps.push(Box::new(move || s.label("Sign in to your server")));
-                }
-                let last = steps.len() + 1;
-                steps.push(Box::new(move || {
-                    s.label(if s.cloud_restore.get() { "Find your backup" } else { "Look for an existing backup, then back up" })
-                }));
-                let phase = move || {
-                    s.cloud_form.with(|f| {
-                        if f.checking {
-                            last
-                        } else if f.waiting {
-                            2
-                        } else if f.allowed {
-                            3
-                        } else {
-                            1
-                        }
-                    })
-                };
-                view().gap(px(14.0)).child(progress_steps(steps, phase)).child(when(
-                    move || s.cloud_form.with(|f| f.waiting),
-                    move || {
-                        text(move || {
-                            s.label("Sign in to Nextcloud in the browser window that opened and allow Safay. Safay continues automatically.")
-                        })
-                        .text_size(px(12.0))
-                        .text_color(move || theme().muted_foreground)
-                    },
-                ))
-            },
-        ).otherwise(move || {
-            // A confirmation is about the address already entered: it takes the fields' place, so it stays in view.
+        .child(
             when(
-                move || s.cloud_form.with(|f| f.needs_consent || f.untrusted.is_some()),
+                move || s.cloud_form.with(|f| f.working),
                 move || {
-                    view()
-                        .child(when(move || s.cloud_form.with(|f| f.needs_consent), move || insecure_confirmation(s, provider)))
-                        .child(when(move || s.cloud_form.with(|f| f.untrusted.is_some()), move || certificate_confirmation(s, provider)))
+                    let mut steps: Vec<Box<dyn Fn() -> SharedString>> = Vec::new();
+                    if provider == Provider::Nextcloud {
+                        steps.push(Box::new(move || s.label("Get the sign-in page from your server")));
+                        steps.push(Box::new(move || s.fmt("Sign in to {} and allow Safay", &[provider.name()])));
+                        steps.push(Box::new(move || s.fmt("Connect to your {} account", &[provider.name()])));
+                    } else {
+                        steps.push(Box::new(move || s.label("Sign in to your server")));
+                    }
+                    let last = steps.len() + 1;
+                    steps.push(Box::new(move || {
+                        s.label(if s.cloud_restore.get() { "Find your backup" } else { "Look for an existing backup, then back up" })
+                    }));
+                    let phase = move || {
+                        s.cloud_form.with(|f| {
+                            if f.checking {
+                                last
+                            } else if f.waiting {
+                                2
+                            } else if f.allowed {
+                                3
+                            } else {
+                                1
+                            }
+                        })
+                    };
+                    view().gap(px(14.0)).child(progress_steps(steps, phase)).child(browser_note(s, provider))
                 },
             )
             .otherwise(move || {
-                view()
-                    .gap(px(18.0))
-                    .child(
+                // A confirmation is about the address already entered: it takes the fields' place, so it stays in view.
+                when(
+                    move || s.cloud_form.with(|f| f.needs_consent || f.untrusted.is_some()),
+                    move || {
                         view()
-                            .gap(px(6.0))
-                            .child(field(
-                                "cloud-address",
-                                "Server Address",
-                                "https://",
-                                Box::new(move || form().address),
-                                Box::new(move |v: &str| {
-                                    s.cloud_form.update(|f| {
-                                        f.address = v.into();
-                                        f.needs_consent = false;
-                                        f.insecure = false;
-                                        // A confirmed certificate belongs to the address it was read from.
-                                        f.untrusted = None;
-                                        f.trusted = None;
-                                        f.error = None;
-                                    })
-                                }),
+                            .child(when(move || s.cloud_form.with(|f| f.needs_consent), move || insecure_confirmation(s, provider)))
+                            .child(when(
+                                move || s.cloud_form.with(|f| f.untrusted.is_some()),
+                                move || certificate_confirmation(s, provider),
                             ))
-                            .child(
-                                text(move || {
-                                    s.label(if provider == Provider::Webdav {
-                                        "The WebDAV address of the folder, for example https://example.com/remote.php/webdav/"
-                                    } else {
-                                        "For example https://cloud.example.com. You’ll sign in and allow Safay in your browser."
-                                    })
-                                })
-                                .text_size(px(11.5))
-                                .text_color(move || theme().muted_foreground),
-                            ),
-                    )
-                    .child(when(
-                        move || provider == Provider::Webdav,
-                        move || {
+                    },
+                )
+                .otherwise(move || {
+                    view()
+                        .gap(px(18.0))
+                        .child(
                             view()
-                                .flex_row()
-                                .gap(px(12.0))
+                                .gap(px(6.0))
+                                .child(field(
+                                    "cloud-address",
+                                    "Server Address",
+                                    "https://",
+                                    Box::new(move || form().address),
+                                    Box::new(move |v: &str| {
+                                        s.cloud_form.update(|f| {
+                                            f.address = v.into();
+                                            f.needs_consent = false;
+                                            f.insecure = false;
+                                            // A confirmed certificate belongs to the address it was read from.
+                                            f.untrusted = None;
+                                            f.trusted = None;
+                                            f.error = None;
+                                        })
+                                    }),
+                                ))
                                 .child(
-                                    view().flex_1().child(field(
+                                    text(move || {
+                                        s.label(if provider == Provider::Webdav {
+                                            "The WebDAV address of the folder, for example https://example.com/remote.php/webdav/"
+                                        } else {
+                                            "For example https://cloud.example.com. You’ll sign in and allow Safay in your browser."
+                                        })
+                                    })
+                                    .text_size(px(11.5))
+                                    .text_color(move || theme().muted_foreground),
+                                ),
+                        )
+                        .child(when(
+                            move || provider == Provider::Webdav,
+                            move || {
+                                view()
+                                    .flex_row()
+                                    .gap(px(12.0))
+                                    .child(view().flex_1().child(field(
                                         "cloud-username",
                                         "Username",
                                         "",
                                         Box::new(move || form().username),
                                         Box::new(move |v: &str| s.cloud_form.update(|f| f.username = v.into())),
-                                    )),
-                                )
-                                .child(view().flex_1().child(labeled(
-                                    move || s.label("Password"),
-                                    secure_field_with(
-                                        s,
-                                        "cloud-password",
+                                    )))
+                                    .child(view().flex_1().child(labeled(
                                         move || s.label("Password"),
-                                        move || form().password.to_string(),
-                                        move |v| s.cloud_form.update(|f| f.password = Zeroizing::new(v.into())),
-                                        move || s.connect_cloud(provider),
-                                        |_| {},
-                                        false,
-                                        false,
-                                    ),
-                                )))
-                        },
-                    ))
-            })
-        }))
+                                        secure_field_with(
+                                            s,
+                                            "cloud-password",
+                                            move || s.label("Password"),
+                                            move || form().password.to_string(),
+                                            move |v| s.cloud_form.update(|f| f.password = Zeroizing::new(v.into())),
+                                            move || s.connect_cloud(provider),
+                                            |_| {},
+                                            false,
+                                            false,
+                                        ),
+                                    )))
+                            },
+                        ))
+                })
+            }),
+        )
         .child(when(
             move || s.cloud_form.with(|f| f.error.is_some()),
             move || {
-                inline_notice(Icon::Warning, move || theme().destructive, move || s.cloud_form.with(|f| f.error.clone().unwrap_or_default()))
+                inline_notice(
+                    Icon::Warning,
+                    move || theme().destructive,
+                    move || s.cloud_form.with(|f| f.error.clone().unwrap_or_default()),
+                )
             },
         ))
 }
