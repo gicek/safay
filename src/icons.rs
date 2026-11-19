@@ -163,7 +163,7 @@ fn shape(name: Icon) -> &'static str {
         Icon::ShieldWarningFill => {
             "<path fill='currentColor' d='M12 3l7 3v5.5c0 4.2-2.9 8-7 9.5-4.1-1.5-7-5.3-7-9.5V6z'/><path d='M12 8v5' stroke='white'/><circle cx='12' cy='16' r='.6' fill='white' stroke='white'/>"
         }
-        Icon::CheckCircleFill => "<circle cx='12' cy='12' r='9' fill='currentColor'/>",
+        Icon::CheckCircleFill => "<circle cx='12' cy='12' r='9' fill='currentColor'/><path d='M8.2 12.3l2.6 2.6 5-5.2' stroke='#fff'/>",
         Icon::Cloud => "<path d='M7 18.5h10.5a3.75 3.75 0 0 0 .4-7.5 6 6 0 0 0-11.5 1.5A3 3 0 0 0 7 18.5Z'/>",
         Icon::CloudDown => {
             "<path d='M7 18.5h10.5a3.75 3.75 0 0 0 .4-7.5 6 6 0 0 0-11.5 1.5A3 3 0 0 0 7 18.5Z'/><path d='M12 10.5v5m-2.2-2.2 2.2 2.2 2.2-2.2'/>"

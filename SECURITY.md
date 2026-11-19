@@ -102,6 +102,8 @@ Remote storage receives only the encrypted vault and a metadata file with a devi
 - Credentials (the serialized connection, including tokens or app passwords) are stored only in the system credential
   store (Keychain, Windows Credential Manager, the Secret Service on Linux); `sync.json` holds the entry's ID and a
   display name. Turning a backup off revokes the token where the provider supports it and deletes the entry.
+- A WebDAV or Nextcloud connection stopped midway (the user leaves it, or Safay locks) keeps nothing: a sign-in that
+  arrives afterwards is revoked and its entry deleted.
 - Plain `http://` WebDAV requires explicit consent in the interface.
 - **Self-signed servers** (WebDAV, Nextcloud): when the system does not trust a server's certificate, Safay shows the
   leaf certificate's SHA-256 fingerprint for the user to compare. Once confirmed, the location accepts either a

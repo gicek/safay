@@ -137,8 +137,12 @@ fn footer(s: Store) -> impl IntoElement {
             move || page() != BackupPage::Overview,
             move || {
                 push_button(move || s.label(if page() == BackupPage::Conflict { "Decide Later" } else { "Back" }), Kind::Standard, false)
-                    // After the browser returns (token exchange, backup check) the page cannot be left midway.
-                    .disabled(move || s.cloud_form.with(|f| f.working && !f.waiting))
+                    // A server connection can be left until the backup check (what it gets back is dropped); an OAuth
+                    // sign-in cannot after the browser returns (token exchange, backup check).
+                    .disabled(move || {
+                        let server = matches!(page(), BackupPage::Setup(Provider::Webdav | Provider::Nextcloud));
+                        s.cloud_form.with(|f| if server { f.checking } else { f.working && !f.waiting })
+                    })
                     .on_press(move || {
                         s.status.set(None);
                         if s.cloud_restore.get() {
@@ -748,7 +752,7 @@ fn pairing_header(s: Store, provider: Provider) -> impl IntoElement {
 /// The OAuth form: pairing header, the Safay-folder promise, and the three steps (they become progress).
 fn oauth_setup(s: Store, provider: Provider) -> impl IntoElement {
     let folder = move || s.label(if provider == Provider::GoogleDrive { "My Drive › Safay" } else { "Apps › Safay" });
-    let steps: [Box<dyn Fn() -> SharedString>; 3] = [
+    let steps: Vec<Box<dyn Fn() -> SharedString>> = vec![
         Box::new(move || s.fmt("Sign in to {} and allow Safay", &[provider.name()])),
         Box::new(move || s.fmt("Connect to your {} account", &[provider.name()])),
         Box::new(move || s.label(if s.cloud_restore.get() { "Find your backup" } else { "Look for an existing backup, then back up" })),
@@ -794,64 +798,7 @@ fn oauth_setup(s: Store, provider: Provider) -> impl IntoElement {
                         ),
                 ),
         )
-        .child(view().gap(px(10.0)).children(steps.into_iter().enumerate().map(move |(i, label)| {
-            let state = move || {
-                let p = phase();
-                if p == 0 {
-                    0
-                } else if i + 1 < p {
-                    3
-                } else if i + 1 == p {
-                    2
-                } else {
-                    1
-                }
-            };
-            view()
-                .flex_row()
-                .items_center()
-                .gap(px(10.0))
-                .child(
-                    view().size(px(20.0)).items_center().justify_center().child(
-                        when(move || state() == 3, move || crate::icons::symbol(Icon::CheckCircleFill, 16.0, move || tok("code-accent")))
-                            .otherwise(move || {
-                                // The current step spins.
-                                when(move || state() == 2, || spinner(14.0)).otherwise(move || {
-                                    view()
-                                        .size(px(18.0))
-                                        .rounded_full()
-                                        .border_1()
-                                        .border_color(move || tok("tertiary"))
-                                        .items_center()
-                                        .justify_center()
-                                        .child(
-                                            text((i + 1).to_string())
-                                                .text_size(px(10.5))
-                                                .font_weight(FontWeight::SEMIBOLD)
-                                                .text_color(move || theme().muted_foreground),
-                                        )
-                                })
-                            }),
-                    ),
-                )
-                .child({
-                    // The current step is semibold; the weight is fixed per text, so the two weights swap.
-                    let label = std::rc::Rc::new(label);
-                    let styled = move |weight: FontWeight| {
-                        let label = label.clone();
-                        move || {
-                            let label = label.clone();
-                            text(move || label()).text_size(px(12.5)).font_weight(weight).text_color(move || match state() {
-                                1 => tok("tertiary"),
-                                0 => theme().muted_foreground,
-                                _ => theme().foreground,
-                            })
-                        }
-                    };
-                    when(move || state() == 2, styled(FontWeight::SEMIBOLD)).otherwise(styled(FontWeight::NORMAL))
-                })
-                .into_element()
-        })))
+        .child(progress_steps(steps, phase))
         .child(when(
             move || s.cloud_form.with(|f| f.error.is_some()),
             move || {
@@ -863,6 +810,68 @@ fn oauth_setup(s: Store, provider: Provider) -> impl IntoElement {
             },
         ))
 }
+/// Steps that become progress: `phase()` is the current step, from 1 (0: not started); earlier steps are checked, the
+/// current one spins.
+fn progress_steps(steps: Vec<Box<dyn Fn() -> SharedString>>, phase: impl Fn() -> usize + Copy + 'static) -> impl IntoElement {
+    view().gap(px(10.0)).children(steps.into_iter().enumerate().map(move |(i, label)| {
+        let state = move || {
+            let p = phase();
+            if p == 0 {
+                0
+            } else if i + 1 < p {
+                3
+            } else if i + 1 == p {
+                2
+            } else {
+                1
+            }
+        };
+        view()
+            .flex_row()
+            .items_center()
+            .gap(px(10.0))
+            .child(
+                view().size(px(20.0)).items_center().justify_center().child(
+                    when(move || state() == 3, move || crate::icons::symbol(Icon::CheckCircleFill, 16.0, move || tok("code-accent")))
+                        .otherwise(move || {
+                            // The current step spins.
+                            when(move || state() == 2, || spinner(14.0)).otherwise(move || {
+                                view()
+                                    .size(px(18.0))
+                                    .rounded_full()
+                                    .border_1()
+                                    .border_color(move || tok("tertiary"))
+                                    .items_center()
+                                    .justify_center()
+                                    .child(
+                                        text((i + 1).to_string())
+                                            .text_size(px(10.5))
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(move || theme().muted_foreground),
+                                    )
+                            })
+                        }),
+                ),
+            )
+            .child({
+                // The current step is semibold; the weight is fixed per text, so the two weights swap.
+                let label = std::rc::Rc::new(label);
+                let styled = move |weight: FontWeight| {
+                    let label = label.clone();
+                    move || {
+                        let label = label.clone();
+                        text(move || label()).text_size(px(12.5)).font_weight(weight).text_color(move || match state() {
+                            1 => tok("tertiary"),
+                            0 => theme().muted_foreground,
+                            _ => theme().foreground,
+                        })
+                    }
+                };
+                when(move || state() == 2, styled(FontWeight::SEMIBOLD)).otherwise(styled(FontWeight::NORMAL))
+            })
+            .into_element()
+    }))
+}
 fn setup(s: Store, provider: Provider) -> AnyElement {
     if matches!(provider, Provider::Dropbox | Provider::Onedrive | Provider::GoogleDrive) {
         return oauth_setup(s, provider).into_element();
@@ -871,7 +880,6 @@ fn setup(s: Store, provider: Provider) -> AnyElement {
 }
 fn server_setup(s: Store, provider: Provider) -> impl IntoElement {
     let form = move || s.cloud_form.get();
-    let busy = move || s.cloud_form.with(|f| f.working);
     let field =
         move |id: &'static str, label: &'static str, placeholder: &'static str, get: Box<dyn Fn() -> String>, set: Box<dyn Fn(&str)>| {
             labeled(move || s.label(label), text_field(s, id, move || s.label(label), move || placeholder.into(), get, set, false, || {}))
@@ -879,94 +887,123 @@ fn server_setup(s: Store, provider: Provider) -> impl IntoElement {
     view()
         .gap(px(18.0))
         .child(pairing_header(s, provider))
+        // Once connecting, the form gives way to the steps (they become progress); Nextcloud signs in in the browser.
         .child(when(
-            move || s.cloud_form.with(|f| f.waiting),
+            move || s.cloud_form.with(|f| f.working),
             move || {
-                view()
-                    .gap(px(14.0))
-                    .child(
-                        text(move || s.label("Waiting for you to grant access in the browser"))
-                            .text_size(px(13.0))
-                            .font_weight(FontWeight::SEMIBOLD),
-                    )
-                    .child(
+                let mut steps: Vec<Box<dyn Fn() -> SharedString>> = Vec::new();
+                if provider == Provider::Nextcloud {
+                    steps.push(Box::new(move || s.label("Get the sign-in page from your server")));
+                    steps.push(Box::new(move || s.fmt("Sign in to {} and allow Safay", &[provider.name()])));
+                    steps.push(Box::new(move || s.fmt("Connect to your {} account", &[provider.name()])));
+                } else {
+                    steps.push(Box::new(move || s.label("Sign in to your server")));
+                }
+                let last = steps.len() + 1;
+                steps.push(Box::new(move || {
+                    s.label(if s.cloud_restore.get() { "Find your backup" } else { "Look for an existing backup, then back up" })
+                }));
+                let phase = move || {
+                    s.cloud_form.with(|f| {
+                        if f.checking {
+                            last
+                        } else if f.waiting {
+                            2
+                        } else if f.allowed {
+                            3
+                        } else {
+                            1
+                        }
+                    })
+                };
+                view().gap(px(14.0)).child(progress_steps(steps, phase)).child(when(
+                    move || s.cloud_form.with(|f| f.waiting),
+                    move || {
                         text(move || {
                             s.label("Sign in to Nextcloud in the browser window that opened and allow Safay. Safay continues automatically.")
                         })
                         .text_size(px(12.0))
-                        .text_color(move || theme().muted_foreground),
-                    )
-            },
-        ).otherwise(move || {
-            view()
-                .gap(px(18.0))
-                .pointer_events(move || if busy() { nsh_core::PointerEvents::None } else { nsh_core::PointerEvents::Auto })
-                .opacity(move || if busy() { 0.6_f32 } else { 1.0 })
-                .child(
-                    view()
-                        .gap(px(6.0))
-                        .child(field(
-                            "cloud-address",
-                            "Server Address",
-                            "https://",
-                            Box::new(move || form().address),
-                            Box::new(move |v: &str| {
-                                s.cloud_form.update(|f| {
-                                    f.address = v.into();
-                                    f.needs_consent = false;
-                                    f.insecure = false;
-                                    // A confirmed certificate belongs to the address it was read from.
-                                    f.untrusted = None;
-                                    f.trusted = None;
-                                    f.error = None;
-                                })
-                            }),
-                        ))
-                        .child(
-                            text(move || {
-                                s.label(if provider == Provider::Webdav {
-                                    "The WebDAV address of the folder, for example https://example.com/remote.php/webdav/"
-                                } else {
-                                    "For example https://cloud.example.com. You’ll sign in and allow Safay in your browser."
-                                })
-                            })
-                            .text_size(px(11.5))
-                            .text_color(move || theme().muted_foreground),
-                        ),
-                )
-                .child(when(
-                    move || provider == Provider::Webdav,
-                    move || {
-                        view()
-                            .flex_row()
-                            .gap(px(12.0))
-                            .child(
-                                view().flex_1().child(field(
-                                    "cloud-username",
-                                    "Username",
-                                    "",
-                                    Box::new(move || form().username),
-                                    Box::new(move |v: &str| s.cloud_form.update(|f| f.username = v.into())),
-                                )),
-                            )
-                            .child(view().flex_1().child(labeled(
-                                move || s.label("Password"),
-                                secure_field_with(
-                                    s,
-                                    "cloud-password",
-                                    move || s.label("Password"),
-                                    move || form().password.to_string(),
-                                    move |v| s.cloud_form.update(|f| f.password = Zeroizing::new(v.into())),
-                                    move || s.connect_cloud(provider),
-                                    |_| {},
-                                    false,
-                                    false,
-                                ),
-                            )))
+                        .text_color(move || theme().muted_foreground)
                     },
                 ))
-                .child(when(move || s.cloud_form.with(|f| f.needs_consent), move || insecure_confirmation(s, provider)))
-                .child(when(move || s.cloud_form.with(|f| f.untrusted.is_some()), move || certificate_confirmation(s, provider)))
+            },
+        ).otherwise(move || {
+            // A confirmation is about the address already entered: it takes the fields' place, so it stays in view.
+            when(
+                move || s.cloud_form.with(|f| f.needs_consent || f.untrusted.is_some()),
+                move || {
+                    view()
+                        .child(when(move || s.cloud_form.with(|f| f.needs_consent), move || insecure_confirmation(s, provider)))
+                        .child(when(move || s.cloud_form.with(|f| f.untrusted.is_some()), move || certificate_confirmation(s, provider)))
+                },
+            )
+            .otherwise(move || {
+                view()
+                    .gap(px(18.0))
+                    .child(
+                        view()
+                            .gap(px(6.0))
+                            .child(field(
+                                "cloud-address",
+                                "Server Address",
+                                "https://",
+                                Box::new(move || form().address),
+                                Box::new(move |v: &str| {
+                                    s.cloud_form.update(|f| {
+                                        f.address = v.into();
+                                        f.needs_consent = false;
+                                        f.insecure = false;
+                                        // A confirmed certificate belongs to the address it was read from.
+                                        f.untrusted = None;
+                                        f.trusted = None;
+                                        f.error = None;
+                                    })
+                                }),
+                            ))
+                            .child(
+                                text(move || {
+                                    s.label(if provider == Provider::Webdav {
+                                        "The WebDAV address of the folder, for example https://example.com/remote.php/webdav/"
+                                    } else {
+                                        "For example https://cloud.example.com. You’ll sign in and allow Safay in your browser."
+                                    })
+                                })
+                                .text_size(px(11.5))
+                                .text_color(move || theme().muted_foreground),
+                            ),
+                    )
+                    .child(when(
+                        move || provider == Provider::Webdav,
+                        move || {
+                            view()
+                                .flex_row()
+                                .gap(px(12.0))
+                                .child(
+                                    view().flex_1().child(field(
+                                        "cloud-username",
+                                        "Username",
+                                        "",
+                                        Box::new(move || form().username),
+                                        Box::new(move |v: &str| s.cloud_form.update(|f| f.username = v.into())),
+                                    )),
+                                )
+                                .child(view().flex_1().child(labeled(
+                                    move || s.label("Password"),
+                                    secure_field_with(
+                                        s,
+                                        "cloud-password",
+                                        move || s.label("Password"),
+                                        move || form().password.to_string(),
+                                        move |v| s.cloud_form.update(|f| f.password = Zeroizing::new(v.into())),
+                                        move || s.connect_cloud(provider),
+                                        |_| {},
+                                        false,
+                                        false,
+                                    ),
+                                )))
+                        },
+                    ))
+            })
         }))
         .child(when(
             move || s.cloud_form.with(|f| f.error.is_some()),

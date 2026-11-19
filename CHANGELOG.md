@@ -5,6 +5,11 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+### Changed
+
+- **Connecting to WebDAV or Nextcloud**: you see each step as it happens, and you can go back at any time before the
+  backup check.
+
 ### Fixed
 
 - The export list and the "Account Details" header show each account's site icon instead of its initials.

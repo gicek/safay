@@ -81,6 +81,8 @@ pub struct CloudForm {
     pub working: bool,
     /// Waiting for the user to finish signing in in the browser (Nextcloud).
     pub waiting: bool,
+    /// The user allowed Safay in the browser; connecting to the account (Nextcloud).
+    pub allowed: bool,
     /// Connected; looking for a backup there (first-run restore), the third step.
     pub checking: bool,
     pub error: Option<SharedString>,
@@ -239,6 +241,9 @@ pub struct Store {
     /// The cloud storage connection sheet was opened from the first-run restore page: connecting looks for a backup
     /// there instead of linking the location.
     pub cloud_restore: Signal<bool>,
+    /// Counts WebDAV and Nextcloud connection attempts: leaving the setup starts a new count, so a running attempt
+    /// drops what it gets back.
+    cloud_attempt: Signal<u64>,
     /// Cloud sign-ins made during first-run restore, reused when the service is chosen again (memory only).
     restore_sign_ins: Stored<safay_app::cloud::RestoreSignIns<CloudForm>>,
     pub form: Signal<Form>,
@@ -350,6 +355,7 @@ impl Store {
             login_error: signal(None),
             restore_location: signal(None),
             cloud_restore: signal(false),
+            cloud_attempt: signal(0),
             restore_sign_ins: stored(Default::default()),
             form,
             strength,
@@ -453,6 +459,11 @@ impl Store {
         if self.cloud_restore.get() {
             self.leave_cloud_setup();
             self.cloud_restore.set(false);
+        } else if matches!(
+            self.backup_page.get(),
+            BackupPage::Setup(safay_app::cloud::Provider::Webdav | safay_app::cloud::Provider::Nextcloud)
+        ) {
+            self.leave_cloud_setup();
         }
         self.reset_transient();
         self.detail.set(None);
@@ -1978,6 +1989,7 @@ impl Store {
     pub fn leave_cloud_setup(self) {
         #[cfg(target_os = "macos")]
         platform::web_auth::cancel();
+        self.cloud_attempt.update(|a| *a = a.wrapping_add(1));
         self.cloud_form.set(CloudForm::default());
         self.status.set(None);
         self.backup_page.set(BackupPage::Choose);
@@ -2022,12 +2034,20 @@ impl Store {
         };
         self.cloud_form.update(|f| {
             f.working = true;
+            f.allowed = false;
             f.error = None;
         });
         let epoch = self.controller.get().epoch();
+        self.cloud_attempt.update(|a| *a = a.wrapping_add(1));
+        let attempt = self.cloud_attempt.get();
+        // Not locked meanwhile, and the user has not left the setup (they may until the backup check).
+        let current = move || self.controller.get().epoch() == epoch && self.cloud_attempt.get() == attempt;
         let trusted = form.trusted;
         // A certificate the system does not trust is offered for confirmation (once: a pinned one that changed is not).
         let fail = move |e: safay_app::sync::SyncError| {
+            if !current() {
+                return;
+            }
             self.cloud_form.update(|f| {
                 f.working = false;
                 f.waiting = false;
@@ -2051,12 +2071,16 @@ impl Store {
                 match blocking(move || cloud::reconnect(&kept)).await.unwrap_or(Err(safay_app::sync::SyncError::Storage)) {
                     Err(safay_app::sync::SyncError::SignIn) => {
                         self.restore_sign_ins.with(|k| k.invalid(Provider::Nextcloud));
+                        if !current() {
+                            return;
+                        }
                         self.cloud_form.update(|f| f.working = false);
                         return self.connect_cloud(provider);
                     }
                     Ok(location) => {
-                        if self.controller.get().epoch() != epoch {
-                            return;
+                        if !current() {
+                            // Left meanwhile: the kept sign-in goes back to memory.
+                            return self.keep_restore_sign_in(&location).await;
                         }
                         self.cloud_form.set(CloudForm::default());
                         return self.connected(location, None);
@@ -2070,12 +2094,15 @@ impl Store {
                     Ok(Err(e)) => return fail(e),
                     Err(_) => return fail(safay_app::sync::SyncError::Storage),
                 };
+                if !current() {
+                    return;
+                }
                 drop(open_url(flow.login_url.clone()));
                 self.cloud_form.update(|f| f.waiting = true);
                 let started = std::time::Instant::now();
                 loop {
                     drop(blocking(|| std::thread::sleep(Duration::from_secs(2))).await);
-                    if !self.cloud_form.with(|f| f.waiting) || self.controller.get().epoch() != epoch {
+                    if !current() {
                         return;
                     }
                     if started.elapsed() > Duration::from_secs(20 * 60) {
@@ -2089,6 +2116,16 @@ impl Store {
                     let (poll, server) = (flow.poll.clone(), server.clone());
                     match blocking(move || cloud::nextcloud_poll(&server, &poll, trusted)).await {
                         Ok(Ok(Some(connection))) => {
+                            if !current() {
+                                // Allowed after the user left: the app password is revoked.
+                                let bytes = connection.to_bytes();
+                                drop(blocking(move || cloud::revoke(&bytes)).await);
+                                return;
+                            }
+                            self.cloud_form.update(|f| {
+                                f.waiting = false;
+                                f.allowed = true;
+                            });
                             break blocking(move || cloud::connect(connection)).await.unwrap_or(Err(safay_app::sync::SyncError::Storage));
                         }
                         Ok(Ok(None)) => {}
@@ -2097,7 +2134,11 @@ impl Store {
                     }
                 }
             };
-            if self.controller.get().epoch() != epoch {
+            if !current() {
+                // Connected after the user left or Safay locked: the sign-in stored for it is revoked and removed.
+                if let Ok(safay_app::sync::Location::Cloud { credential, .. }) = connected {
+                    drop(blocking(move || cloud::forget(&credential)).await);
+                }
                 return;
             }
             match connected {
