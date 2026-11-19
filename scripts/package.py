@@ -213,9 +213,18 @@ def arch() -> str:
 
 
 def zip_app(app: Path, archive: Path) -> Path:
-    """A zip of the app as Finder makes it (`ditto`): resource forks and signatures intact, the `.app` at its top."""
+    """A zip of the app (`ditto`), signatures intact, holding the `.app` and nothing else.
+
+    `--norsrc` keeps extended attributes and resource forks out: `--sequesterRsrc` would add them as AppleDouble files
+    in a `__MACOSX` folder beside the app, which the signature does not cover, and NSH's updater refuses an archive whose
+    top holds more than the app ("the archive must hold one directory, the app").
+    """
     archive.unlink(missing_ok=True)
-    subprocess.run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(app), str(archive)], check=True)
+    subprocess.run(["ditto", "-c", "-k", "--norsrc", "--keepParent", str(app), str(archive)], check=True)
+    with zipfile.ZipFile(archive) as zipped:
+        tops = {name.split("/", 1)[0] for name in zipped.namelist()}
+    if tops != {app.name}:
+        raise SystemExit(f"error: {archive.name} must hold only {app.name}, found {sorted(tops)}")
     return archive
 
 
