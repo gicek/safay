@@ -34,7 +34,8 @@ Versions below are exact pins. Cargo.lock records the full production build grap
 | thiserror | 2.0.21 | MIT OR Apache-2.0 | Typed, non-sensitive application errors |
 | dispatch2 | 0.3.1 | MIT | macOS main-thread work |
 | block2 | 0.6.2 | MIT | macOS lifecycle callbacks |
-| libc | 0.2.189 | MIT OR Apache-2.0 | macOS process information (the app that sent a launcher's Apple event) |
+| libc | 0.2.189 | MIT OR Apache-2.0 | macOS process information (the app that sent a launcher's Apple event); the device's offset from UTC on macOS and Linux |
+| time | 0.3.55 | MIT OR Apache-2.0 | The device's offset from UTC on Windows; already used by the core |
 | cloudset | 0.3.0 | MIT OR Apache-2.0 | Cloud storage protocols (WebDAV, Nextcloud, Dropbox, OneDrive, Google Drive), sans-IO; replace the cloud backend |
 | ureq | 3.5.1 | MIT OR Apache-2.0 | HTTP executor for cloud backup and site icons (rustls, system certificate verification); already used by NSH |
 | rustls, rustls-pki-types, rustls-platform-verifier | 0.23.46, 1.15.1, 0.7.1 | Apache-2.0 OR ISC OR MIT, MIT OR Apache-2.0, MIT OR Apache-2.0 | The pinned-certificate TLS step for self-signed WebDAV / Nextcloud servers (`src/platform/tls.rs`); the same versions ureq already uses |
@@ -245,6 +246,7 @@ This includes test tools; the production graph is narrower. NSH-generated test r
 | nsh-updater | 0.5.0 (main) | Apache-2.0 | [GitHub](https://github.com/longbridge/nsh) |
 | num-conv | 0.2.2 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/num-conv/0.2.2) |
 | num-traits | 0.2.19 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/num-traits/0.2.19) |
+| num_threads | 0.1.8 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/num_threads/0.1.8) |
 | objc2 | 0.6.5 | MIT | [crates.io](https://crates.io/crates/objc2/0.6.5) |
 | objc2-app-kit | 0.3.2 | Zlib OR Apache-2.0 OR MIT | [crates.io](https://crates.io/crates/objc2-app-kit/0.3.2) |
 | objc2-authentication-services | 0.3.2 | Zlib OR Apache-2.0 OR MIT | [crates.io](https://crates.io/crates/objc2-authentication-services/0.3.2) |

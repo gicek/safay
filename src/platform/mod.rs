@@ -5,6 +5,7 @@ pub mod clipboard;
 pub mod credentials;
 pub mod files;
 pub mod http;
+pub mod local_time;
 #[cfg(target_os = "macos")]
 pub mod macos;
 pub mod site_icons;

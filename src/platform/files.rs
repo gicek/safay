@@ -69,20 +69,12 @@ pub async fn read_named(path: std::path::PathBuf) -> Result<(String, Vec<u8>), E
     let bytes = nsh_core::prelude::blocking(move || bounded_read(&path)).await.map_err(|_| Error::Storage)??.ok_or(Error::Missing)?;
     Ok((name, bytes))
 }
-/// `Safay-export-yyyyMMdd-HHmm.json` in UTC, without a time-zone database.
+/// `Safay-export-yyyyMMdd-HHmm.json`, by this device's clock.
 pub fn export_file_name(now: std::time::SystemTime) -> String {
-    let secs = now.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
-    let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = yoe + era * 400 + i64::from(m <= 2);
-    format!("Safay-export-{y:04}{m:02}{d:02}-{:02}{:02}.json", rem / 3600, rem % 3600 / 60)
+    export_file_name_of(super::local_time::fields(now))
+}
+fn export_file_name_of((y, m, d, hour, minute): (i64, i64, i64, i64, i64)) -> String {
+    format!("Safay-export-{y:04}{m:02}{d:02}-{hour:02}{minute:02}.json")
 }
 pub async fn save_export(data: Vec<u8>, title: String) -> Result<bool, Error> {
     let name = export_file_name(std::time::SystemTime::now());
@@ -133,8 +125,8 @@ mod tests {
     use super::*;
     #[test]
     fn export_name_matches_its_pattern() {
-        let t = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_793_840_460);
-        assert_eq!(export_file_name(t), "Safay-export-20261105-0101.json");
+        let fields = crate::platform::local_time::fields_at(1_793_840_460, 8 * 3600);
+        assert_eq!(export_file_name_of(fields), "Safay-export-20261105-0901.json");
     }
     #[test]
     fn public_otp_qr_round_trip_is_local() {

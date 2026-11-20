@@ -1128,11 +1128,9 @@ fn category_menu(s: Store, row: &safay_app::session::Row) {
     let items = if items.is_empty() { vec![MenuItem::new(s.label("None").to_string()).disabled(true)] } else { items };
     show_menu(s, items, None);
 }
-/// A short, locale-neutral date and time (UTC) without a time-zone database.
+/// A short, locale-neutral date and time, by this device's clock.
 fn format_date(t: std::time::SystemTime) -> String {
-    let name = crate::platform::files::export_file_name(t);
-    let d = &name["Safay-export-".len()..name.len() - ".json".len()];
-    format!("{}-{}-{} {}:{} UTC", &d[0..4], &d[4..6], &d[6..8], &d[9..11], &d[11..13])
+    crate::platform::local_time::date_time(t)
 }
 fn secret_section(s: Store, id: impl Fn() -> Option<Uuid> + Copy + 'static) -> impl IntoElement {
     let shown = move || !s.revealed.with(|r| r.is_empty());

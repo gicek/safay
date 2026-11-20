@@ -55,11 +55,15 @@ objc2-core-media = { version = "=0.3.2", default-features = false, features = ["
 objc2-core-video = { version = "=0.3.2", default-features = false, features = ["std", "CVPixelBuffer", "CVImageBuffer", "CVBuffer", "CVReturn", "CVPixelFormatDescription"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
+# The device's offset from UTC (src/platform/local_time.rs).
+time = { version = "=0.3.55", features = ["local-offset"] }
 keyring = { version = "=3.6.3", default-features = false, features = ["windows-native"] }
 windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Controls", "Win32_System_RemoteDesktop", "Win32_System_LibraryLoader"] }
 nsh-platform-windows = { git = "https://github.com/longbridge/nsh", branch = "main", default-features = false, features = ["svg"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+# The device's offset from UTC (src/platform/local_time.rs).
+libc = "=0.2.189"
 nsh-platform-linux = { git = "https://github.com/longbridge/nsh", branch = "main", default-features = false, features = ["svg"] }
 # "Select on Screen" and "Use Camera" (src/platform/screenshot.rs, src/platform/camera_linux.rs): the desktop portal's
 # Screenshot and Camera, on zbus's own runtime; the camera's PipeWire stream read with GStreamer, as NSH's sound does.

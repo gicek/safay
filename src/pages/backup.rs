@@ -33,13 +33,9 @@ pub fn dot_color(s: Store) -> Option<AdaptiveColor> {
 fn this_device(s: Store) -> SharedString {
     s.label(if look() == Look::Mac { "This Mac" } else { "This device" })
 }
-/// Local wall time for history rows, without a time-zone database: "Nov 5 10:42" style via UTC offset-free fields.
-fn stamp(s: Store, ms: i64) -> String {
-    let t = std::time::UNIX_EPOCH + std::time::Duration::from_millis(ms.max(0) as u64);
-    let name = crate::platform::files::export_file_name(t);
-    let d = &name["Safay-export-".len()..name.len() - ".json".len()];
-    let _ = s;
-    format!("{}-{}-{} {}:{}", &d[0..4], &d[4..6], &d[6..8], &d[9..11], &d[11..13])
+/// When something happened, by this device's clock: "2026-11-05 10:42".
+fn stamp(ms: i64) -> String {
+    crate::platform::local_time::date_time(std::time::UNIX_EPOCH + std::time::Duration::from_millis(ms.max(0) as u64))
 }
 fn size(bytes: Option<u64>) -> String {
     match bytes {
@@ -327,7 +323,7 @@ fn overview(s: Store) -> impl IntoElement {
                                         _ => s
                                             .projection
                                             .with(|p| p.sync.last_synced_ms)
-                                            .map(|ms| s.fmt("Last synced {}", &[&stamp(s, ms)]))
+                                            .map(|ms| s.fmt("Last synced {}", &[&stamp(ms)]))
                                             .unwrap_or_default(),
                                     })
                                     .max_w(px(220.0))
@@ -548,7 +544,7 @@ fn history_row(s: Store, item: ReadSignal<(usize, HistoryEntry)>) -> impl IntoEl
                 view()
                     .items_end()
                     .gap(px(1.0))
-                    .child(text(move || stamp(s, h().at_ms)).text_size(px(11.5)).text_color(move || theme().muted_foreground))
+                    .child(text(move || stamp(h().at_ms)).text_size(px(11.5)).text_color(move || theme().muted_foreground))
                     .child(text(move || size(h().bytes)).text_size(px(11.0)).text_color(move || tok("tertiary"))),
             ),
     )

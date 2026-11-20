@@ -16,6 +16,7 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 - An upload whose result is unclear is checked against the backup before the sync counts as done.
 - Connecting to Nextcloud finishes even when the server fails to report your user ID after you approve.
+- Times in "Backup & Sync" and "Account Details", and the date in an export's file name, follow your device's clock.
 - After switching to another cloud service, "Backup & Sync" shows that service's icon.
 
 ## [1.3.0] - 2026-11-19
