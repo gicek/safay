@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="{{@lang}}">
+  <head>
+{{@include head}}
+{{@include meta}}
+  </head>
+  <body>
+{{@include header}}
+    <main id="main" class="wrap prose">
+      <p class="eyebrow">{{privacy_kicker}}</p>
+      <h1>{{privacy_title}}</h1>
+      <p class="fine">{{privacy_updated}}</p>
+      <p class="lede">{{privacy_summary}}</p>
+
+      <h2>{{privacy_app_title}}</h2>
+      <p>{{privacy_app_vault}}</p>
+      <p>{{privacy_app_biometrics}}</p>
+      <p>{{privacy_app_camera}}</p>
+      <p>{{privacy_app_icons}}</p>
+      <p>{{privacy_app_updates}}</p>
+      <p>{{privacy_app_none}}</p>
+
+      <h2 id="backup">{{privacy_backup_title}}</h2>
+      <p>{{privacy_backup_where}}</p>
+      <p>{{privacy_backup_what}}</p>
+      <p>{{privacy_backup_icloud}}</p>
+
+      <h2 id="cloud">{{privacy_cloud_title}}</h2>
+      <p>{{privacy_cloud_intro}}</p>
+      <ul>
+        <li>{{privacy_cloud_access}}</li>
+        <li>{{privacy_cloud_account}}</li>
+        <li>{{privacy_cloud_tokens}}</li>
+        <li>{{privacy_cloud_share}}</li>
+        <li>{{privacy_cloud_remove}}</li>
+      </ul>
+      <p>{{privacy_cloud_google}}</p>
+
+      <h2>{{privacy_site_title}}</h2>
+      <p>{{privacy_site_body}}</p>
+
+      <h2>{{privacy_children_title}}</h2>
+      <p>{{privacy_children_body}}</p>
+
+      <h2>{{privacy_changes_title}}</h2>
+      <p>{{privacy_changes_body}}</p>
+
+      <h2>{{privacy_contact_title}}</h2>
+      <p>{{privacy_contact_body}}</p>
+      <p><a class="text-link" href="{{@link new_issue}}">{{privacy_contact_issue}} <span aria-hidden="true">→</span></a></p>
+    </main>
+{{@include footer}}
+  </body>
+</html>

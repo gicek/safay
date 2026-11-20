@@ -30,7 +30,8 @@ else
 endif
 
 .PHONY: help all ci build build-release run preview fmt fmt-check lint nsh-features raycast check test test-ui test-native screenshots \
-	package package-adhoc package-release open icloud-check release update-keygen nsh-ready nsh-install nsh-update audit clean clean-all
+	package package-adhoc package-release open icloud-check release update-keygen nsh-ready nsh-install nsh-update audit clean clean-all \
+	site site-shots site-serve site-deploy
 
 help: ## List the targets
 	@echo "$(NAME) $(VERSION) ($(BUILD)) build commands"
@@ -134,6 +135,29 @@ update-keygen: nsh-ready ## Create the update-signing key: make update-keygen KE
 	@case "$(abspath $(KEY))" in "$(CURDIR)"/*) echo "KEY must be outside the repository"; exit 1;; esac
 	$(NSH) keygen "$(KEY)"
 	@echo "Next: local.toml [release] update_key = \"$(KEY).secret\"; scripts/package.py UPDATE_PUBLIC_KEY = the .pub content"
+
+##@ Website (safay.gicek.com)
+
+SITE_DIST := build/site/dist
+# Pinned so that a deploy never picks up an untested wrangler release. Installed under build/tools/ (npx's cache can
+# miss workerd's platform binary); its usage telemetry is turned off.
+WRANGLER_VERSION := 4.151.2
+WRANGLER_DIR := build/tools/wrangler-$(WRANGLER_VERSION)
+WRANGLER := WRANGLER_SEND_METRICS=false "$(CURDIR)/$(WRANGLER_DIR)/node_modules/.bin/wrangler"
+
+site: ## Build the website into build/site/dist (site/build.py, standard library only)
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) site/build.py
+
+site-shots: ## Refresh site/shots/*.webp and the logo sizes from docs/img and docs/screenshots (needs Pillow)
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) site/build.py --shots
+
+site-serve: site ## Build and serve the website at http://localhost:8787
+	$(PYTHON) -m http.server 8787 --directory "$(SITE_DIST)"
+
+site-deploy: site ## Build and deploy the website to Cloudflare (site/wrangler.toml; signs in through the browser the first time)
+	@test -x "$(WRANGLER_DIR)/node_modules/.bin/wrangler" || npm install --prefix "$(WRANGLER_DIR)" --no-save --no-audit --no-fund \
+	    "wrangler@$(WRANGLER_VERSION)"
+	cd build/site && $(WRANGLER) deploy
 
 ##@ NSH and housekeeping
 

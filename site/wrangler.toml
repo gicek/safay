@@ -1,0 +1,15 @@
+# Cloudflare Workers static assets for safay.gicek.com. site/build.py copies this file to build/site/, next to dist/, and
+# `make site-deploy` runs wrangler there, so wrangler's .wrangler/ cache stays out of the source tree. Wrangler signs in to
+# Cloudflare in the browser the first time. The site is fully static; there is no Worker script.
+name = "safay-site"
+compatibility_date = "2026-10-01"
+
+[assets]
+directory = "dist"
+html_handling = "auto-trailing-slash"
+not_found_handling = "404-page"
+
+# The gicek.com zone must be on this Cloudflare account; wrangler creates the DNS record for the custom domain.
+[[routes]]
+pattern = "safay.gicek.com"
+custom_domain = true

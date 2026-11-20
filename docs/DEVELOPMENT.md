@@ -213,6 +213,27 @@ for loopback only.
 `cd integrations/raycast && npm run dev` loads it into Raycast. The Alfred workflow is built into every package. See
 [integrations/README.md](../integrations/README.md).
 
+## Website
+
+`site/` is the website at safay.gicek.com: a home page and a privacy policy, each in English, Simplified Chinese and
+Traditional Chinese (`/`, `/zh-hans/`, `/zh-hant/`). Pages are templates in `site/src/`, copy is in
+`site/i18n/<lang>.json`, and `site/build.py` (standard library only) renders them into `build/site/dist/`, taking the
+version from `Cargo.toml` and the brand marks and the code font from `assets/`. Every outbound link is in
+`site/links.toml`; the download button points at `releases/latest/download/Safay-<version>.dmg`, so redeploy the site
+after each release. Copy speaks of "your device", not of one system; the download section lists the systems, with
+those not published yet marked "Coming soon".
+
+- `make site` builds it and `make site-serve` serves it at `http://localhost:8787`.
+- `make site-shots` refreshes `site/shots/*.webp` and the logo sizes from `docs/img/` and `docs/screenshots/` (needs
+  Pillow). Commit the results; the site build never runs the app.
+- `make site-deploy` builds the site and runs the pinned wrangler from `build/site/`. The first run opens a browser to
+  sign in to Cloudflare. The `gicek.com` zone must be on that account; wrangler then binds the custom domain
+  (`[[routes]]` in `site/wrangler.toml`) and creates its DNS record. Headers, including the Content Security Policy,
+  are in `site/src/_headers`.
+
+The privacy policy is what the cloud services' app reviews read: when Safay starts to send, store or read something
+it did not before, change `site/i18n/*.json` in the same change and redeploy.
+
 ## Dependency audit
 
 ```sh

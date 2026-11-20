@@ -1,0 +1,13 @@
+# Every outbound link on the website, in one place. site/build.py reads this file and fills in {version} with the
+# workspace version from Cargo.toml. Templates reference a link as {{@link NAME}}.
+
+site = "https://safay.gicek.com"
+repository = "https://github.com/gicek/safay"
+releases = "https://github.com/gicek/safay/releases"
+changelog = "https://github.com/gicek/safay/blob/main/CHANGELOG.md"
+new_issue = "https://github.com/gicek/safay/issues/new"
+report_vulnerability = "https://github.com/gicek/safay/security/advisories/new"
+security_model = "https://github.com/gicek/safay/blob/main/SECURITY.md"
+
+# GitHub Releases: the notarized DMG from `make release`, attached under this name.
+mac = "https://github.com/gicek/safay/releases/latest/download/Safay-{version}.dmg"
