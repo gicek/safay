@@ -127,6 +127,13 @@ tray, global shortcuts, the application menu. NSH's API is taken from the Rust s
 `Cargo.lock`. Capabilities NSH does not offer are implemented in `src/platform/` and listed below with the condition for
 moving back to NSH. Review this list on every NSH upgrade.
 
+The app's root declares its one main window (`shell::main_window`, id `main`); the settings window, the panel and the
+notice are opened from it. A root mounted from TSX (the previews that `nsh test` and the screenshots run) returns
+`shell::main_content` instead: NSH gives such a root its first window, and one declared inside it would be a second. NSH's own first window is an app host that never shows, so nothing reads AppKit's window
+list to find the main window: `shell::main_ref` is its handle, and `platform::macos` keeps whether it is on screen
+(the Dock icon setting follows that). Its close button hides it while the menu bar or tray icon keeps the app running.
+The panel, and the main window when it comes back from hiding, open on the display the pointer is on.
+
 A file's name in `src/platform/` says where it is built: without a suffix on every system, with `_macos`, `_linux` or
 `_windows` on that system only. The implementations of one feature share its name, and the module is named without
 the suffix: `camera_macos.rs` and `camera_linux.rs` are both `platform::camera`.

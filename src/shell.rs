@@ -10,7 +10,7 @@ use crate::{
 use nsh_base::theme;
 use nsh_core::{
     desktop::{TitleBarOptions, TitleBarStyle, WindowAttributes},
-    element::desktop::{MenuItem, main_window as native_window, set_application_menu, title_bar},
+    element::desktop::{MenuItem, WindowRef, current_window, set_application_menu, title_bar, window as app_window},
     prelude::*,
 };
 use safay_app::controller::Controller;
@@ -28,7 +28,35 @@ pub(crate) fn hide_title_bar(height: Option<Points>, controls: Option<Point<Poin
     native_window().set(attributes);
 }
 
+thread_local! {
+    /// The main window, once its content is made.
+    static MAIN: std::cell::RefCell<Option<WindowRef>> = const { std::cell::RefCell::new(None) };
+}
+/// The main window (`"main"`). Before it opens, the app host's ref, whose window requests do nothing.
+pub(crate) fn main_ref() -> WindowRef {
+    MAIN.with(|main| main.borrow().clone()).unwrap_or_else(nsh_core::element::desktop::main_window)
+}
+fn native_window() -> WindowRef {
+    main_ref()
+}
+
+/// The main window: the one window the app declares at its root, for a root NSH starts from Rust (the app's launcher).
+/// Off the desktops its content is the app's surface.
 pub fn main_window(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
+    app_window()
+        .id("main")
+        .title("Safay")
+        .default_size(size(px(980.0), px(680.0)))
+        .content(move || main_content(controller.clone(), fixture))
+}
+
+/// What the main window shows. A root mounted from TSX (the previews of `nsh test` and the screenshots) returns this
+/// as it is: NSH gives such a root its first window, and a window declared inside it would be a second one.
+pub fn main_content(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
+    MAIN.with(|main| main.replace(Some(current_window())));
+    // What the desktop integration asks of the main window (its smallest size, what its close button does).
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    crate::desktop::main_opened();
     let s = Store::new(controller, fixture, Surface::Main);
     effect(move || untracked(|| s.start()));
     #[cfg(debug_assertions)]

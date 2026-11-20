@@ -442,9 +442,11 @@ fn text_panel(s: Store) -> impl IntoElement {
             )
             .border_color(move || if over.get() { tok("code-accent") } else { tok("input") }),
         )
-        .child(note(move || {
-            s.label("Paste one otpauth:// URL or Google Authenticator migration URL per line, or drop in a plain text file.")
-        }))
+        // Two lines in the sheet's width: at 14 pt each, six parsed rows fit under them without the sheet scrolling.
+        .child(
+            note(move || s.label("Paste one otpauth:// URL or Google Authenticator migration URL per line, or drop in a plain text file."))
+                .line_height(px(14.0)),
+        )
         .child(parsed_list(s, move || s.form.with(|f| f.text.clone())))
 }
 /// A row of the parsed lines, and how many show before the rest scroll.

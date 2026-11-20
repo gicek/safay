@@ -60,6 +60,9 @@ pub fn configure(controller: Arc<Controller>) {
 use std::sync::atomic::{AtomicU8, Ordering};
 /// 0 always, 1 only while the main window is open, 2 never (the Dock icon setting).
 static DOCK: AtomicU8 = AtomicU8::new(1);
+/// Whether the main window is on screen, as the app last showed or hid it ([`apply_dock`]). AppKit's window list does
+/// not tell: its first window is NSH's app host, which never shows.
+static MAIN_SHOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
 
 /// Applies the Dock policy. Only presentation state crosses into AppKit; the tray and the shortcuts are NSH's
 /// (`desktop.rs`).
@@ -77,9 +80,14 @@ pub fn apply_preferences(p: safay_app::preferences::Preferences) {
 }
 /// Regular (Dock icon) or accessory (menu bar only) activation policy for the main window's state. Any thread.
 pub fn apply_dock(main_open: bool) {
+    MAIN_SHOWN.store(main_open, Ordering::SeqCst);
     set_policy(Some(main_open));
 }
-/// `main_open`: `None` reads whether the main window is on screen.
+/// Whether the main window is on screen, as the app last showed or hid it.
+pub fn main_shown() -> bool {
+    MAIN_SHOWN.load(Ordering::SeqCst)
+}
+/// `main_open`: `None` takes what the main window was last said to be.
 fn set_policy(main_open: Option<bool>) {
     use nsh_platform_macos::{
         objc2::MainThreadMarker,
@@ -91,7 +99,7 @@ fn set_policy(main_open: Option<bool>) {
         let regular = match DOCK.load(Ordering::SeqCst) {
             0 => true,
             2 => false,
-            _ => main_open.unwrap_or_else(|| app.windows().to_vec().first().is_some_and(|w| w.isVisible())),
+            _ => main_open.unwrap_or_else(|| MAIN_SHOWN.load(Ordering::SeqCst)),
         };
         app.setActivationPolicy(if regular { NSApplicationActivationPolicy::Regular } else { NSApplicationActivationPolicy::Accessory });
     });

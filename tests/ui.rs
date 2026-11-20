@@ -10,8 +10,14 @@ use std::{
     sync::Arc,
     time::{Duration, SystemTime},
 };
+/// One test at a time: the app keeps what its windows ask of each other (a sheet to open, the language) in the process,
+/// as a single running app does, so tests running side by side would take each other's.
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
 fn open() -> Headless {
-    let mut config = EngineConfig::new(Root::of::<safay::FixtureApp>());
+    let mut config = EngineConfig::new(Root::of::<safay::FixtureWindow>());
     config.viewport = Size::new(px(1040.0), px(720.0));
     config.storage = Some(MemoryStorage::new(std::iter::empty::<(String, String)>()));
     config.clipboard = Some(Arc::new(MemoryClipboard::default()));
@@ -42,6 +48,7 @@ fn paste(app: &mut Headless, links: &str) {
 
 #[test]
 fn create_add_by_key_copy_search_lock_and_unlock() {
+    let _serial = serial();
     let mut app = open();
     create(&mut app);
     app.press("role:button[Add]").unwrap();
@@ -66,6 +73,7 @@ fn create_add_by_key_copy_search_lock_and_unlock() {
 }
 #[test]
 fn wrong_password_is_reported_and_keeps_the_vault_locked() {
+    let _serial = serial();
     let mut app = open();
     create(&mut app);
     app.press("role:button[Lock]").unwrap();
@@ -77,6 +85,7 @@ fn wrong_password_is_reported_and_keeps_the_vault_locked() {
 }
 #[test]
 fn refresh_does_not_clear_a_password_being_typed() {
+    let _serial = serial();
     let mut app = open();
     app.wait_for("Start fresh").unwrap();
     app.press("role:button[Start fresh]").unwrap();
@@ -88,6 +97,7 @@ fn refresh_does_not_clear_a_password_being_typed() {
 }
 #[test]
 fn mismatched_confirmation_disables_create() {
+    let _serial = serial();
     let mut app = open();
     app.wait_for("Start fresh").unwrap();
     app.press("role:button[Start fresh]").unwrap();
@@ -100,6 +110,7 @@ fn mismatched_confirmation_disables_create() {
 /// while the confirmation is a prefix being typed; leaving it incomplete or typing a wrong character says so.
 #[test]
 fn confirmation_mismatch_waits_for_a_wrong_character_or_leaving_the_field() {
+    let _serial = serial();
     const MISMATCH: &str = "Passwords do not match";
     let mut app = open();
     app.wait_for("Start fresh").unwrap();
@@ -127,11 +138,13 @@ fn confirmation_mismatch_waits_for_a_wrong_character_or_leaving_the_field() {
 }
 #[test]
 fn generated_runner_cannot_implicitly_open_a_real_vault() {
+    let _serial = serial();
     let mut app = Headless::start(EngineConfig::new(Root::of::<safay::App>())).unwrap();
     app.wait_for("NSH UI harness. Launch the local vault with cargo run.").unwrap();
 }
 #[test]
 fn secret_needs_the_master_password_and_lock_removes_it() {
+    let _serial = serial();
     let mut app = open();
     create(&mut app);
     paste(&mut app, SAMPLE);
@@ -167,6 +180,7 @@ fn secret_needs_the_master_password_and_lock_removes_it() {
 }
 #[test]
 fn compact_settings_switch_language_with_large_text() {
+    let _serial = serial();
     let mut app = open();
     create(&mut app);
     app.set_viewport(Size::new(px(880.0), px(620.0))).unwrap();
@@ -183,6 +197,7 @@ fn compact_settings_switch_language_with_large_text() {
 }
 #[test]
 fn category_inline_create_and_delete_confirmation_keeps_accounts() {
+    let _serial = serial();
     use nsh_testing::DialogAnswer;
     let mut app = open();
     create(&mut app);
@@ -202,6 +217,7 @@ fn category_inline_create_and_delete_confirmation_keeps_accounts() {
 }
 #[test]
 fn deleted_accounts_wait_in_recently_deleted() {
+    let _serial = serial();
     use nsh_testing::DialogAnswer;
     let mut app = open();
     create(&mut app);
@@ -232,6 +248,7 @@ fn deleted_accounts_wait_in_recently_deleted() {
 }
 #[test]
 fn duplicate_import_is_reported_in_the_sheet() {
+    let _serial = serial();
     let mut app = open();
     create(&mut app);
     paste(&mut app, SAMPLE);
@@ -241,6 +258,7 @@ fn duplicate_import_is_reported_in_the_sheet() {
 }
 #[test]
 fn backup_sheet_starts_off_and_offers_a_folder() {
+    let _serial = serial();
     let mut app = open();
     create(&mut app);
     app.press("role:button[Backup & Sync]").unwrap();
@@ -265,6 +283,7 @@ fn backup_sheet_starts_off_and_offers_a_folder() {
 #[cfg(target_os = "macos")]
 #[test]
 fn settings_show_default_global_shortcuts_and_login_options() {
+    let _serial = serial();
     let mut app = open();
     create(&mut app);
     app.press("role:button[Settings]").unwrap();
@@ -279,7 +298,8 @@ fn settings_show_default_global_shortcuts_and_login_options() {
 #[cfg(target_os = "linux")]
 #[test]
 fn settings_offer_the_tray_icon_on_linux() {
-    let mut config = EngineConfig::new(Root::of::<safay::FixtureApp>());
+    let _serial = serial();
+    let mut config = EngineConfig::new(Root::of::<safay::FixtureWindow>());
     config.viewport = Size::new(px(1040.0), px(720.0));
     config.storage = Some(MemoryStorage::new(std::iter::empty::<(String, String)>()));
     config.clipboard = Some(Arc::new(MemoryClipboard::default()));
@@ -311,6 +331,7 @@ fn settings_offer_the_tray_icon_on_linux() {
 #[cfg(target_os = "macos")]
 #[test]
 fn about_shows_updates_disabled_without_an_update_feed() {
+    let _serial = serial();
     let mut app = open();
     create(&mut app);
     app.press("role:button[Settings]").unwrap();
@@ -323,6 +344,7 @@ fn about_shows_updates_disabled_without_an_update_feed() {
 }
 #[test]
 fn settings_choice_applies_at_once_and_is_kept() {
+    let _serial = serial();
     let mut app = open();
     create(&mut app);
     app.press("role:button[Settings]").unwrap();
@@ -348,6 +370,7 @@ fn settings_choice_applies_at_once_and_is_kept() {
 /// without linking anything.
 #[test]
 fn restore_offers_cloud_storage_and_back_leaves_it() {
+    let _serial = serial();
     let mut app = open();
     app.wait_for("Restore a backup").unwrap();
     app.press("role:button[Restore a backup]").unwrap();
@@ -364,8 +387,9 @@ fn restore_offers_cloud_storage_and_back_leaves_it() {
 /// The eye in a password field is not a Tab stop: Tab goes from the new password straight to its confirmation.
 #[test]
 fn tab_skips_the_reveal_button() {
+    let _serial = serial();
     // macOS, where Tab stops at buttons too (the headless default is a phone, where it moves between fields only).
-    let mut config = EngineConfig::new(Root::of::<safay::FixtureApp>());
+    let mut config = EngineConfig::new(Root::of::<safay::FixtureWindow>());
     config.viewport = Size::new(px(1040.0), px(720.0));
     config.storage = Some(MemoryStorage::new(std::iter::empty::<(String, String)>()));
     config.clipboard = Some(Arc::new(MemoryClipboard::default()));
@@ -391,8 +415,9 @@ fn tab_skips_the_reveal_button() {
 /// a flush column on macOS 27 (and 15 and earlier).
 #[test]
 fn sidebar_follows_the_macos_release() {
+    let _serial = serial();
     for (version, origin, height) in [((26, 4), (8.0, 8.0), 680.0 - 16.0), ((27, 2), (0.0, 0.0), 680.0), ((15, 7), (0.0, 0.0), 680.0)] {
-        let mut config = EngineConfig::new(Root::of::<safay::FixtureApp>());
+        let mut config = EngineConfig::new(Root::of::<safay::FixtureWindow>());
         config.viewport = Size::new(px(980.0), px(680.0));
         config.storage = Some(MemoryStorage::new(std::iter::empty::<(String, String)>()));
         config.clipboard = Some(Arc::new(MemoryClipboard::default()));
@@ -415,6 +440,7 @@ fn sidebar_follows_the_macos_release() {
 /// leaves the form as it was (the fixture's `self-signed.example.invalid` answers as such a server).
 #[test]
 fn webdav_setup_shows_an_untrusted_certificate_for_confirmation() {
+    let _serial = serial();
     let mut app = open();
     create(&mut app);
     app.press("role:button[Backup & Sync]").unwrap();
@@ -436,6 +462,7 @@ fn webdav_setup_shows_an_untrusted_certificate_for_confirmation() {
 /// takes Return), "Use Anyway" only a click away, and choosing the stronger one creates nothing.
 #[test]
 fn fair_password_alert_defaults_to_choosing_a_stronger_one() {
+    let _serial = serial();
     use nsh_core::DialogButtonStyle;
     use safay_app::core::password::{PasswordStrength, evaluate};
     use std::sync::Mutex;
@@ -467,6 +494,7 @@ fn fair_password_alert_defaults_to_choosing_a_stronger_one() {
 /// stays, typing goes on in the field showing, and the whole password unlocks.
 #[test]
 fn revealing_the_master_password_keeps_what_was_typed() {
+    let _serial = serial();
     let mut app = open();
     create(&mut app);
     app.press("role:button[Lock]").unwrap();
@@ -485,6 +513,7 @@ fn order(app: &Headless) -> Vec<String> {
 }
 #[test]
 fn cards_and_rows_reorder_by_dragging() {
+    let _serial = serial();
     let mut app = open();
     create(&mut app);
     app.press("role:button[Add]").unwrap();
@@ -523,6 +552,7 @@ fn categories(app: &Headless) -> Vec<String> {
 }
 #[test]
 fn categories_reorder_by_dragging() {
+    let _serial = serial();
     let mut app = open();
     create(&mut app);
     paste(&mut app, SAMPLE);
@@ -549,6 +579,7 @@ fn categories_reorder_by_dragging() {
 }
 #[test]
 fn qr_sheet_opens_only_after_verification() {
+    let _serial = serial();
     let mut app = open();
     create(&mut app);
     paste(&mut app, SAMPLE);
@@ -582,7 +613,8 @@ fn qr_sheet_opens_only_after_verification() {
 /// field measures as laid out. It was checked on the packaged app.)
 #[test]
 fn pasted_lines_scroll_inside_their_list() {
-    let mut config = EngineConfig::new(Root::of::<safay::FixtureApp>());
+    let _serial = serial();
+    let mut config = EngineConfig::new(Root::of::<safay::FixtureWindow>());
     config.viewport = Size::new(px(980.0), px(620.0));
     config.storage = Some(MemoryStorage::new(std::iter::empty::<(String, String)>()));
     config.clipboard = Some(Arc::new(MemoryClipboard::default()));

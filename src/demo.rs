@@ -115,14 +115,14 @@ pub fn controller_with(locked: bool, total: usize) -> Arc<Controller> {
 /// The main window over the demo vault, unlocked.
 #[component]
 pub fn DemoApp() -> impl IntoElement {
-    shell::main_window(controller(false), true)
+    shell::main_content(controller(false), true)
 }
 /// The main window over the demo vault, locked.
 #[component]
 pub fn DemoLockedApp() -> impl IntoElement {
     let c = controller(false);
     c.request_lock();
-    shell::main_window(c, true)
+    shell::main_content(c, true)
 }
 /// The menu bar panel's content over the demo vault.
 #[component]
@@ -139,7 +139,7 @@ pub fn DemoSettingsApp() -> impl IntoElement {
         crate::shell::hide_title_bar(None, None);
         let mut attributes = nsh_core::desktop::WindowAttributes::default();
         attributes.backdrop = Some(nsh_core::desktop::Backdrop::Sidebar);
-        nsh_core::element::desktop::main_window().set(attributes);
+        crate::shell::main_ref().set(attributes);
     });
     if let Ok(scene) = std::env::var("SAFAY_DEMO_SCENE") {
         use crate::store::SettingsPage as P;

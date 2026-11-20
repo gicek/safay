@@ -72,14 +72,20 @@ pub fn App() -> impl IntoElement {
         }
         shell::main_window(controller.clone(), *preview).into_element()
     } else {
-        view()
-            .flex_1()
-            .items_center()
-            .justify_center()
-            .p_8()
-            .gap_4()
-            .child(text("Safay").text_size(px(28.0)))
-            .child(text("NSH UI harness. Launch the local vault with cargo run."))
+        // A window of its own: a root's plain view shows in no window on a desktop.
+        nsh_core::element::desktop::window()
+            .id("main")
+            .title("Safay")
+            .content(|| {
+                view()
+                    .flex_1()
+                    .items_center()
+                    .justify_center()
+                    .p_8()
+                    .gap_4()
+                    .child(text("Safay").text_size(px(28.0)))
+                    .child(text("NSH UI harness. Launch the local vault with cargo run."))
+            })
             .into_element()
     }
 }
@@ -87,6 +93,16 @@ pub fn App() -> impl IntoElement {
 #[cfg(debug_assertions)]
 #[component]
 pub fn FixtureApp() -> impl IntoElement {
+    let controller =
+        Controller::new(Box::new(safay_app::storage::MemoryRepository::default()), Arc::new(FixtureClock)).expect("memory fixture");
+    // Mounted from TSX (`previews/Fresh.tsx`), which has its window already.
+    shell::main_content(controller, true)
+}
+
+/// [`FixtureApp`] for a root started from Rust (the headless tests): such a root declares its window itself.
+#[cfg(debug_assertions)]
+#[component]
+pub fn FixtureWindow() -> impl IntoElement {
     let controller =
         Controller::new(Box::new(safay_app::storage::MemoryRepository::default()), Arc::new(FixtureClock)).expect("memory fixture");
     shell::main_window(controller, true)

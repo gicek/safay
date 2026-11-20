@@ -6,7 +6,9 @@
   "rust": ".",
   "root": "App",
   "appearance": "system",
-  "capabilities": {},
+  "capabilities": {
+    "windows": true
+  },
   "theme": "theme.json",
   "icon": "assets/icon.png",
   "schemes": [

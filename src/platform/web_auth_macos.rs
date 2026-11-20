@@ -20,7 +20,12 @@ define_class!(
         #[unsafe(method_id(presentationAnchorForWebAuthenticationSession:))]
         fn anchor(&self, _session: &ASWebAuthenticationSession) -> Retained<NSWindow> {
             let app = NSApplication::sharedApplication(self.mtm());
-            app.keyWindow().or_else(|| app.mainWindow()).or_else(|| app.windows().firstObject()).expect("a window to present sign-in from")
+            // A window on screen: the list's first is NSH's app host, which never shows.
+            app.keyWindow()
+                .or_else(|| app.mainWindow())
+                .or_else(|| app.windows().iter().find(|w| w.isVisible()))
+                .or_else(|| app.windows().firstObject())
+                .expect("a window to present sign-in from")
         }
     }
 );

@@ -80,7 +80,7 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
   the main window. NSH chooses the window to drag from shared input state instead of the event's own window
   (`chrome::mouse_down`); a double click there may act on the main window too. Fix expected upstream.
 - Opening the menu bar panel with its shortcut before the menu bar icon has ever been clicked places it at the top right
-  of the main display: NSH reports the icon's position only on clicks.
+  of the display the pointer is on, not under the icon: NSH reports the icon's position only on clicks.
 - The menu bar panel and the desktop notice use flat colours rather than a blur material: NSH's window material has no
   rounded mask for transparent windows.
 

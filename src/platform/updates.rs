@@ -232,7 +232,8 @@ impl Updater {
         // The restart starts the app at the path the user knows: after the swap this process' executable is the old
         // one, moved aside.
         nsh_core::restart::remember_program();
-        let result = staged.finish().map_err(|_| Failure::Install);
+        // The new app's executable is the installed one's: an update of Safay keeps its name.
+        let result = staged.finish().map(drop).map_err(|_| Failure::Install);
         if let Err(f) = result {
             self.set(Phase::Failed(f));
         }
@@ -313,7 +314,7 @@ pub fn command_line_check() -> i32 {
     }
     let Some(staged) = u.lock().staged.take() else { return 1 };
     match staged.finish() {
-        Ok(()) => {
+        Ok(_) => {
             println!("install: replaced");
             0
         }
@@ -484,11 +485,15 @@ mod tests {
 
     /// `App/run` with `body`, archived as an update (`.tar.gz`, one directory).
     fn app_archive(dir: &std::path::Path, body: &str) -> Vec<u8> {
+        archive(dir, body, 0o755)
+    }
+    /// An archive of `App/run` with `mode`: an app when `run` can be executed.
+    fn archive(dir: &std::path::Path, body: &str, mode: u32) -> Vec<u8> {
         use std::os::unix::fs::PermissionsExt as _;
         let src = dir.join("src");
         fs::create_dir_all(src.join("App")).unwrap();
         fs::write(src.join("App/run"), body).unwrap();
-        fs::set_permissions(src.join("App/run"), fs::Permissions::from_mode(0o755)).unwrap();
+        fs::set_permissions(src.join("App/run"), fs::Permissions::from_mode(mode)).unwrap();
         let out = dir.join("update.tar.gz");
         let status = std::process::Command::new("tar")
             .env("COPYFILE_DISABLE", "1")
@@ -565,11 +570,11 @@ mod tests {
     fn an_update_that_is_not_the_app_fails_before_the_quit() {
         let (secret, public) = keys();
         let dir = temp_dir("not-the-app");
-        let archive = app_archive(&dir, "new");
+        // Nothing in the archive can be run. (An executable of another name is an app: an update may rename it.)
+        let archive = archive(&dir, "new", 0o644);
         let root = dir.join("installed/App");
         fs::create_dir_all(&root).unwrap();
         fs::write(root.join("main"), "old").unwrap();
-        // The installed app's executable is `main`; the archive has none.
         let installation = Installation::directory(&root, &root.join("main")).unwrap();
         let u = Updater::new(
             config(&public),

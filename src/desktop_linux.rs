@@ -15,8 +15,7 @@ use crate::{
 use nsh_core::{
     desktop::{SizeToContent, WindowAttributes, WindowKind},
     element::desktop::{
-        MenuItem, WindowRef, main_window, on_app_quit, open_window, register_global_shortcut, set_tray, tray,
-        unregister_all_global_shortcuts, window,
+        MenuItem, WindowRef, on_app_quit, open_window, register_global_shortcut, set_tray, tray, unregister_all_global_shortcuts, window,
     },
     prelude::*,
 };
@@ -69,24 +68,6 @@ pub fn install(controller: Arc<Controller>, preview: bool) {
     DESKTOP.with(|slot| slot.set(Some(d)));
     // The panel's menus in the app's color scheme, with the main window shown or not.
     platform::linux::follow_scheme();
-
-    // While the icon shows in a tray, the close button hides the main window and Safay stays there; otherwise it closes,
-    // which quits. A desktop with no tray (GNOME without its AppIndicator extension) would leave a hidden window no way
-    // back.
-    let main = main_window();
-    let shown = move || d.preferences.with(|p| p.is_some_and(|p| p.tray_icon)) && platform::linux::has_tray();
-    effect(move || {
-        let mut attributes = WindowAttributes::default();
-        attributes.close_on_press = Some(!shown());
-        main_window().set(attributes);
-    });
-    main.on_close_press(move |_| {
-        if untracked(shown) {
-            close_panel();
-            HIDDEN.with(|h| h.set(true));
-            main_window().hide();
-        }
-    });
 
     // The tray icon, its menu in the app's language.
     let state = signal(None::<(bool, Language)>);
@@ -173,7 +154,7 @@ pub fn apply(preferences: Preferences, language: Language) {
     }
     // Hiding the icon while the main window is in the tray would leave no way back to Safay.
     if !preferences.tray_icon && HIDDEN.with(|h| h.replace(false)) {
-        main_window().show();
+        crate::shell::main_ref().show();
     }
 }
 
@@ -198,7 +179,7 @@ pub fn open_main() {
     d.owner.get().run(|| {
         close_panel();
         HIDDEN.with(|h| h.set(false));
-        let main = main_window();
+        let main = crate::shell::main_ref();
         main.show();
         main.focus();
     });
@@ -331,5 +312,32 @@ pub fn panel_blurred() {
 pub fn close_panel() {
     if let Some(panel) = PANEL.with(|p| p.borrow_mut().take()) {
         panel.close();
+    }
+}
+
+/// The main window's content was made (`shell::main_window`). While the icon shows in a tray, the close button hides
+/// the main window and Safay stays there; otherwise it closes, which quits. A desktop with no tray (GNOME without its
+/// AppIndicator extension) would leave a hidden window no way back.
+pub fn main_opened() {
+    let Some(d) = desktop() else { return };
+    let main = crate::shell::main_ref();
+    let shown = move || d.preferences.with(|p| p.is_some_and(|p| p.tray_icon)) && platform::linux::has_tray();
+    let window = main.clone();
+    effect(move || {
+        let mut attributes = WindowAttributes::default();
+        attributes.close_on_press = Some(!shown());
+        window.set(attributes);
+    });
+    let window = main.clone();
+    main.on_close_press(move |_| {
+        if untracked(shown) {
+            close_panel();
+            HIDDEN.with(|h| h.set(true));
+            window.hide();
+        }
+    });
+    // "Start in Tray": hidden from the start.
+    if HIDDEN.with(|h| h.get()) {
+        main.hide();
     }
 }

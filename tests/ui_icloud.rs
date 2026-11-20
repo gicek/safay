@@ -18,7 +18,7 @@ use std::{
 const PASSWORD: &str = "P8!nQ2@vT7#sL4$m";
 
 fn open() -> Headless {
-    let mut config = EngineConfig::new(Root::of::<safay::FixtureApp>());
+    let mut config = EngineConfig::new(Root::of::<safay::FixtureWindow>());
     config.viewport = Size::new(px(1040.0), px(720.0));
     config.storage = Some(MemoryStorage::new(std::iter::empty::<(String, String)>()));
     config.clipboard = Some(Arc::new(MemoryClipboard::default()));

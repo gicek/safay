@@ -13,7 +13,7 @@ use crate::{
 use nsh_core::{
     desktop::{SizeToContent, TitleBarOptions, TitleBarStyle, WindowAttributes, WindowCloseCause, WindowKind, WindowLevel, WindowPosition},
     element::desktop::{
-        MenuItem, WindowRef, displays, main_window, open_window, register_global_shortcut, set_tray, tray, unregister_all_global_shortcuts,
+        MenuItem, WindowRef, displays, on_reopen, open_window, register_global_shortcut, set_tray, tray, unregister_all_global_shortcuts,
         window,
     },
     prelude::*,
@@ -107,12 +107,8 @@ pub fn install(controller: Arc<Controller>, preview: bool) {
     // Dragging a window onto a display above or below its own (NSH stops it at its display's menu bar).
     platform::macos::drag_windows_across_displays();
 
-    let main = main_window();
-    let mut attributes = WindowAttributes::default();
-    attributes.min_size = Some(Some(size(px(MAIN_MIN.0), px(MAIN_MIN.1))));
-    main.set(attributes);
-    // "Only when the main window is open": closing it leaves only the menu bar icon.
-    main.on_close_press(|_| platform::macos::apply_dock(false));
+    // A click on the Dock icon while the main window is hidden brings it back.
+    on_reopen(open_main);
 
     // The menu bar icon, its menu in the app's language.
     let shown = signal(None::<(bool, Language)>);
@@ -203,9 +199,28 @@ pub fn apply(preferences: Preferences, language: Language) {
     platform::macos::apply_preferences(preferences);
     // "Start in Menu Bar": at launch the main window goes away and only the menu bar icon remains.
     if !LAUNCHED.replace(true) && preferences.background_launch && preferences.tray_icon {
-        main_window().hide();
+        crate::shell::main_ref().hide();
         platform::macos::apply_dock(false);
     }
+}
+
+/// The main window's content was made (`shell::main_window`): its smallest size, and a close button that hides it and
+/// keeps the app, with its menu bar icon, running.
+pub fn main_opened() {
+    if desktop().is_none() {
+        return;
+    }
+    let main = crate::shell::main_ref();
+    let mut attributes = WindowAttributes::default();
+    attributes.min_size = Some(Some(size(px(MAIN_MIN.0), px(MAIN_MIN.1))));
+    attributes.close_on_press = Some(false);
+    main.set(attributes);
+    let window = main.clone();
+    main.on_close_press(move |_| {
+        window.hide();
+        // "Only when the main window is open": closing it leaves only the menu bar icon.
+        platform::macos::apply_dock(false)
+    });
 }
 
 /// Brings the main window forward (the tray menu, the panel, a shortcut, the Settings window).
@@ -213,8 +228,16 @@ pub fn open_main() {
     let Some(d) = desktop() else { return };
     d.owner.get().run(|| {
         close_panel();
+        let main = crate::shell::main_ref();
+        // Out of sight, it comes back on the display the user is working on.
+        if !platform::macos::main_shown()
+            && let Some(display) = pointer_display()
+        {
+            main.center(Some(display.id));
+        }
         platform::macos::apply_dock(true);
-        main_window().focus();
+        main.show();
+        main.focus();
     });
 }
 
@@ -330,9 +353,23 @@ pub fn close_panel() {
     }
 }
 
-/// The panel's top left corner: centered under the icon and kept inside its display. Before the icon was ever clicked
-/// (a shortcut opened the panel first) NSH does not say where it is: the top right of the primary display, where the
-/// menu bar's icons are.
+/// The display the pointer is on: where the user is working, whichever display has the main menu bar.
+fn pointer_display() -> Option<nsh_core::desktop::Display> {
+    let displays = displays();
+    let primary = displays.iter().find(|d| d.primary).or(displays.first())?.clone();
+    // AppKit counts up from the primary display's bottom left; NSH's displays count down from its top left.
+    let (x, y) = platform::macos::pointer()?;
+    let at = point(px(x as f32), primary.bounds.size.height - px(y as f32));
+    let inside = |b: &Bounds<Points>| {
+        at.x >= b.origin.x && at.x < b.origin.x + b.size.width && at.y >= b.origin.y && at.y < b.origin.y + b.size.height
+    };
+    displays.iter().find(|d| inside(&d.bounds)).cloned().or(Some(primary))
+}
+
+/// The panel's top left corner: under the menu bar icon of the display the pointer is on, and kept inside that display.
+/// NSH says where the icon is only once it was clicked, and then for the display it was clicked on; every display's
+/// menu bar has it at the same distance from its right end, so that is where the panel goes on another display. Before
+/// any click (a shortcut opened the panel first): the top right of that display, where the menu bar's icons are.
 fn panel_origin(icon: Option<Bounds<Points>>) -> Point<Points> {
     let displays = displays();
     let inside = |b: &Bounds<Points>, p: Point<Points>| {
@@ -340,22 +377,21 @@ fn panel_origin(icon: Option<Bounds<Points>>) -> Point<Points> {
     };
     let width = px(PANEL_WIDTH);
     let (edge, gap) = (px(PANEL_EDGE), px(PANEL_GAP));
+    let Some(target) = pointer_display().or_else(|| displays.iter().find(|d| d.primary).or(displays.first()).cloned()) else {
+        return point(px(0.0), px(0.0));
+    };
+    let area = target.visible_bounds;
+    let clamp = |x: Points| x.max(area.origin.x + edge).min(area.origin.x + area.size.width - width - edge);
     match icon {
         Some(icon) => {
-            let area = displays.iter().find(|d| inside(&d.bounds, icon.origin)).or(displays.first()).map(|d| d.visible_bounds);
-            let mut x = icon.origin.x + (icon.size.width - width) / 2.0;
-            if let Some(area) = area {
-                x = x.max(area.origin.x + edge).min(area.origin.x + area.size.width - width - edge);
-            }
-            point(x, icon.origin.y + icon.size.height + gap)
+            let home = displays.iter().find(|d| inside(&d.bounds, icon.origin)).cloned().unwrap_or_else(|| target.clone());
+            // The icon's place in its own display, carried over to the pointer's.
+            let from_right = home.bounds.origin.x + home.bounds.size.width - icon.origin.x;
+            let below = icon.origin.y + icon.size.height - home.bounds.origin.y;
+            let x = target.bounds.origin.x + target.bounds.size.width - from_right + (icon.size.width - width) / 2.0;
+            point(clamp(x), (target.bounds.origin.y + below).max(area.origin.y) + gap)
         }
-        None => match displays.iter().find(|d| d.primary).or(displays.first()) {
-            Some(display) => {
-                let area = display.visible_bounds;
-                point(area.origin.x + area.size.width - width - edge, area.origin.y + gap)
-            }
-            None => point(px(0.0), px(0.0)),
-        },
+        None => point(area.origin.x + area.size.width - width - edge, area.origin.y + gap),
     }
 }
 

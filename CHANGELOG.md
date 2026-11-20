@@ -5,9 +5,14 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+### Changed
+
+- **Menu bar panel**: opened with its shortcut, it appears on the display you are working on, under the menu bar icon.
+- **Main window**: brought back with its shortcut or from the menu bar, it opens on the display you are working on.
+
 ### Fixed
 
-- **Windows**: Safay's icon shows on its windows, the taskbar, Explorer and shortcuts.
+- On Windows, Safay's icon now shows on its windows, the taskbar, Explorer and shortcuts.
 
 ## [1.4.0] - 2026-11-20
 
