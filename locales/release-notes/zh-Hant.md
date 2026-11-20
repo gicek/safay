@@ -3,6 +3,24 @@
 Each version's section translates the one in CHANGELOG.md, item for item. The update window shows it to people who use
 Safay in Traditional Chinese.
 
+## [1.4.0] - 2026-11-20
+
+可以用 Google Drive 和 OneDrive 備份和同步了。
+
+### 新增
+
+- **Google Drive 和 OneDrive**：備份、同步和回復保險庫；備份保存在 Safay 自己的檔案夾裡。
+
+### 變更
+
+- **上傳到 Google Drive**：首次備份之後，Safay 會先用「上傳」詢問，再取代備份。
+- **選擇備份位置**：位置每行顯示兩個，登入時會顯示備份所在的檔案夾。
+
+### 修正
+
+- 即使伺服器沒有回傳你的使用者 ID，連線 Nextcloud 也能完成。
+- 「備份與同步」和「帳號詳細資料」中的時間依裝置的時鐘顯示。
+
 ## [1.3.0] - 2026-11-19
 
 可以用 Dropbox 備份和同步了，連線伺服器時也能看到每一步進度。

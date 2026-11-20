@@ -5,19 +5,23 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-20
+
+Back up through Google Drive and OneDrive.
+
+### Added
+
+- **Google Drive and OneDrive**: back up, sync and restore your vault; the backup is kept in Safay's own folder.
+
 ### Changed
 
-- **Backup & Sync**: where a service can't check an upload against another device's changes, such as Google Drive,
-  Safay asks with "Upload" before it replaces the backup. The first backup needs no approval.
-- **Choosing a backup location**: locations are listed two per line, and signing in to a cloud service shows the
-  folder your backup is kept in.
+- **Uploading to Google Drive**: after the first backup, Safay asks with "Upload" before it replaces the backup.
+- **Choosing a backup location**: locations are listed two per line, and signing in shows your backup's folder.
 
 ### Fixed
 
-- An upload whose result is unclear is checked against the backup before the sync counts as done.
-- Connecting to Nextcloud finishes even when the server fails to report your user ID after you approve.
-- Times in "Backup & Sync" and "Account Details", and the date in an export's file name, follow your device's clock.
-- After switching to another cloud service, "Backup & Sync" shows that service's icon.
+- Connecting to Nextcloud finishes even when the server fails to report your user ID.
+- Times in "Backup & Sync" and "Account Details" follow your device's clock.
 
 ## [1.3.0] - 2026-11-19
 
