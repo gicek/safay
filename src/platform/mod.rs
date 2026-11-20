@@ -44,6 +44,9 @@ pub mod automation;
 #[cfg(target_os = "macos")]
 #[path = "biometric_macos.rs"]
 pub mod biometric;
+#[cfg(target_os = "android")]
+#[path = "biometric_android.rs"]
+pub mod biometric;
 #[cfg(target_os = "macos")]
 #[path = "icloud_macos.rs"]
 pub mod icloud;
@@ -148,7 +151,7 @@ pub mod supports {
     /// Launch at login and background-only launch.
     pub const LOGIN_ITEM: bool = cfg!(any(target_os = "macos", target_os = "linux"));
     /// Hardware-protected key release (Touch ID; Windows Hello later).
-    pub const BIOMETRIC: bool = cfg!(target_os = "macos");
+    pub const BIOMETRIC: bool = cfg!(any(target_os = "macos", target_os = "android"));
     /// Settings in a window of its own (elsewhere a dialog over the main window).
     pub const SETTINGS_WINDOW: bool = cfg!(target_os = "macos");
     /// Selecting a QR code on screen (macOS: Safay's selection over a picture of each display, Screen Recording

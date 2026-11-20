@@ -43,7 +43,7 @@ fn vm() -> Option<&'static JavaVM> {
 
 /// Runs `f` on this thread, attached to the VM for as long as it lives. `None` when the VM or a call fails; a pending
 /// Java exception is cleared so the next call starts clean.
-fn with_env<R>(f: impl FnOnce(&mut JNIEnv<'_>) -> jni::errors::Result<R>) -> Option<R> {
+pub(super) fn with_env<R>(f: impl FnOnce(&mut JNIEnv<'_>) -> jni::errors::Result<R>) -> Option<R> {
     let mut env = vm()?.attach_current_thread_as_daemon().ok()?;
     let result = f(&mut env);
     if env.exception_check().unwrap_or(false) {
@@ -52,17 +52,22 @@ fn with_env<R>(f: impl FnOnce(&mut JNIEnv<'_>) -> jni::errors::Result<R>) -> Opt
     result.ok()
 }
 
-/// `com.gicek.safay.Bridge`, found through the application's class loader: a thread Rust started sees only the
-/// system's classes through `FindClass`.
+/// `com.gicek.safay.Bridge`.
 fn bridge<'a>(env: &mut JNIEnv<'a>) -> jni::errors::Result<JClass<'a>> {
     if let Some(class) = BRIDGE.get() {
         return Ok(JClass::from(env.new_local_ref(class.as_obj())?));
     }
+    let class = class(env, "com.gicek.safay.Bridge")?;
+    let _ = BRIDGE.set(env.new_global_ref(&class)?);
+    Ok(class)
+}
+/// A class of the app's own dex, found through the application's class loader: a thread Rust started sees only the
+/// system's classes through `FindClass`.
+pub(super) fn class<'a>(env: &mut JNIEnv<'a>, name: &str) -> jni::errors::Result<JClass<'a>> {
     let application = application(env)?;
     let loader = env.call_method(&application, "getClassLoader", "()Ljava/lang/ClassLoader;", &[])?.l()?;
-    let name = env.new_string("com.gicek.safay.Bridge")?;
+    let name = env.new_string(name)?;
     let class = env.call_method(&loader, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;", &[JValue::Object(&name)])?.l()?;
-    let _ = BRIDGE.set(env.new_global_ref(&class)?);
     Ok(JClass::from(class))
 }
 fn application<'a>(env: &mut JNIEnv<'a>) -> jni::errors::Result<JObject<'a>> {

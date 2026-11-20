@@ -15,6 +15,9 @@
   "android": {
     "dex": [
       "build/android/java/classes.dex"
+    ],
+    "permissions": [
+      "USE_BIOMETRIC"
     ]
   },
   "schemes": [

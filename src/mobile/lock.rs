@@ -16,6 +16,15 @@ pub fn page(s: Store) -> impl IntoElement {
             s.unlock()
         }
     };
+    // The prompt opens by itself once, on the lock screen the app starts with; after that it waits for its button.
+    thread_local! {
+        static PROMPTED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+    effect(move || {
+        if s.touch_id_ready() && !PROMPTED.with(|p| p.replace(true)) {
+            untracked(|| s.unlock_touch_id());
+        }
+    });
     scroll().flex_1().keyboard_dismiss_mode(KeyboardDismissMode::OnDrag).keyboard_taps(KeyboardTaps::Handled).child(
         view().flex_grow(1.0).items_center().justify_center().pt_safe_area_plus(px(32.0)).pb_safe_area_plus(px(72.0)).px(px(24.0)).child(
             view()
@@ -56,7 +65,28 @@ pub fn page(s: Store) -> impl IntoElement {
                         .text_center()
                         .mt(px(12.0))
                         .text_color(move || theme().destructive),
-                ),
+                )
+                .child(when(
+                    move || s.touch_id_ready(),
+                    move || {
+                        nsh_base::button()
+                            .test_id("biometric")
+                            .accessibility_label(move || Some(s.label("Unlock with biometrics")))
+                            .size(px(68.0))
+                            .mt(px(8.0))
+                            .items_center()
+                            .justify_center()
+                            .rounded_full()
+                            .text_color(move || theme().primary)
+                            .active(|st| st.bg(move || crate::components::tok("pressed")))
+                            .disabled(move || s.busy.get())
+                            .on_press(move || {
+                                dismiss_keyboard();
+                                s.unlock_touch_id()
+                            })
+                            .child(crate::icons::icon(crate::icons::Icon::TouchId).size(px(44.0)))
+                    },
+                )),
         ),
     )
 }

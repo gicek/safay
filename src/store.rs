@@ -2533,14 +2533,14 @@ impl Store {
         self.biometrics.get() && self.preferences.with(|p| p.touch_id) && self.projection.with(|p| p.biometric)
     }
     pub fn check_biometrics(self) {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "android"))]
         if crate::hosted() {
             self.biometrics.set(platform::biometric::available());
         }
     }
     /// Keeps a hardware-wrapped copy of the key while Touch ID is on (after unlock, creation, a password change).
     fn maybe_wrap_key(self) {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "android"))]
         {
             let wanted = self.surface == Surface::Main
                 && self.biometrics.get()
@@ -2578,7 +2578,7 @@ impl Store {
         });
     }
     /// Removes the wrapped key (Touch ID turned off, or the key went stale).
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    #[cfg_attr(not(any(target_os = "macos", target_os = "android")), allow(dead_code))]
     pub fn forget_biometric(self) {
         self.dispatch(true, |s| {
             s.set_biometric(None)?;
@@ -2589,12 +2589,19 @@ impl Store {
     /// `cancelled` when the user, the app or the system cancelled the prompt (nothing is shown then), not for
     /// "Use Password…", a failure, a lockout or a stale key (which is deleted).
     fn with_touch_id(self, reason: &'static str, then: impl FnOnce(Zeroizing<Vec<u8>>) + 'static, otherwise: impl FnOnce(bool) + 'static) {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "android"))]
         {
             let controller = self.controller.get();
             let epoch = controller.epoch();
-            let reason = self.label(reason).to_string();
-            let cancel = self.label("Cancel").to_string();
+            // Android's prompt shows the reason as its title, and its other button hands over to the master password.
+            let reason = if cfg!(target_os = "android") {
+                let text = self.label(reason).to_string();
+                let mut letters = text.chars();
+                letters.next().map(|first| first.to_uppercase().collect::<String>() + letters.as_str()).unwrap_or_default()
+            } else {
+                self.label(reason).to_string()
+            };
+            let cancel = self.label(if cfg!(target_os = "android") { "Use Master Password" } else { "Cancel" }).to_string();
             self.task(async move {
                 let c = controller.clone();
                 let result = blocking(move || {
@@ -2633,7 +2640,7 @@ impl Store {
                 otherwise(false);
             });
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", target_os = "android")))]
         {
             let _ = (reason, then);
             otherwise(false);

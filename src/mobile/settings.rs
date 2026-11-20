@@ -29,7 +29,24 @@ fn nothing() -> impl IntoElement {
 
 pub fn page(s: Store, nav: Nav) -> impl IntoElement {
     let preferences = move || s.preferences.get();
-    let security = ui::group(vec![
+    let mut security_rows = Vec::new();
+    // Shown where the device has a strong biometric enrolled.
+    if s.biometrics.get_untracked() {
+        security_rows.push(
+            ui::row(
+                ui::round_tile(Icon::TouchId, false),
+                move || s.label("Unlock with biometrics"),
+                Some(Box::new(move || {
+                    s.label("The vault key is protected by this device’s hardware keystore. After you change enrolled fingerprints or faces, turn it on again with your master password.")
+                })),
+                ui::switch(move || preferences().touch_id),
+            )
+            .test_id("biometrics")
+            .on_press(move || s.set_touch_id(!preferences().touch_id))
+            .into_element(),
+        );
+    }
+    security_rows.extend(vec![
         ui::row(
             ui::round_tile(Icon::Lock, false),
             move || s.label("Auto-Lock"),
@@ -61,6 +78,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
         })
         .into_element(),
     ]);
+    let security = ui::group(security_rows);
     let data = ui::group(vec![
         ui::row(ui::round_tile(Icon::ExportImport, false), move || s.label("Export Encrypted Backup"), None, chevron())
             .test_id("export")

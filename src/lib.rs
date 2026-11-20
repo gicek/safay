@@ -37,9 +37,10 @@ pub fn demo_controller(total: usize) -> Arc<Controller> {
     demo::controller_with(false, total)
 }
 /// Running under the app's own launcher, not an NSH test or preview runner.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+#[cfg_attr(not(any(target_os = "macos", target_os = "android")), allow(dead_code))]
 pub(crate) fn hosted() -> bool {
-    CONTROLLER.get().is_some()
+    // A phone has no launcher of Safay's: NSH's runner is the app.
+    cfg!(any(target_os = "android", target_os = "ios")) || CONTROLLER.get().is_some()
 }
 pub fn install_controller(controller: Arc<Controller>, preview: bool) -> Result<(), (Arc<Controller>, bool)> {
     CONTROLLER.set((controller, preview))
