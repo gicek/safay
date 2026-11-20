@@ -509,7 +509,10 @@ pub fn status_line(status: impl Fn() -> Option<Status> + Copy + 'static) -> impl
                     }),
                 ))
                 .child(
+                    // Shrinks with the row, so a long message is cut short instead of running under what follows it.
                     text(move || status().map(|s| s.text).unwrap_or_default())
+                        .flex_1()
+                        .min_w(px(0.0))
                         .number_of_lines(1)
                         .text_size(px(12.0))
                         .text_color(move || if tone() == Tone::Info { theme().muted_foreground } else { tint() }),

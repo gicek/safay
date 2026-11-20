@@ -264,6 +264,7 @@
   "The backup changed during the sync. Try again.": "同步期間備份發生變化，請重試。",
   "The backup file format is invalid.": "備份檔格式無效。",
   "The backup here can’t be opened with this vault’s key. It belongs to another vault, or its master password was changed on another device.": "此處的備份無法用本機保險庫的密鑰解開：它屬於另一個保險庫，或另一台裝置修改了主密碼。",
+  "{} wasn’t connected: the backup there belongs to another vault, or its master password was changed on another device. To back up this vault there, delete that backup first.": "未連線 {}：那裡的備份屬於另一個保險庫，或另一台裝置修改了主密碼。要把此保險庫備份到那裡，請先刪除那份備份。",
   "The change couldn’t be saved. Your previous vault is kept.": "無法儲存變更，已保留先前的保險庫。",
   "The export is encrypted with this password and you’ll need it to import. Don’t lose it.": "匯出檔用這個密碼單獨加密，匯入時需要輸入，請務必牢記。",
   "The file exceeds the size or image limit.": "檔案超出大小或圖片尺寸限制。",

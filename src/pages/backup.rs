@@ -376,6 +376,18 @@ fn overview(s: Store) -> impl IntoElement {
                 ),
         )
         .child(when(
+            move || s.refused.with(Option::is_some),
+            move || {
+                inline_notice(Icon::Warning, move || tok("warning"), move || {
+                    let name = s.refused.get().unwrap_or_default();
+                    s.fmt(
+                        "{} wasn’t connected: the backup there belongs to another vault, or its master password was changed on another device. To back up this vault there, delete that backup first.",
+                        &[&name],
+                    )
+                })
+            },
+        ))
+        .child(when(
             move || st() == WAITING,
             move || {
                 callout(

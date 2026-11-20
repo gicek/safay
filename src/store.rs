@@ -226,6 +226,8 @@ pub struct Store {
     pub review: Signal<Option<safay_app::sync::Review>>,
     pub prefer_remote: Signal<BTreeSet<Uuid>>,
     pub syncing: Signal<bool>,
+    /// A location that was not linked because the backup there cannot be opened with this vault's key: its name.
+    pub refused: Signal<Option<String>>,
     /// The shortcut being recorded in Settings (0 panel, 1 main window).
     pub recording: Signal<Option<u8>>,
     pub login_item: Signal<Option<bool>>,
@@ -347,6 +349,7 @@ impl Store {
             review: signal(None),
             prefer_remote: signal(BTreeSet::new()),
             syncing: signal(false),
+            refused: signal(None),
             recording: signal(None),
             login_item: signal(None),
             updates: signal(None),
@@ -410,6 +413,7 @@ impl Store {
         self.projection.with(|p| p.unlocked)
     }
     fn reset_transient(self) {
+        self.refused.set(None);
         self.form.set(Form::fresh());
         self.marks.set(Marks::default());
         self.revealed.set(Zeroizing::new(String::new()));
@@ -1869,6 +1873,8 @@ impl Store {
     }
     pub fn link(self, location: safay_app::sync::Location) {
         self.status.set(None);
+        self.refused.set(None);
+        let title = location.title();
         self.sync_job(
             move |c, e, _| {
                 let credential = match &location {
@@ -1885,7 +1891,12 @@ impl Store {
                 result
             },
             move |e| {
-                self.status.set(Some(Status { tone: Tone::Error, text: self.label(sync_error_key(e)) }));
+                // Too much to say in the footer's one line, and "the backup here" would read as the linked location's.
+                if e == safay_app::sync::SyncError::Unreadable {
+                    self.refused.set(Some(title.clone()));
+                } else {
+                    self.status.set(Some(Status { tone: Tone::Error, text: self.label(sync_error_key(e)) }));
+                }
             },
         );
         self.backup_page.set(BackupPage::Overview);
