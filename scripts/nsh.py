@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Run the NSH CLI built from the commit Cargo.lock pins; never silently use a CLI from another NSH revision."""
 from pathlib import Path
+import hashlib
 import os
-import shutil
 import subprocess
 import sys
 
@@ -12,11 +12,17 @@ import install_nsh  # noqa: E402
 root = install_nsh.root
 commit = install_nsh.pinned_commit()
 # The CLI builds the crate in its own workspace (.nsh/rust), whose lock file it creates once and never updates: a new one
-# would take NSH main's latest commit, and one from before an upgrade keeps the old commit. It starts from the project's.
+# would take NSH main's latest commit, and one from before an upgrade keeps the old commit. It starts from the project's,
+# and again whenever the project's changes (a new version of Safay included): cargo would resolve a stale lock file
+# anew, and move the NSH crates that are not taken from the checkout to main's latest commit while doing so.
 generated = root / ".nsh/rust/Cargo.lock"
-if install_nsh.locked_commits(generated) != {commit}:
+project = (root / "Cargo.lock").read_bytes()
+origin = generated.with_name("Cargo.lock.origin")
+digest = hashlib.sha256(project).hexdigest()
+if install_nsh.locked_commits(generated) != {commit} or not origin.is_file() or origin.read_text(encoding="utf-8") != digest:
     generated.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(root / "Cargo.lock", generated)
+    generated.write_bytes(project)
+    origin.write_text(digest, encoding="utf-8")
 explicit = os.environ.get("NSH_BIN")
 candidate = Path(explicit) if explicit else install_nsh.executable()
 if candidate.is_file():
