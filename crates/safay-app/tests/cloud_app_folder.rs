@@ -58,10 +58,23 @@ impl Clock for Time {
     }
 }
 fn device(offset: u64) -> Arc<Controller> {
-    Controller::new(Box::new(MemoryRepository::default()), Arc::new(Time(AtomicU64::new(offset)))).unwrap()
+    device_at(Arc::new(Time(AtomicU64::new(offset))))
+}
+fn device_at(clock: Arc<Time>) -> Arc<Controller> {
+    Controller::new(Box::new(MemoryRepository::default()), clock).unwrap()
 }
 fn issuers(c: &Controller) -> Vec<String> {
     c.run(c.epoch(), |s| Ok(s.projection("", None)?.rows.into_iter().map(|r| r.issuer).collect::<Vec<_>>())).unwrap()
+}
+
+fn add(c: &Controller, issuer: &str) {
+    c.run(c.epoch(), |s| {
+        let mut draft = Draft::default();
+        draft.issuer = issuer.into();
+        draft.secret = "JBSWY3DPEHPK3PXP".into();
+        s.save_account(&draft)
+    })
+    .unwrap();
 }
 
 /// Signs in to the in-memory provider with the app-folder scope, as Safay does, and returns the stored connection.
@@ -90,27 +103,18 @@ fn backups_live_at_the_root_of_the_app_folder() {
         cloud::install(Services { http: server.clone(), credentials, user_agent: "safay-test/1".into() });
         let location = Location::Cloud { provider, account: "alice".into(), credential: CREDENTIAL.into(), pinned: false };
 
-        let a = device(0);
+        let clock = Arc::new(Time::default());
+        let a = device_at(clock.clone());
+        // A later edit is a later vault.
+        let add = |c: &Controller, issuer: &str| {
+            clock.0.fetch_add(60, Ordering::SeqCst);
+            add(c, issuer);
+        };
         a.run(0, |s| s.create(PASSWORD, false)).unwrap();
-        a.run(a.epoch(), |s| {
-            let mut draft = Draft::default();
-            draft.issuer = "Alpha".into();
-            draft.secret = "JBSWY3DPEHPK3PXP".into();
-            s.save_account(&draft)
-        })
-        .unwrap();
+        add(&a, "Alpha");
         sync::link(&a, a.epoch(), location.clone()).unwrap();
-        let initial = sync::run(&a, a.epoch(), "Device", Source::Auto);
-        if provider == Provider::GoogleDrive {
-            assert_eq!(initial, Err(SyncError::ManualWriteRequired));
-            {
-                let memory = server.0.lock().unwrap();
-                assert!(memory.data(&memory.storage_path("vault.safayvault")).is_none());
-            }
-            sync::keep_local(&a, a.epoch(), "Device").unwrap();
-        } else {
-            assert_eq!(initial, Ok(Status::Synced), "{provider:?}");
-        }
+        // The first backup replaces nothing, so it is uploaded even where the write cannot be checked.
+        assert_eq!(sync::run(&a, a.epoch(), "Device", Source::Auto), Ok(Status::Synced), "{provider:?}");
 
         let memory = server.0.lock().unwrap();
         let at = |name: &str| memory.storage_path(name);
@@ -123,6 +127,42 @@ fn backups_live_at_the_root_of_the_app_folder() {
         let b = device(1000);
         sync::restore_first_run(&b, b.epoch(), location, PASSWORD).unwrap();
         assert_eq!(issuers(&b), vec!["Alpha"], "{provider:?}");
+
+        // A later change: uploaded on its own where the write is checked against the backup it replaces.
+        add(&a, "Beta");
+        let later = sync::run(&a, a.epoch(), "Device", Source::Auto);
+        if provider != Provider::GoogleDrive {
+            assert_eq!(later, Ok(Status::Synced), "{provider:?}");
+            continue;
+        }
+        // Google Drive cannot check it: the upload waits for the user, which is neither a failure nor an upload.
+        assert_eq!(later, Err(SyncError::ManualWriteRequired));
+        let waiting = |c: &Controller| c.run(c.epoch(), |s| Ok((s.sync_status(), s.sync_state().history.len()))).unwrap();
+        let (status, entries) = waiting(&a);
+        assert_eq!(status, Status::Failed(SyncError::ManualWriteRequired));
+        assert_eq!(sync::run(&a, a.epoch(), "Device", Source::Auto), Err(SyncError::ManualWriteRequired));
+        assert_eq!(waiting(&a).1, entries, "waiting adds nothing to the history");
+        let stored = || {
+            let memory = server.0.lock().unwrap();
+            memory.data(&memory.storage_path("vault.safayvault"))
+        };
+        let before = stored();
+        sync::replace(&a, a.epoch(), "Device").unwrap();
+        assert_eq!(waiting(&a).0, Status::Synced);
+        assert_ne!(stored(), before, "the approved upload replaced the backup");
+        assert_eq!(sync::run(&b, b.epoch(), "Other", Source::Auto), Ok(Status::Synced));
+        assert_eq!(issuers(&b), vec!["Beta", "Alpha"]);
+
+        // Both devices change; the other one uploads while this one waits. Approving then compares again and finds the
+        // conflict instead of replacing the other device's backup.
+        add(&a, "Gamma");
+        assert_eq!(sync::run(&a, a.epoch(), "Device", Source::Auto), Err(SyncError::ManualWriteRequired));
+        add(&b, "Delta");
+        sync::replace(&b, b.epoch(), "Other").unwrap();
+        let theirs = stored();
+        sync::replace(&a, a.epoch(), "Device").unwrap();
+        assert_eq!(waiting(&a).0, Status::Conflict);
+        assert_eq!(stored(), theirs, "the other device's backup is still there");
     }
 }
 

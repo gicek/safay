@@ -1834,6 +1834,10 @@ impl Store {
             self.refresh();
         });
     }
+    /// Uploads the changes that wait for approval (the location cannot check the write against the backup it replaces).
+    pub fn approve_upload(self) {
+        self.sync_job(safay_app::sync::replace, |_| {});
+    }
     pub fn sync_now(self, source: safay_app::sync::Source) {
         self.sync_job(move |c, e, d| safay_app::sync::run(c, e, d, source).map(|_| ()), |_| {});
     }
@@ -2669,7 +2673,7 @@ pub fn sync_error_key(e: safay_app::sync::SyncError) -> &'static str {
             "The backup here can’t be opened with this vault’s key. It belongs to another vault, or its master password was changed on another device."
         }
         RemoteChanged => "The backup changed during the sync. Try again.",
-        ManualWriteRequired => "This provider needs your approval to replace the backup.",
+        ManualWriteRequired => "Waiting for your approval",
         CommitUnconfirmed => "The upload could not be confirmed. Check the backup before retrying.",
         NoLocal => "No local encrypted vault available to sync.",
         Locked => "Unlock Safay to continue.",

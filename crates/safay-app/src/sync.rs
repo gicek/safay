@@ -389,6 +389,11 @@ impl Session {
             self.sync_status = Status::Idle;
             return;
         }
+        // Nothing went wrong: the upload waits for the user, and every automatic sync until then would repeat the entry.
+        if error == SyncError::ManualWriteRequired {
+            self.sync_status = Status::Failed(error);
+            return;
+        }
         self.sync_status = Status::Failed(error);
         let location = self.sync.location.as_ref().map(Location::title).unwrap_or_default();
         self.sync.push(HistoryEntry {
@@ -418,8 +423,8 @@ impl Session {
         Ok(match (decision, local, remote) {
             (SyncDecision::Upload, Some(local), _) => {
                 let expect = match remote {
-                    None => Expect::Absent,
-                    Some(r) => Expect::Unchanged(r.version.clone().ok_or(SyncError::ManualWriteRequired)?),
+                    None => Some(Expect::Absent),
+                    Some(r) => r.version.clone().map(Expect::Unchanged),
                 };
                 Plan::Upload(local, expect)
             }
@@ -490,7 +495,8 @@ impl Session {
 }
 
 enum Plan {
-    Upload(LocalSnapshot, Expect),
+    /// What the remote must still be; `None` when the backup there has no version to check against.
+    Upload(LocalSnapshot, Option<Expect>),
     Downloaded,
     UpToDate,
     Conflict,
@@ -533,7 +539,20 @@ pub fn link(controller: &Controller, epoch: u64, location: Location) -> Result<(
 }
 
 /// Automatic or "Back Up Now" sync. Retries once if the remote changed between the decision and the write.
+///
+/// A location that cannot check the write against the backup it replaces gets the first backup as it is (there is
+/// nothing to replace); every later upload waits for [`replace`] and fails with [`SyncError::ManualWriteRequired`].
 pub fn run(controller: &Controller, epoch: u64, device: &str, source: Source) -> Result<Status, SyncError> {
+    sync(controller, epoch, device, source, false)
+}
+
+/// The user approved an upload that [`run`] left waiting. The backup is read and compared again first, so one that
+/// another device changed in the meantime becomes a conflict instead of being replaced.
+pub fn replace(controller: &Controller, epoch: u64, device: &str) -> Result<(), SyncError> {
+    sync(controller, epoch, device, Source::Manual, true).map(|_| ())
+}
+
+fn sync(controller: &Controller, epoch: u64, device: &str, source: Source, approved: bool) -> Result<Status, SyncError> {
     let location = controller.run(epoch, |s| Ok(s.begin())).map_err(session_error)??;
     let backend = location.backend();
     let result = (|| {
@@ -542,8 +561,17 @@ pub fn run(controller: &Controller, epoch: u64, device: &str, source: Source) ->
             let plan = controller.run(epoch, |s| Ok(s.plan(remote.as_ref()))).map_err(session_error)??;
             match plan {
                 Plan::Upload(local, expect) => {
-                    let now = SystemTime::now();
-                    match backend.write(&local.data, &metadata(device, &local, now), &expect) {
+                    let metadata = metadata(device, &local, SystemTime::now());
+                    let unchecked = || backend.write(&local.data, &metadata, &Expect::Any);
+                    let written = match &expect {
+                        Some(expect) => match backend.write(&local.data, &metadata, expect) {
+                            Err(SyncError::ManualWriteRequired) if approved || *expect == Expect::Absent => unchecked(),
+                            written => written,
+                        },
+                        None if approved => unchecked(),
+                        None => Err(SyncError::ManualWriteRequired),
+                    };
+                    match written {
                         Ok(version) => {
                             controller
                                 .run(epoch, |s| Ok(s.finish_upload(&local, version.as_ref(), source, device)))

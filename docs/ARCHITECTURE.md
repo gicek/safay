@@ -81,9 +81,13 @@ difference: a merge keeps the deletion of an account deleted on either side, so 
 
 ### Cloud backup consistency
 
-Automatic uploads require an atomic create or revision check. If the provider cannot enforce it, Backup & Sync
-offers **Replace Backup** for a user-initiated overwrite. Google Drive path writes require this choice, as do
-versioned OneDrive writes that use an upload session and WebDAV overwrites with a weak or missing revision.
+Automatic uploads that replace a backup require an atomic revision check. If the provider cannot enforce it, the
+upload waits (`SyncError::ManualWriteRequired`, shown as a warning and not recorded as a failure) and Backup & Sync
+offers **Upload**. Approving runs the sync again (`sync::replace`): the backup is read and compared once more, so a
+change from another device becomes a conflict, and only then is the backup written without the check. Google Drive
+writes need this approval, as do versioned OneDrive writes that use an upload session and WebDAV overwrites with a
+weak or missing revision. The first backup replaces nothing, so it is uploaded without asking even where the
+provider cannot create a file atomically; the sign-in page for Google Drive says that later uploads ask.
 A completed upload with an uncertain outcome is checked by reading back the ciphertext. Sync records its baseline
 only when the upload succeeded or the read returned the same bytes. The cloud upload and restore limits both use
 `storage::MAX_FILE_BYTES` (16 MiB). Refreshed credentials go to the credential store before the next HTTP request.

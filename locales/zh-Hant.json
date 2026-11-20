@@ -1,8 +1,9 @@
 {
-  "Replace cloud backup?": "取代雲端備份？",
-  "Replace Backup": "取代備份",
-  "This provider cannot protect this write against changes from another device. Replacing the backup uploads this device’s vault.": "此服務無法防止本次寫入覆蓋其他裝置的更改。取代備份將上傳此裝置上的保險庫。",
-  "This provider needs your approval to replace the backup.": "此服務需要您確認才能取代備份。",
+  "Upload this device’s changes?": "上傳此裝置的更改？",
+  "Upload": "上傳",
+  "{} can’t check for changes from another device during an upload, so Safay asks before it replaces the backup.": "{} 無法在上傳時檢查其他裝置的更改，因此 Safay 會在取代備份前詢問。",
+  "Waiting for your approval": "正在等待您確認",
+  "After the first backup, Safay asks before it uploads changes to {}.": "首次備份之後，Safay 會在向 {} 上傳更改前詢問。",
   "The upload could not be confirmed. Check the backup before retrying.": "無法確認上傳結果。請先檢查備份，再重試。",
   "30 seconds": "30 秒",
   "60 seconds": "60 秒",

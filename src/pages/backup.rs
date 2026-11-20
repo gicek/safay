@@ -21,11 +21,14 @@ fn status(s: Store) -> Status {
 fn configured(s: Store) -> bool {
     s.projection.with(|p| p.sync.location.is_some())
 }
-/// The sidebar's 7pt status dot color: none when off, orange for a conflict, red for failures, green otherwise.
+/// An upload that waits for the user's approval: the location cannot check it against the backup it replaces.
+const WAITING: Status = Status::Failed(safay_app::sync::SyncError::ManualWriteRequired);
+/// The sidebar's 7pt status dot color: none when off, orange for a conflict or an upload that waits for approval, red
+/// for failures, green otherwise.
 pub fn dot_color(s: Store) -> Option<AdaptiveColor> {
     match status(s) {
         Status::Off => None,
-        Status::Conflict => Some(tok("warning")),
+        Status::Conflict | WAITING => Some(tok("warning")),
         Status::Unreadable | Status::Failed(_) => Some(theme().destructive),
         _ => Some(tok("success")),
     }
@@ -304,7 +307,7 @@ fn overview(s: Store) -> impl IntoElement {
                                 .items_end()
                                 .gap(px(6.0))
                                 .child(when(
-                                    move || !matches!(st(), Status::Conflict | Status::Unreadable | Status::Failed(safay_app::sync::SyncError::ManualWriteRequired)),
+                                    move || !matches!(st(), Status::Conflict | Status::Unreadable | WAITING),
                                     move || {
                                         push_button(
                                             move || s.label(if s.syncing.get() { "Syncing" } else { "Back Up Now" }),
@@ -331,7 +334,7 @@ fn overview(s: Store) -> impl IntoElement {
                                     .text_right()
                                     .text_size(px(11.0))
                                     .text_color(move || match st() {
-                                        Status::Conflict => tok("warning"),
+                                        Status::Conflict | WAITING => tok("warning"),
                                         Status::Unreadable | Status::Failed(_) => theme().destructive,
                                         _ => tok("success"),
                                     }),
@@ -373,15 +376,17 @@ fn overview(s: Store) -> impl IntoElement {
                 ),
         )
         .child(when(
-            move || st() == Status::Failed(safay_app::sync::SyncError::ManualWriteRequired),
-            move || callout(
-                s,
-                move || tok("warning"),
-                "Replace cloud backup?",
-                "This provider cannot protect this write against changes from another device. Replacing the backup uploads this device’s vault.",
-                "Replace Backup",
-                move || s.resolve_conflict(1),
-            ),
+            move || st() == WAITING,
+            move || {
+                callout(
+                    s,
+                    move || tok("warning"),
+                    "Upload this device’s changes?",
+                    "{} can’t check for changes from another device during an upload, so Safay asks before it replaces the backup.",
+                    "Upload",
+                    move || s.approve_upload(),
+                )
+            },
         ))
         .child(when(
             move || st() == Status::Conflict,
@@ -481,7 +486,11 @@ fn callout(
         .child(view().text_color(tint).child(icon(Icon::Warning).size(px(18.0))))
         .child(
             view().flex_1().gap(px(3.0)).child(heading(move || s.label(title), 13.0)).child(
-                text(move || s.label(detail)).text_size(px(12.0)).line_height(px(17.0)).text_color(move || theme().muted_foreground),
+                // A detail may name the location.
+                text(move || s.fmt(detail, &[&s.projection.with(|p| p.sync.location.as_ref().map(|l| l.title()).unwrap_or_default())]))
+                    .text_size(px(12.0))
+                    .line_height(px(17.0))
+                    .text_color(move || theme().muted_foreground),
             ),
         )
         .child(push_button(move || s.label(action), Kind::Primary, false).disabled(move || s.syncing.get()).on_press(press))
@@ -838,6 +847,13 @@ fn oauth_setup(s: Store, provider: Provider) -> impl IntoElement {
                     ),
                 ),
         )
+        // Google Drive has no checked write (see `safay_app::sync::run`): say so before the first upload waits.
+        .child(when(
+            move || provider == Provider::GoogleDrive && !s.cloud_restore.get(),
+            move || {
+                note(move || s.fmt("After the first backup, Safay asks before it uploads changes to {}.", &[provider.name()])).px(px(2.0))
+            },
+        ))
         .child(progress_steps(steps, phase))
         // macOS signs in in a window of its own; elsewhere the page is in the browser.
         .child(when(move || crate::platform::supports::BROWSER_SIGN_IN, move || browser_note(s, provider)))
