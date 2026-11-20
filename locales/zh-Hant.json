@@ -381,6 +381,8 @@
   "Something went wrong while syncing": "同步時發生錯誤",
   "Couldn’t read the server’s response": "無法識別伺服器的回應",
   "Not available in this build of Safay": "此版本的 Safay 無法使用",
+  "Signed in": "已登入",
+  "You can close this tab and return to Safay.": "可以關閉此分頁並返回 Safay。",
   "Connect to {}": "連線到 {}",
   "Connect to your own server or NAS": "連接你自己的伺服器或 NAS",
   "Only the encrypted vault is stored on your server.": "伺服器上只存放加密後的保險庫。",

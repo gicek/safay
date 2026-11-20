@@ -31,6 +31,9 @@ pub mod camera;
 pub mod hotkeys;
 #[cfg(target_os = "macos")]
 pub mod icloud;
+/// The loopback redirect of a browser sign-in; macOS signs in in a system session and has no use for it.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+pub mod loopback;
 #[cfg(target_os = "macos")]
 pub mod screen_capture;
 /// Linux's "Select on Screen": the desktop portal's screenshot (`screen_capture` is macOS's own selection).
@@ -73,9 +76,25 @@ pub fn web_sign_in(url: &str, callback_scheme: &str) -> std::sync::mpsc::Receive
         receiver
     }
 }
+/// Opens the provider's sign-in page in the default browser for a sign-in whose redirect comes back to a loopback
+/// port (Google's "Desktop app" client): the receiver gets the callback `accepts` takes, after the browser was shown
+/// `page`. On the engine thread, like [`web_sign_in`].
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+pub fn loopback_sign_in(
+    url: &str,
+    loopback: loopback::Loopback,
+    accepts: impl Fn(&str) -> bool + Send + 'static,
+    page: String,
+) -> std::sync::mpsc::Receiver<Signed> {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    drop(nsh_core::prelude::open_url(url.to_owned()));
+    std::thread::spawn(move || drop(sender.send(loopback.wait(accepts, &page))));
+    receiver
+}
 /// Closes the web sign-in in progress, if any (the user left its page; a page in the browser stays open, and its
 /// callback no longer ends a session).
 pub fn cancel_web_sign_in() {
+    loopback::cancel();
     #[cfg(target_os = "macos")]
     web_auth::cancel();
     #[cfg(not(target_os = "macos"))]
@@ -228,7 +247,8 @@ pub fn url_schemes() -> Vec<String> {
         for provider in [Provider::Dropbox, Provider::Onedrive, Provider::GoogleDrive] {
             let Some(client) = crate::pages::backup::oauth_client(provider) else { continue };
             let scheme = client.callback_scheme();
-            if !scheme.is_empty() && !schemes.contains(&scheme) {
+            // A loopback redirect comes back to a port, not through a link.
+            if !scheme.is_empty() && scheme != "http" && !schemes.contains(&scheme) {
                 schemes.push(scheme);
             }
         }

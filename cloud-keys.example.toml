@@ -1,0 +1,34 @@
+# OAuth clients for cloud backup. Copy to cloud-keys.toml (untracked) and fill in the clients registered for your build;
+# build.rs compiles the values in. A section with an empty client ID hides that service. Everything here is public:
+# the clients use PKCE, and the one "secret" below ships inside the app by Google's design.
+#
+# Each redirect_uri must be registered for its client in the provider's console, exactly as written here.
+
+[dropbox]
+# App Console: Scoped access, "App folder". The app key, and a redirect URI of the form db-<app key>://2/token.
+app_key = ""
+redirect_uri = ""
+
+[microsoft]
+# Entra app registration: accounts in any directory and personal accounts, platform "Mobile and desktop
+# applications", public client flows allowed. Any custom scheme works, such as com.example.app.oauth://callback.
+client_id = ""
+redirect_uri = ""
+
+[google]
+# Google Cloud Console: an OAuth client of type "iOS". Its redirect URI is the client ID in reverse DNS notation,
+# com.googleusercontent.apps.<id>:/oauth2redirect.
+client_id = ""
+redirect_uri = ""
+# Google Drive has no app folder of its own: the app keeps its files in a folder with this name in My Drive, created on
+# first use. Changing it later makes the app start over in a new folder.
+folder_name = ""
+
+[google.desktop]
+# Windows and Linux, where the sign-in happens in the browser: an OAuth client of type "Desktop app". Google requires
+# its client secret with every token request, although it is not confidential. The redirect is a loopback address;
+# Safay listens on a free port of it while a sign-in is in progress and adds the port. Empty: these systems use the
+# [google] client.
+client_id = ""
+client_secret = ""
+redirect_uri = "http://127.0.0.1"

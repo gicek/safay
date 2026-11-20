@@ -7,6 +7,7 @@ local.*
 *.log
 __pycache__/
 cloud-keys*.toml
+!cloud-keys.example.toml
 # Signing keys and per-machine agent settings never belong in the repository.
 *.secret
 # Coding-agent files: NSH's skills are installed locally (docs/DEVELOPMENT.md), never vendored.

@@ -132,11 +132,17 @@ meaning override it.
 | `[release] update_url` | `SAFAY_UPDATE_URL` | Release packages' update manifest (`latest.json`, HTTPS); empty: no self-update |
 | `[release] download_url_prefix` | `SAFAY_DOWNLOAD_URL_PREFIX` | Where update archives are hosted; empty: next to the manifest |
 
-Dropbox, OneDrive and Google Drive need public OAuth client IDs registered for Safay, in an untracked
-`cloud-keys.toml` (`[dropbox] app_key`, `[microsoft] client_id`, `[google] client_id`). `build.rs` compiles them in;
-services without one are hidden. Every system uses the same redirect URIs, which each client registers: Dropbox
-`db-<app key>://2/token`, Microsoft `msal<client id>://auth` (a "Mobile and desktop applications" platform), Google
-`com.googleusercontent.apps.<id>:/oauth2redirect` (an iOS client).
+Dropbox, OneDrive and Google Drive need public OAuth clients registered for Safay. Everything about them lives in
+an untracked `cloud-keys.toml`, copied from `cloud-keys.example.toml`: each service's client ID, the redirect URI
+registered for it, and the name of the app folder on Google Drive. `build.rs` compiles the values in; nothing about
+a service is written in the code. A service without a client ID is hidden, and a client ID without the values that go
+with it stops the build. The redirect URIs are: Dropbox `db-<app key>://2/token`, Microsoft a custom scheme of your
+choice (a "Mobile and desktop applications" platform), Google `com.googleusercontent.apps.<id>:/oauth2redirect` (an
+iOS client).
+
+Linux and Windows sign in to Google Drive with the client under `[google.desktop]` when there is one: a "Desktop app"
+client with its client secret and the loopback redirect `http://127.0.0.1`, to which Safay adds the port it listens
+on. Without it they use the `[google]` client like macOS.
 
 ### Signing and iCloud
 

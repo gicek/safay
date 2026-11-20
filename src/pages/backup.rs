@@ -637,24 +637,32 @@ pub fn oauth_configured(provider: Provider) -> bool {
     !matches!(provider, Provider::Dropbox | Provider::Onedrive | Provider::GoogleDrive)
         || (crate::platform::supports::OAUTH && oauth_client(provider).is_some())
 }
-/// The public client and its callback, by each service's native-app convention: Dropbox `db-<app key>://2/token`, Microsoft
-/// `msal<client id>://auth`, Google `com.googleusercontent.apps.<id>:/oauth2redirect` (keys from `cloud-keys.toml`).
+/// The public client of each service and the callback registered for it, both from `cloud-keys.toml` (`build.rs`).
 pub fn oauth_client(provider: Provider) -> Option<safay_app::cloudset::OAuthClient> {
     use safay_app::cloudset::OAuthClient;
-    match provider {
-        Provider::Dropbox => {
-            option_env!("SAFAY_DROPBOX_APP_KEY").map(|key| OAuthClient::new(key, format!("db-{}://2/token", key.to_ascii_lowercase())))
+    // Where the sign-in happens in the browser (Windows, Linux), Google expects its "Desktop app" client: a loopback
+    // redirect, whose port is chosen when the sign-in starts (`Store::connect_oauth`), and a client secret.
+    let desktop = (
+        option_env!("SAFAY_GOOGLE_DESKTOP_CLIENT_ID"),
+        option_env!("SAFAY_GOOGLE_DESKTOP_REDIRECT_URI"),
+        option_env!("SAFAY_GOOGLE_DESKTOP_CLIENT_SECRET"),
+    );
+    let (id, redirect, secret) = match (provider, desktop) {
+        (Provider::Dropbox, _) => (option_env!("SAFAY_DROPBOX_APP_KEY"), option_env!("SAFAY_DROPBOX_REDIRECT_URI"), None),
+        (Provider::Onedrive, _) => (option_env!("SAFAY_MICROSOFT_CLIENT_ID"), option_env!("SAFAY_MICROSOFT_REDIRECT_URI"), None),
+        (Provider::GoogleDrive, (Some(id), Some(redirect), Some(secret))) if crate::platform::supports::BROWSER_SIGN_IN => {
+            (Some(id), Some(redirect), Some(secret))
         }
-        Provider::Onedrive => {
-            option_env!("SAFAY_MICROSOFT_CLIENT_ID").map(|id| OAuthClient::new(id, format!("msal{}://auth", id.to_ascii_lowercase())))
-        }
-        Provider::GoogleDrive => option_env!("SAFAY_GOOGLE_CLIENT_ID").map(|id| {
-            let scheme: Vec<&str> = id.split('.').rev().collect();
-            OAuthClient::new(id, format!("{}:/oauth2redirect", scheme.join(".").to_ascii_lowercase()))
-                .with_folder_name(safay_app::core::backup::DEFAULT_FOLDER)
-        }),
-        _ => None,
-    }
+        (Provider::GoogleDrive, _) => (option_env!("SAFAY_GOOGLE_CLIENT_ID"), option_env!("SAFAY_GOOGLE_REDIRECT_URI"), None),
+        _ => return None,
+    };
+    let client = OAuthClient::new(id?, redirect?);
+    let client = match secret {
+        Some(secret) => client.with_client_secret(secret),
+        None => client,
+    };
+    // Google Drive has no app folder of its own: Safay's is a folder with the configured name in My Drive.
+    Some(if provider == Provider::GoogleDrive { client.with_folder_name(option_env!("SAFAY_GOOGLE_FOLDER_NAME")?) } else { client })
 }
 fn choose(s: Store) -> impl IntoElement {
     let row = move |kind: LocationIcon, title: &'static str, subtitle: Option<&'static str>, enabled: bool, press: Box<dyn Fn()>| {

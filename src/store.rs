@@ -2218,14 +2218,26 @@ impl Store {
         if self.fixture || self.cloud_form.with(|f| f.working) {
             return;
         }
-        let Some(client) = crate::pages::backup::oauth_client(provider) else { return };
+        let Some(mut client) = crate::pages::backup::oauth_client(provider) else { return };
+        // A loopback redirect is configured without its port: take one for this sign-in.
+        let loopback = if platform::loopback::is_loopback(&client.redirect_uri) {
+            let Some(loopback) = platform::loopback::bind(&client.redirect_uri) else {
+                self.cloud_form.update(|f| f.error = Some(self.label("Something went wrong while syncing")));
+                return;
+            };
+            client.redirect_uri.clone_from(&loopback.redirect_uri);
+            Some(loopback)
+        } else {
+            None
+        };
         let authorization = match safay_app::cloud::oauth_begin(provider, safay_app::cloudset::AccessScope::AppFolder, client) {
-            Ok(a) => a,
+            Ok(a) => std::sync::Arc::new(a),
             Err(e) => {
                 self.cloud_form.update(|f| f.error = Some(self.label(sync_error_key(e))));
                 return;
             }
         };
+        let page = platform::loopback::page(&self.label("Signed in"), &self.label("You can close this tab and return to Safay."));
         self.cloud_form.update(|f| {
             f.working = true;
             f.waiting = true;
@@ -2239,7 +2251,13 @@ impl Store {
         self.task(async move {
             use platform::Signed;
             // Started in the task, under the window content's owner: what it spawns outlives the pressed button.
-            let outcome = platform::web_sign_in(authorization.url(), &authorization.callback_scheme());
+            let outcome = match loopback {
+                Some(loopback) => {
+                    let waiting = authorization.clone();
+                    platform::loopback_sign_in(authorization.url(), loopback, move |callback| waiting.accepts(callback), page)
+                }
+                None => platform::web_sign_in(authorization.url(), &authorization.callback_scheme()),
+            };
             let signed = blocking(move || outcome.recv().unwrap_or(Signed::Failed)).await.unwrap_or(Signed::Failed);
             if !current() {
                 return;

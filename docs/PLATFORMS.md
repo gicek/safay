@@ -68,8 +68,10 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
   location, a package manager's), Safay offers the new version as a download instead. "Check for Updates" is in the
   tray menu, and a new version opens the update window.
 - Dropbox, OneDrive and Google Drive sign in in the default browser. The provider redirects to its callback scheme,
-  which the desktop entry claims; the link starts Safay again, which hands it to the running one. Leaving the page in
-  Safay ends the sign-in; the browser tab stays open.
+  which the desktop entry claims; the link starts Safay again, which hands it to the running one. Google Drive, when
+  the build has a "Desktop app" client (`[google.desktop]` in `cloud-keys.toml`), redirects to a port of `127.0.0.1`
+  that Safay listens on for the sign-in, and the browser shows a page saying the tab can be closed. Leaving the page
+  in Safay ends the sign-in; the browser tab stays open.
 
 ## Known issues
 
