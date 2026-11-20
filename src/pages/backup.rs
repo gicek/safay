@@ -216,13 +216,20 @@ fn location_detail(s: Store, location: &safay_app::sync::Location) -> SharedStri
     }
 }
 fn location_icon(s: Store, size: f32) -> impl IntoElement {
+    // A mark is drawn for the service it was built for, and the overview stays mounted while the location changes
+    // (linking another service comes back to it): each service has its own, shown while it is the linked one.
+    let marks = [
+        LocationIcon::Icloud,
+        LocationIcon::Cloud(Provider::Dropbox),
+        LocationIcon::Cloud(Provider::Onedrive),
+        LocationIcon::Cloud(Provider::GoogleDrive),
+        LocationIcon::Cloud(Provider::Nextcloud),
+        LocationIcon::Cloud(Provider::Webdav),
+    ];
     view()
         .size(px(size))
-        .child(
-            // The page is rebuilt when the location changes (choosing one goes through the location list).
-            when(move || service_mark(s).is_some(), move || location_mark(service_mark(s).unwrap_or(LocationIcon::Folder), size))
-                .otherwise(move || location_tile(s, size)),
-        )
+        .children(marks.map(|kind| when(move || service_mark(s) == Some(kind), move || location_mark(kind, size)).into_element()))
+        .child(when(move || service_mark(s).is_none(), move || location_tile(s, size)))
         .child(when(
             move || dot_color(s).is_some(),
             move || {
