@@ -84,7 +84,7 @@ authentication and signed distribution are checked by hand.
   appearance and the page to open.
 - A development package started with `SAFAY_PREVIEW_DEMO=<accounts>` and `--preview` opens the demo vault, unlocked
   and in memory, with made-up accounts after its eight samples up to that number: for checking memory and scrolling
-  with a large vault (`build/debug/Safay.app/Contents/MacOS/Safay --preview`).
+  with a large vault (`build/macos/debug/Safay.app/Contents/MacOS/Safay --preview`).
 
 ### Screenshots
 
@@ -104,18 +104,20 @@ window's rounded corners at all four corners and transparency outside them.
 
 ## Packaging (macOS)
 
-Packages go to `build/` at the repository root (untracked):
+Packages go to `build/` at the repository root (untracked), each system in a folder of its own (`macos`, `linux`,
+`windows`); `build/dist/` holds what a release publishes, for every system:
 
 | Command | Output | What it is |
 |---|---|---|
-| `make package` | `build/debug/Safay.app` | Development package (`com.gicek.safay.debug`) |
-| `make package-release` | `build/release/Safay.app`, `Safay-<version>-macos-<arch>.zip` | Developer ID release package, not notarized: for testing on this Mac |
+| `make package` | `build/macos/debug/Safay.app` | Development package (`com.gicek.safay.debug`) |
+| `make package-release` | `build/macos/release/Safay.app`, `Safay-<version>-macos-<arch>.zip` | Developer ID release package, not notarized: for testing on this Mac |
 | `make release` | `build/dist/` | Notarized app, zip and DMG, update archive and manifest: what is published |
 
 Release builds use the app ID `com.gicek.safay`; development builds use `com.gicek.safay.debug`, with their own data
 directory, keychain items and provisioning profile. `python3 scripts/package.py --out <folder>` writes elsewhere. On
-Linux and Windows it writes the `Safay/` folder (the executable at its top) and its archive,
-`Safay-<version>-linux-<arch>.tar.gz` or `Safay-<version>-windows-<arch>.zip`, which is also the update archive.
+Linux and Windows it writes, in `build/linux/` or `build/windows/`, the `Safay/` folder (the executable at its top)
+and its archive, `Safay-<version>-linux-<arch>.tar.gz` or `Safay-<version>-windows-<arch>.zip`, which is also the
+update archive.
 
 ### Local settings
 
@@ -187,7 +189,7 @@ without building or notarizing: after the version's notes changed, or another sy
 
 To see a version's notes in the update window before releasing, start a development package with
 `SAFAY_PREVIEW_UPDATE=<version> SAFAY_PREVIEW_NOTES=<file>`, the file holding the output of `release.py --notes`
-(`build/debug/Safay.app/Contents/MacOS/Safay --preview`). Switch the language in Settings to see each translation. Its
+(`build/macos/debug/Safay.app/Contents/MacOS/Safay --preview`). Switch the language in Settings to see each translation. Its
 "Install Update" simulates a download, so the progress and "Install and Relaunch" can be seen too.
 
 Nothing is uploaded. Releases are published on GitHub Releases: upload the DMG, the zip, every platform's update

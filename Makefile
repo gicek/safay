@@ -18,7 +18,7 @@ BUILD := $(shell $(PYTHON) -c 'import json; print(json.load(open("nsh.json"))["b
 UNAME := $(shell uname -s)
 ifeq ($(UNAME),Darwin)
   HOST_TARGET := macos
-  APP := build/debug/$(NAME).app
+  APP := build/macos/debug/$(NAME).app
   APP_BIN := $(APP)/Contents/MacOS/$(NAME)
   HOST_TRIPLE := $(shell uname -m | sed 's/arm64/aarch64/')-apple-darwin
 else ifeq ($(UNAME),Linux)
@@ -110,13 +110,13 @@ audit: ## cargo-deny advisories and licenses for this host's platform (needs car
 
 ##@ Packages and release
 
-package: ## Development package in build/debug: Apple Development + profile (iCloud Development), ad-hoc without them
+package: ## Development package in build/<system>/debug: Apple Development + profile (iCloud Development), ad-hoc without them
 	$(PYTHON) scripts/package.py
 
 package-adhoc: ## Development package signed ad-hoc (no iCloud)
 	SAFAY_DEVELOPMENT_IDENTITY=- $(PYTHON) scripts/package.py
 
-package-release: ## Release package and zip in build/release: Developer ID, Hardened Runtime (not notarized)
+package-release: ## Release package and zip in build/<system>/release: Developer ID, Hardened Runtime (not notarized)
 	$(PYTHON) scripts/package.py --release
 
 open: ## Open the development package (make package first)

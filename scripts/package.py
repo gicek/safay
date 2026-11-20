@@ -13,8 +13,8 @@ Linux and Windows packages are a folder (`Safay/`, the executable at its top) an
 manifest reads it: `Safay-<version>-linux-<arch>.tar.gz`, `Safay-<version>-windows-<arch>.zip`. The updater replaces
 that folder wherever the user unpacked it.
 
-Output: `build/debug/` (development) or `build/release/` (`--release`, which on macOS also writes
-`Safay-<version>-macos-<arch>.zip`); `--out` picks another folder.
+Output: `build/<system>/debug/` (development) or `build/<system>/release/` (`--release`, which on macOS also writes
+`Safay-<version>-macos-<arch>.zip`), `<system>` being `macos`, `linux` or `windows`; `--out` picks another folder.
 """
 from pathlib import Path
 import argparse
@@ -231,14 +231,15 @@ def zip_app(app: Path, archive: Path) -> Path:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--release", action="store_true", help="Developer ID build with Hardened Runtime (not notarized)")
-    parser.add_argument("--out", type=Path, help="output folder (default: build/debug or build/release)")
+    parser.add_argument("--out", type=Path, help="output folder (default: build/<system>/debug or build/<system>/release)")
     args = parser.parse_args()
     metadata = json.loads((root / "nsh.json").read_text(encoding="utf-8"))
     name = metadata["name"]
     profile = "release" if args.release else "debug"
     subprocess.run(["cargo", "build", "--locked", *(["--release"] if args.release else [])], cwd=root, check=True)
     system = platform.system()
-    out = (args.out or root / "build" / profile).resolve()
+    folder = {"Darwin": "macos", "Linux": "linux", "Windows": "windows"}.get(system, system.lower())
+    out = (args.out or root / "build" / folder / profile).resolve()
     out.mkdir(parents=True, exist_ok=True)
     exe = root / "target" / profile / ("safay.exe" if os.name == "nt" else "safay")
     if system == "Darwin":
