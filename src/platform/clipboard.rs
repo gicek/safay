@@ -154,6 +154,31 @@ pub fn copy(
     rx.recv().map_err(|_| Error::Storage)?
 }
 
+// Phones and tablets: the system clipboard through NSH, which only the interface's thread reaches. The vault's thread
+// leaves the code here and the interface puts it on the clipboard as it shows the copy ([`flush`]). Neither marked
+// sensitive nor expiring yet: NSH's clipboard has neither.
+#[cfg(any(target_os = "android", target_os = "ios"))]
+static PENDING: std::sync::Mutex<Option<Zeroizing<String>>> = std::sync::Mutex::new(None);
+#[cfg(any(target_os = "android", target_os = "ios"))]
+pub fn copy(
+    text: Zeroizing<String>,
+    _ttl: Duration,
+    controller: std::sync::Arc<safay_app::controller::Controller>,
+    epoch: u64,
+) -> Result<(), Error> {
+    controller.at_epoch(epoch, || {
+        *PENDING.lock().map_err(|_| Error::Storage)? = Some(text);
+        Ok(())
+    })
+}
+/// Puts the code a copy left on the system clipboard. Call it on the interface's thread.
+#[cfg(any(target_os = "android", target_os = "ios"))]
+pub fn flush() {
+    if let Some(text) = PENDING.lock().ok().and_then(|mut pending| pending.take()) {
+        nsh_core::element::set_clipboard(text.as_str());
+    }
+}
+
 pub struct NativeClipboard;
 impl safay_app::clipboard::SecretClipboard for NativeClipboard {
     fn copy(

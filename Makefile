@@ -13,6 +13,7 @@ export PYTHONDONTWRITEBYTECODE := 1
 NAME := $(shell $(PYTHON) -c 'import json; print(json.load(open("nsh.json"))["name"])')
 VERSION := $(shell $(PYTHON) -c 'import json; print(json.load(open("nsh.json"))["version"])')
 BUILD := $(shell $(PYTHON) -c 'import json; print(json.load(open("nsh.json"))["build"])')
+ID := $(shell $(PYTHON) -c 'import json; print(json.load(open("nsh.json"))["id"])')
 
 # The native UI test target is the host's own.
 UNAME := $(shell uname -s)
@@ -31,7 +32,7 @@ endif
 
 .PHONY: help all ci build build-release run preview fmt fmt-check lint nsh-features raycast check test test-ui test-native screenshots \
 	package package-adhoc package-release open icloud-check release update-keygen nsh-ready nsh-install nsh-update audit clean clean-all \
-	site site-shots site-serve site-deploy
+	android android-run ios-simulator ios-simulator-run site site-shots site-serve site-deploy
 
 help: ## List the targets
 	@echo "$(NAME) $(VERSION) ($(BUILD)) build commands"
@@ -135,6 +136,22 @@ update-keygen: nsh-ready ## Create the update-signing key: make update-keygen KE
 	@case "$(abspath $(KEY))" in "$(CURDIR)"/*) echo "KEY must be outside the repository"; exit 1;; esac
 	$(NSH) keygen "$(KEY)"
 	@echo "Next: local.toml [release] update_key = \"$(KEY).secret\"; scripts/package.py UPDATE_PUBLIC_KEY = the .pub content"
+
+##@ Phones and tablets (development)
+
+# Like the desktop's development package, these carry the development app ID, so they never share data with a release.
+android: nsh-ready ## Development APK in build/android/debug, signed with the debug key (needs the Android SDK and NDK)
+	$(NSH) package --target android --id $(ID).debug --out build/android/debug
+
+android-run: android ## Install it on the running emulator or the connected device, and start it
+	adb install -r "build/android/debug/$(NAME).apk"
+	adb shell monkey -p $(ID).debug -c android.intent.category.LAUNCHER 1
+
+ios-simulator: nsh-ready ## Development app for the iOS simulator in build/ios-simulator/debug (needs Xcode)
+	$(NSH) package --target ios-simulator --id $(ID).debug --out build/ios-simulator/debug
+
+ios-simulator-run: nsh-ready ## Build it, then install and start it in the booted simulator
+	$(NSH) package --target ios-simulator --id $(ID).debug --out build/ios-simulator/debug --run
 
 ##@ Website (safay.gicek.com)
 

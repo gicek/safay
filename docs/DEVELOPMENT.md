@@ -105,13 +105,23 @@ window's rounded corners at all four corners and transparency outside them.
 ## Packaging (macOS)
 
 Packages go to `build/` at the repository root (untracked), each system in a folder of its own (`macos`, `linux`,
-`windows`); `build/dist/` holds what a release publishes, for every system:
+`windows`, `android`, `ios-simulator`); `build/dist/` holds what a release publishes, for every system:
 
 | Command | Output | What it is |
 |---|---|---|
 | `make package` | `build/macos/debug/Safay.app` | Development package (`com.gicek.safay.debug`) |
 | `make package-release` | `build/macos/release/Safay.app`, `Safay-<version>-macos-<arch>.zip` | Developer ID release package, not notarized: for testing on this Mac |
 | `make release` | `build/dist/` | Notarized app, zip and DMG, update archive and manifest: what is published |
+
+Development packages for phones and tablets go there too. They are early builds: the app starts, with the desktop's
+layout.
+
+| Command | Output | Needs |
+|---|---|---|
+| `make android` | `build/android/debug/Safay.apk` (debug key, `arm64-v8a` and `armeabi-v7a`) | The Android SDK with `platforms;android-35`, build tools and an NDK; a JDK; `rustup target add aarch64-linux-android armv7-linux-androideabi` |
+| `make android-run` | Installs it on the running emulator or the connected device, and starts it | `adb` |
+| `make ios-simulator` | `build/ios-simulator/debug/Safay.app` | Xcode (`DEVELOPER_DIR` when `xcode-select` names the command line tools); `rustup target add aarch64-apple-ios-sim` |
+| `make ios-simulator-run` | Builds it, then installs and starts it in the booted simulator | An iOS simulator runtime |
 
 Release builds use the app ID `com.gicek.safay`; development builds use `com.gicek.safay.debug`, with their own data
 directory, keychain items and provisioning profile. `python3 scripts/package.py --out <folder>` writes elsewhere. On

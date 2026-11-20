@@ -696,6 +696,8 @@ impl Store {
                 }
             }
             Payload::Copied(id) => {
+                #[cfg(any(target_os = "android", target_os = "ios"))]
+                platform::clipboard::flush();
                 self.copied.set(Some(id));
                 self.owner.get().run(|| {
                     set_timeout(Duration::from_millis(if self.surface == Surface::Panel { 1100 } else { 600 }), move || {

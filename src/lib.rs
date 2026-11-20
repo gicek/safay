@@ -17,6 +17,9 @@ mod i18n;
 mod icons;
 #[cfg(target_os = "macos")]
 mod launcher;
+// The phone and tablet interface; debug builds of the desktop can show it too (`SAFAY_MOBILE`).
+#[cfg(any(debug_assertions, target_os = "android", target_os = "ios"))]
+mod mobile;
 mod pages;
 pub mod platform;
 #[cfg(target_os = "macos")]
@@ -70,24 +73,57 @@ pub fn App() -> impl IntoElement {
             }
             desktop::install(controller.clone(), *preview);
         }
+        // Debug builds: `SAFAY_MOBILE=1` shows the phone interface in the desktop's window.
+        #[cfg(debug_assertions)]
+        if std::env::var_os("SAFAY_MOBILE").is_some() {
+            let (controller, preview) = (controller.clone(), *preview);
+            return nsh_core::element::desktop::window()
+                .id("main")
+                .title("Safay")
+                .default_size(size(px(412.0), px(892.0)))
+                .content(move || mobile::root(controller.clone(), preview))
+                .into_element();
+        }
         shell::main_window(controller.clone(), *preview).into_element()
     } else {
-        // A window of its own: a root's plain view shows in no window on a desktop.
-        nsh_core::element::desktop::window()
-            .id("main")
-            .title("Safay")
-            .content(|| {
-                view()
-                    .flex_1()
-                    .items_center()
-                    .justify_center()
-                    .p_8()
-                    .gap_4()
-                    .child(text("Safay").text_size(px(28.0)))
-                    .child(text("NSH UI harness. Launch the local vault with cargo run."))
-            })
-            .into_element()
+        unhosted()
     }
+}
+/// Phones and tablets have no launcher of Safay's own: NSH's runner starts the root, and the vault opens in the directory
+/// the system gives the app.
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn unhosted() -> AnyElement {
+    static MOBILE: OnceLock<Option<Arc<Controller>>> = OnceLock::new();
+    let controller = MOBILE.get_or_init(|| {
+        let directory = nsh_core::element::data_dir()?;
+        let repo = safay_app::storage::DiskRepository::open(directory).ok()?;
+        let controller = Controller::new(Box::new(repo), Arc::new(safay_app::session::SystemClock::default())).ok()?;
+        platform::install_network(false);
+        Some(controller)
+    });
+    match controller {
+        Some(controller) => mobile::root(controller.clone(), false).into_element(),
+        None => view().flex_1().items_center().justify_center().child(text("Safay can’t open its storage.")).into_element(),
+    }
+}
+/// The default CLI runner on a desktop: a harness that opens no vault.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn unhosted() -> AnyElement {
+    // A window of its own: a root's plain view shows in no window on a desktop.
+    nsh_core::element::desktop::window()
+        .id("main")
+        .title("Safay")
+        .content(|| {
+            view()
+                .flex_1()
+                .items_center()
+                .justify_center()
+                .p_8()
+                .gap_4()
+                .child(text("Safay").text_size(px(28.0)))
+                .child(text("NSH UI harness. Launch the local vault with cargo run."))
+        })
+        .into_element()
 }
 /// Synthetic, in-memory UI test root. Never registers in a release build.
 #[cfg(debug_assertions)]

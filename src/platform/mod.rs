@@ -20,6 +20,11 @@ pub mod local_time;
 pub mod loopback;
 pub mod site_icons;
 pub mod tls;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub mod updates;
+// Phones and tablets update through their stores.
+#[cfg(any(target_os = "android", target_os = "ios"))]
+#[path = "updates_mobile.rs"]
 pub mod updates;
 
 // Each system's own integration.
@@ -293,6 +298,9 @@ pub fn data_directory() -> Option<std::path::PathBuf> {
     return std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Application Support").join(APP_ID));
     #[cfg(target_os = "windows")]
     return std::env::var_os("LOCALAPPDATA").map(|root| PathBuf::from(root).join(APP_ID));
+    // Phones and tablets: the system gives the app its directory once the engine runs (`mobile::start`).
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    return None::<PathBuf>;
     #[cfg(target_os = "linux")]
     return std::env::var_os("XDG_DATA_HOME")
         .filter(|p| PathBuf::from(p).is_absolute())
@@ -350,6 +358,8 @@ pub fn device_name() -> String {
         let name = std::env::var("COMPUTERNAME").ok();
         #[cfg(target_os = "linux")]
         let name = std::fs::read_to_string("/etc/hostname").ok();
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        let name = Some(if cfg!(target_os = "android") { "Android" } else { "iPhone" }.to_owned());
         name.map(|n| n.trim().to_owned()).filter(|n| !n.is_empty() && n.len() <= 120).unwrap_or_else(|| "Safay".to_owned())
     })
     .clone()
@@ -359,8 +369,11 @@ pub fn device_name() -> String {
 /// preview never touches the keychain).
 pub fn install_network(preview: bool) {
     use safay_app::cloud::{Credentials, Services};
-    let credentials: std::sync::Arc<dyn Credentials> =
-        if preview { std::sync::Arc::new(MemoryCredentials::default()) } else { std::sync::Arc::new(credentials::Keychain) };
+    let credentials: std::sync::Arc<dyn Credentials> = if preview || cfg!(any(target_os = "android", target_os = "ios")) {
+        std::sync::Arc::new(MemoryCredentials::default())
+    } else {
+        std::sync::Arc::new(credentials::Keychain)
+    };
     safay_app::cloud::install(Services {
         http: std::sync::Arc::new(http::Executor::storage()),
         credentials,

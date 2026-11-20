@@ -4,9 +4,22 @@
 use safay_app::{Zeroizing, cloud::Credentials, sync::SyncError};
 
 /// `<bundle ID>.cloud`: the release and debug builds keep separate sign-ins.
+#[cfg_attr(any(target_os = "android", target_os = "ios"), allow(dead_code))]
 const SERVICE: &str = if cfg!(debug_assertions) { "com.gicek.safay.debug.cloud" } else { "com.gicek.safay.cloud" };
 
 pub struct Keychain;
+// Spike: phones and tablets have no store yet (Keychain, Keystore); sign-ins are kept in memory (`install_network`).
+#[cfg(any(target_os = "android", target_os = "ios"))]
+impl Credentials for Keychain {
+    fn load(&self, _: &str) -> Option<Zeroizing<Vec<u8>>> {
+        None
+    }
+    fn save(&self, _: &str, _: &[u8]) -> Result<(), SyncError> {
+        Err(SyncError::Storage)
+    }
+    fn delete(&self, _: &str) {}
+}
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 impl Credentials for Keychain {
     fn load(&self, id: &str) -> Option<Zeroizing<Vec<u8>>> {
         keyring::Entry::new(SERVICE, id).ok()?.get_secret().ok().map(Zeroizing::new)

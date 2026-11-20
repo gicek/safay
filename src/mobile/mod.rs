@@ -1,0 +1,240 @@
+//! The phone and tablet interface: one job per screen, all starting from the list. It shares the store, the vault and
+//! the sync with the desktop interface and has its own pages and controls (`ui`), drawn with `theme-mobile.json`.
+mod add;
+mod categories;
+mod detail;
+mod dialogs;
+mod home;
+mod lock;
+mod menus;
+mod onboarding;
+mod settings;
+pub mod ui;
+
+use crate::{components::tok, store::Store};
+use nsh_base::theme;
+use nsh_core::prelude::*;
+use safay_app::controller::Controller;
+use std::sync::Arc;
+
+/// A page over the list.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Page {
+    /// "Enter Setup Key".
+    Manual,
+    /// "Manage Categories".
+    Categories,
+    Settings,
+    /// "Recently Deleted", from settings.
+    Deleted,
+    /// "Add Account": what a scan, a photo or pasted links hold, before it is added.
+    Review,
+}
+/// A dialog of settings or of the add menu.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Dialog {
+    AutoLock,
+    Language,
+    ChangePassword,
+    Export,
+    BackupPassword,
+}
+
+/// What the pages of one window share beside the store.
+#[derive(Clone, Copy)]
+pub struct Nav {
+    pub page: Signal<Option<Page>>,
+    /// The add menu over the list is open.
+    pub adding: Signal<bool>,
+    /// The list's overflow menu is open.
+    pub menu: Signal<bool>,
+    /// The account whose menu is open, and where it was pressed.
+    pub context: Signal<Option<(safay_app::Uuid, Point<Points>)>>,
+    /// The account "Add to" is choosing categories for.
+    pub add_to: Signal<Option<safay_app::Uuid>>,
+    pub dialog: Signal<Option<Dialog>>,
+    /// The pages under the one showing, the list excepted.
+    pub stack: Signal<Vec<Page>>,
+}
+impl Nav {
+    pub fn push(self, page: Page) {
+        self.adding.set(false);
+        self.menu.set(false);
+        if let Some(under) = self.page.get_untracked() {
+            self.stack.update(|st| st.push(under));
+        }
+        self.page.set(Some(page));
+    }
+    /// Back to the list, whatever is over it.
+    pub fn home(self) {
+        dismiss_keyboard();
+        self.stack.set(Vec::new());
+        self.page.set(None);
+    }
+    /// One step back; false when the list itself is showing.
+    pub fn back(self) -> bool {
+        if self.context.get_untracked().is_some() {
+            self.context.set(None);
+        } else if self.menu.get_untracked() {
+            self.menu.set(false);
+        } else if self.adding.get_untracked() {
+            self.adding.set(false);
+        } else if self.page.get_untracked().is_some() {
+            dismiss_keyboard();
+            let mut stack = self.stack.get_untracked();
+            let under = stack.pop();
+            self.stack.set(stack);
+            self.page.set(under);
+        } else {
+            return false;
+        }
+        true
+    }
+}
+
+pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
+    set_tokens(nsh_base::Theme::from_json(include_str!("../../theme-mobile.json")).expect("bundled theme").into_tokens());
+    let s = Store::new(controller, fixture, crate::store::Surface::Main);
+    effect(move || untracked(|| s.start()));
+    let nav = Nav {
+        page: signal(None),
+        adding: signal(false),
+        menu: signal(false),
+        context: signal(None),
+        add_to: signal(None),
+        dialog: signal(None),
+        stack: signal(Vec::new()),
+    };
+    // Locking leaves no page over the list for the next unlock.
+    effect(move || {
+        if !s.unlocked() {
+            nav.page.set(None);
+            nav.adding.set(false);
+            nav.menu.set(false);
+            nav.context.set(None);
+            nav.add_to.set(None);
+            nav.dialog.set(None);
+            nav.stack.set(Vec::new());
+        }
+    });
+    // A backup file was chosen: one that needs no password is imported at once, another asks for its password.
+    effect(move || {
+        if !s.has_file() || !s.unlocked() {
+            return;
+        }
+        untracked(|| match s.file_kind.get() {
+            safay_app::core::import::FileKind::Encrypted => nav.dialog.set(Some(Dialog::BackupPassword)),
+            safay_app::core::import::FileKind::Unsupported => {
+                s.remove_file();
+                s.show_toast(crate::store::Tone::Error, s.label("Not a supported backup file"));
+            }
+            _ => s.import_file(),
+        });
+    });
+    // Imported: the file and its dialog go.
+    effect(move || {
+        if s.toast.get().is_some() && untracked(|| s.has_file()) && !s.busy.get() && untracked(|| s.error.get().is_none()) {
+            untracked(|| {
+                s.remove_file();
+                if nav.dialog.get() == Some(Dialog::BackupPassword) {
+                    nav.dialog.set(None)
+                }
+            });
+        }
+    });
+    // Codes read from photos wait in the scanned list: they are reviewed before they are added.
+    effect(move || {
+        if s.unlocked() && !s.scanned.with(|t| t.trim().is_empty()) && untracked(|| nav.page.get() != Some(Page::Review)) {
+            untracked(|| nav.push(Page::Review));
+        }
+    });
+    on_back_press(move || {
+        // What is asked over everything goes first.
+        if s.editing.with_untracked(Option::is_some) {
+            s.editing.set(None);
+            return true;
+        }
+        if s.auth.get_untracked().is_some() {
+            if !s.busy.get_untracked() {
+                s.cancel_auth();
+            }
+            return true;
+        }
+        if s.unlocked() {
+            if matches!(s.sheet.get_untracked(), Some(crate::store::Sheet::Qr(_))) {
+                s.close_sheet();
+                return true;
+            }
+            return nav.back();
+        }
+        // Onboarding: a step back to the welcome page.
+        if !s.projection.with_untracked(|p| p.exists) && s.stage.get_untracked() != crate::store::Stage::Welcome && !s.busy.get_untracked()
+        {
+            onboarding::leave(s);
+            return true;
+        }
+        false
+    });
+    view()
+        .flex_1()
+        .font_family("system-ui")
+        .font_weight(FontWeight::NORMAL)
+        .text_size(px(14.0))
+        .bg(move || theme().background)
+        .text_color(move || theme().foreground)
+        .on_press(move |_: &()| s.controller.get().activity())
+        .child(when(move || !s.ready.get(), || view().flex_1()).otherwise(move || {
+            when(move || s.unlocked(), move || unlocked(s, nav)).otherwise(move || {
+                when(move || s.projection.with(|p| p.exists), move || lock::page(s)).otherwise(move || onboarding::page(s))
+            })
+        }))
+        .child(when(move || s.unlocked(), move || view().child(detail::sheet(s)).child(menus::add_to(s, nav))))
+        .child(dialogs::all(s))
+        .child(dialogs::of(s, nav))
+        // Above the add button while the list shows.
+        .child(toast(s, move || s.unlocked() && nav.page.get().is_none()))
+}
+
+fn unlocked(s: Store, nav: Nav) -> impl IntoElement {
+    view()
+        .flex_1()
+        .child(when(move || nav.page.get().is_none(), move || home::page(s, nav)))
+        .child(when(move || nav.page.get() == Some(Page::Manual), move || add::manual(s, nav)))
+        .child(when(move || nav.page.get() == Some(Page::Categories), move || categories::page(s, nav)))
+        .child(when(move || nav.page.get() == Some(Page::Settings), move || settings::page(s, nav)))
+        .child(when(move || nav.page.get() == Some(Page::Deleted), move || settings::deleted(s, nav)))
+        .child(when(move || nav.page.get() == Some(Page::Review), move || add::review(s, nav)))
+}
+
+/// One line at the bottom about what just happened, above the navigation bar; it takes no input.
+fn toast(s: Store, lifted: impl Fn() -> bool + Copy + 'static) -> impl IntoElement {
+    when(
+        move || s.toast.get().is_some(),
+        move || {
+            view()
+                .absolute()
+                .left(px(0.0))
+                .right(px(0.0))
+                .bottom(move || px(if lifted() { 72.0 } else { 0.0 }))
+                .pb_safe_area_plus(px(16.0))
+                .px(px(ui::MARGIN))
+                .items_center()
+                .pointer_events(nsh_core::PointerEvents::None)
+                .child(
+                    view()
+                        .min_h(px(48.0))
+                        .max_w(px(480.0))
+                        .px(px(16.0))
+                        .py(px(12.0))
+                        .justify_center()
+                        .rounded(px(12.0))
+                        .bg(move || tok("glass"))
+                        .shadow_lg()
+                        .child(
+                            ui::body(text(move || s.toast.get().map(|t| t.text).unwrap_or_default()))
+                                .text_color(move || tok("glass-foreground")),
+                        ),
+                )
+        },
+    )
+}
