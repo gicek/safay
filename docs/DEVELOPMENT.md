@@ -123,6 +123,10 @@ layout.
 | `make ios-simulator` | `build/ios-simulator/debug/Safay.app` | Xcode (`DEVELOPER_DIR` when `xcode-select` names the command line tools); `rustup target add aarch64-apple-ios-sim` |
 | `make ios-simulator-run` | Builds it, then installs and starts it in the booted simulator | An iOS simulator runtime |
 
+The Android package carries Java classes of its own (`android/java`, compiled by `make android` into the dex that
+`nsh.json` lists): Android's APIs that take a class of the app, such as the clipboard entry marked sensitive and the
+lock when the screen goes off. Rust reaches them through JNI (`src/platform/android.rs`).
+
 Release builds use the app ID `com.gicek.safay`; development builds use `com.gicek.safay.debug`, with their own data
 directory, keychain items and provisioning profile. `python3 scripts/package.py --out <folder>` writes elsewhere. On
 Linux and Windows it writes, in `build/linux/` or `build/windows/`, the `Safay/` folder (the executable at its top)

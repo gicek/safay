@@ -140,7 +140,17 @@ update-keygen: nsh-ready ## Create the update-signing key: make update-keygen KE
 ##@ Phones and tablets (development)
 
 # Like the desktop's development package, these carry the development app ID, so they never share data with a release.
-android: nsh-ready ## Development APK in build/android/debug, signed with the debug key (needs the Android SDK and NDK)
+# The Java classes Android's APIs need of the app (android/java), as the dex nsh.json lists. javac and d8 come from the
+# JDK and the Android SDK.
+ANDROID_JAR := $(ANDROID_HOME)/platforms/android-35/android.jar
+D8 := $(lastword $(sort $(wildcard $(ANDROID_HOME)/build-tools/*/d8)))
+ANDROID_JAVA := $(shell find android/java -name '*.java' 2>/dev/null)
+build/android/java/classes.dex: $(ANDROID_JAVA)
+	@rm -rf build/android/java && mkdir -p build/android/java/classes
+	javac -Xlint:-options -source 11 -target 11 -classpath "$(ANDROID_JAR)" -d build/android/java/classes $(ANDROID_JAVA)
+	"$(D8)" --min-api 26 --lib "$(ANDROID_JAR)" --output build/android/java $$(find build/android/java/classes -name '*.class')
+
+android: nsh-ready build/android/java/classes.dex ## Development APK in build/android/debug, signed with the debug key (needs the Android SDK and NDK)
 	$(NSH) package --target android --id $(ID).debug --out build/android/debug
 
 android-run: android ## Install it on the running emulator or the connected device, and start it

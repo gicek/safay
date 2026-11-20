@@ -148,6 +148,14 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
             untracked(|| nav.push(Page::Review));
         }
     });
+    // Release builds keep the unlocked vault out of screenshots, recordings and the recent apps' pictures.
+    #[cfg(target_os = "android")]
+    effect(move || {
+        let unlocked = s.unlocked();
+        if !cfg!(debug_assertions) {
+            crate::platform::android::set_secure(unlocked);
+        }
+    });
     on_back_press(move || {
         // What is asked over everything goes first.
         if s.editing.with_untracked(Option::is_some) {

@@ -12,6 +12,11 @@
   },
   "theme": "theme.json",
   "icon": "assets/icon.png",
+  "android": {
+    "dex": [
+      "build/android/java/classes.dex"
+    ]
+  },
   "schemes": [
     "safay"
   ]

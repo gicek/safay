@@ -99,6 +99,8 @@ fn unhosted() -> AnyElement {
         let repo = safay_app::storage::DiskRepository::open(directory).ok()?;
         let controller = Controller::new(Box::new(repo), Arc::new(safay_app::session::SystemClock::default())).ok()?;
         platform::install_network(false);
+        #[cfg(target_os = "android")]
+        platform::android::start(controller.clone());
         Some(controller)
     });
     match controller {
