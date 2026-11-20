@@ -41,6 +41,11 @@ public final class Bridge {
                     return;
                 }
                 application = app;
+                // The activity that is up already: the callbacks below tell only of what happens from now on.
+                front = running();
+                if (front != null) {
+                    apply(front);
+                }
                 app.registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
                     @Override
                     public void onActivityCreated(Activity activity, Bundle state) {
@@ -81,6 +86,27 @@ public final class Bridge {
                 }, new IntentFilter(Intent.ACTION_SCREEN_OFF));
             }
         });
+    }
+
+    /** The activity the app is showing now, from the activity thread's own list; null when it cannot be read. */
+    private static Activity running() {
+        try {
+            Class<?> type = Class.forName("android.app.ActivityThread");
+            Object thread = type.getMethod("currentActivityThread").invoke(null);
+            java.lang.reflect.Field records = type.getDeclaredField("mActivities");
+            records.setAccessible(true);
+            for (Object record : ((java.util.Map<?, ?>) records.get(thread)).values()) {
+                java.lang.reflect.Field activity = record.getClass().getDeclaredField("activity");
+                activity.setAccessible(true);
+                Activity found = (Activity) activity.get(record);
+                if (found != null && !found.isFinishing()) {
+                    return found;
+                }
+            }
+        } catch (Exception | LinkageError ignored) {
+            // Not readable on this system: the next activity to resume is taken instead.
+        }
+        return null;
     }
 
     /** The activity in front, for a prompt; null in the background. Main thread. */

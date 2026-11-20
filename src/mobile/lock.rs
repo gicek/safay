@@ -9,7 +9,12 @@ use safay_app::Zeroizing;
 pub fn page(s: Store) -> impl IntoElement {
     let waiting = move || s.projection.with(|p| p.waiting);
     let message = move || {
-        if waiting() > 0 { Some(s.count("wait", waiting() as usize)) } else { s.error.get().map(|e| s.label(crate::i18n::error_key(e))) }
+        if waiting() > 0 {
+            Some(s.count("wait", waiting() as usize))
+        } else {
+            // A prompt that could not be shown or did not verify says so here.
+            s.error.get().map(|e| s.label(crate::i18n::error_key(e))).or_else(|| s.status.get().map(|status| status.text))
+        }
     };
     let submit = move || {
         if waiting() == 0 && !s.busy.get() && s.form.with(|f| !f.password.is_empty()) {

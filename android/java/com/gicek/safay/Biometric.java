@@ -1,6 +1,5 @@
 package com.gicek.safay;
 
-import android.app.Activity;
 import android.content.DialogInterface;
 import android.hardware.biometrics.BiometricManager;
 import android.hardware.biometrics.BiometricPrompt;
@@ -107,8 +106,9 @@ public final class Biometric {
         MAIN.post(new Runnable() {
             @Override
             public void run() {
-                Activity activity = Bridge.front();
-                if (Build.VERSION.SDK_INT < 28 || activity == null) {
+                // The system draws the prompt: any context of the app's serves, the activity in front when it is known.
+                android.content.Context context = Bridge.front() != null ? Bridge.front() : Bridge.application();
+                if (Build.VERSION.SDK_INT < 28 || context == null) {
                     result(token, UNAVAILABLE, null);
                     return;
                 }
@@ -136,7 +136,7 @@ public final class Biometric {
                         MAIN.post(command);
                     }
                 };
-                BiometricPrompt prompt = new BiometricPrompt.Builder(activity)
+                BiometricPrompt prompt = new BiometricPrompt.Builder(context)
                         .setTitle(title)
                         .setNegativeButton(cancel, executor, new DialogInterface.OnClickListener() {
                             @Override
