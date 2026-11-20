@@ -100,7 +100,17 @@ fn backups_live_at_the_root_of_the_app_folder() {
         })
         .unwrap();
         sync::link(&a, a.epoch(), location.clone()).unwrap();
-        assert_eq!(sync::run(&a, a.epoch(), "Device", Source::Auto), Ok(Status::Synced), "{provider:?}");
+        let initial = sync::run(&a, a.epoch(), "Device", Source::Auto);
+        if provider == Provider::GoogleDrive {
+            assert_eq!(initial, Err(SyncError::ManualWriteRequired));
+            {
+                let memory = server.0.lock().unwrap();
+                assert!(memory.data(&memory.storage_path("vault.safayvault")).is_none());
+            }
+            sync::keep_local(&a, a.epoch(), "Device").unwrap();
+        } else {
+            assert_eq!(initial, Ok(Status::Synced), "{provider:?}");
+        }
 
         let memory = server.0.lock().unwrap();
         let at = |name: &str| memory.storage_path(name);
@@ -114,4 +124,39 @@ fn backups_live_at_the_root_of_the_app_folder() {
         sync::restore_first_run(&b, b.epoch(), location, PASSWORD).unwrap();
         assert_eq!(issuers(&b), vec!["Alpha"], "{provider:?}");
     }
+}
+
+#[test]
+fn a_failed_replayed_request_still_saves_rotated_credentials() {
+    struct Interrupted {
+        cloud: Mutex<MemoryCloud>,
+        refreshed: std::sync::atomic::AtomicBool,
+    }
+    impl Http for Interrupted {
+        fn execute(&self, request: HttpRequest, _: Option<&CertificatePin>) -> Result<HttpResponse, TransportError> {
+            if self.refreshed.load(Ordering::SeqCst) {
+                return Err(TransportError::Unreachable);
+            }
+            if request.url.ends_with("/token") {
+                self.refreshed.store(true, Ordering::SeqCst);
+            }
+            Ok(self.cloud.lock().unwrap().handle(request))
+        }
+    }
+    let mut memory = MemoryCloud::new(FakeProvider::OneDrive);
+    let original = sign_in(&mut memory, ProviderKind::OneDrive);
+    memory.expire_access_token();
+    let server = Arc::new(Interrupted { cloud: Mutex::new(memory), refreshed: false.into() });
+    let credentials = Arc::new(Memory::default());
+    credentials.save(CREDENTIAL, &original).unwrap();
+    let services = Services { http: server.clone(), credentials: credentials.clone(), user_agent: "test".into() };
+    let client = cloudset::Client::new(cloudset::Connection::from_bytes(&original).unwrap(), ClientConfig::new("test"));
+    assert_eq!(cloud::run(&services, Some(CREDENTIAL), client.stat(cloudset::RemotePath::root()), None), Err(SyncError::Network));
+    let saved = credentials.load(CREDENTIAL).unwrap();
+    assert!(*saved != original);
+    let client = client.with_connection(cloudset::Connection::from_bytes(&saved).unwrap());
+    let mut memory = server.cloud.lock().unwrap();
+    let before = memory.requests.len();
+    cloudset::run(client.stat(cloudset::RemotePath::root()).as_mut(), |req| memory.handle(req)).unwrap();
+    assert!(memory.requests[before..].iter().all(|req| !req.url.ends_with("/token")));
 }

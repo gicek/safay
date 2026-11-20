@@ -26,6 +26,7 @@ const AUTH: &str = "Basic YWxpY2U6cHc="; // alice:pw
 struct Server {
     dav: Mutex<MemoryDav>,
     offline: AtomicBool,
+    lose_next_vault_put_response: AtomicBool,
     /// A certificate the system does not trust, by its SHA-256: as the real executor, only a pin covering the request
     /// with exactly it gets through.
     self_signed: Mutex<Option<[u8; 32]>>,
@@ -42,7 +43,10 @@ impl Http for Server {
                 Some(_) => {}
             }
         }
-        Ok(self.dav.lock().unwrap().handle(request))
+        let vault_put = request.method == cloudset::Method::Put && request.url.ends_with("/vault.safayvault");
+        let response = self.dav.lock().unwrap().handle(request);
+        let lose_response = vault_put && response.is_success() && self.lose_next_vault_put_response.swap(false, Ordering::SeqCst);
+        if lose_response { Err(TransportError::Unreachable) } else { Ok(response) }
     }
 }
 #[derive(Default)]
@@ -108,9 +112,21 @@ fn location() -> Location {
 
 #[test]
 fn webdav_backup_restore_conflict_and_failures() {
-    let server = Arc::new(Server { dav: Mutex::new(MemoryDav::new(AUTH)), offline: AtomicBool::new(false), self_signed: Mutex::new(None) });
+    let server = Arc::new(Server {
+        dav: Mutex::new(MemoryDav::new(AUTH)),
+        offline: AtomicBool::new(false),
+        lose_next_vault_put_response: AtomicBool::new(false),
+        self_signed: Mutex::new(None),
+    });
     let credentials = Arc::new(Memory::default());
     cloud::install(Services { http: server.clone(), credentials: credentials.clone(), user_agent: "safay-test/1".into() });
+
+    use safay_app::sync::{Backend, Expect};
+    let meta = safay_app::core::backup::BackupMetadata { device_name: "Device".into(), vault_updated_at: UNIX_EPOCH, saved_at: UNIX_EPOCH };
+    let data = vec![0; safay_app::storage::MAX_FILE_BYTES as usize + 1];
+    let backend = cloud::CloudBackend::new("missing".into());
+    assert_eq!(backend.write(&data, &meta, &Expect::Any), Err(SyncError::TooLarge));
+    assert!(server.dav.lock().unwrap().requests.is_empty());
 
     // No saved sign-in yet: linking asks to sign in, nothing is sent.
     let a = Device::new(0);
@@ -133,7 +149,9 @@ fn webdav_backup_restore_conflict_and_failures() {
     credentials.save("test-webdav", &Connection::webdav(endpoint, "alice", "pw").to_bytes()).unwrap();
     a.add("Alpha", "JBSWY3DPEHPK3PXP");
     sync::link(&a.c, a.c.epoch(), location()).unwrap();
-    assert_eq!(a.run(), Ok(Status::Synced));
+    server.lose_next_vault_put_response.store(true, Ordering::SeqCst);
+    assert_eq!(a.run(), Ok(Status::Synced), "confirm a committed upload after its response is lost");
+    assert!(!server.lose_next_vault_put_response.load(Ordering::SeqCst));
     let stored = server.dav.lock().unwrap().data("Safay/vault.safayvault").expect("uploaded");
     assert!(!String::from_utf8_lossy(&stored).contains("JBSWY3DPEHPK3PXP"), "only ciphertext leaves the device");
     assert!(server.dav.lock().unwrap().data("Safay/vault.metadata.json").is_some());
@@ -182,6 +200,14 @@ fn webdav_backup_restore_conflict_and_failures() {
     let again = cloud::reconnect(&kept).unwrap();
     let Location::Cloud { credential, .. } = &again else { panic!("a cloud location") };
     assert_eq!(credentials.load(credential).as_deref(), Some(&*kept));
+    // Pad a real encrypted JSON envelope with legal trailing whitespace to exercise the exact restore boundary.
+    let mut boundary = stored;
+    boundary.resize(safay_app::storage::MAX_FILE_BYTES as usize, b' ');
+    let backend = cloud::CloudBackend::new(credential.clone());
+    let version = backend.write(&boundary, &meta, &Expect::Any).unwrap();
+    let restored = backend.read().unwrap().unwrap();
+    assert!(version.is_some() && version == restored.version);
+    assert!(restored.data == boundary);
     cloud::forget(credential);
 
     // A self-signed server: setup reports its fingerprint; once the user confirms it, only that certificate is trusted,

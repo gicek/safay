@@ -47,7 +47,7 @@ impl Executor {
     }
     /// Cloud storage: 10 s to connect, 60 s per request, the core's 16 MiB body limit.
     pub fn storage() -> Self {
-        Self::new(Duration::from_secs(10), Duration::from_secs(60), safay_app::cloudset::Limits::default().max_body_bytes)
+        Self::new(Duration::from_secs(10), Duration::from_secs(60), safay_app::storage::MAX_FILE_BYTES as usize)
     }
 }
 impl Http for Executor {

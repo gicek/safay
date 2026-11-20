@@ -47,17 +47,18 @@ pub enum UploadMode {
     /// The user explicitly chose to overwrite (manual backup, or keeping the local copy in a conflict).
     Overwrite,
     /// Write only if the remote is still the copy seen when the sync decision was made; `None` means there was no remote
-    /// backup then. A remote with only a modification time and no ETag cannot be written conditionally and is overwritten.
+    /// backup then. A modification time alone cannot authorize a conditional write.
     IfUnchanged(Option<RemoteVersion>),
 }
 
 impl UploadMode {
-    fn precondition(&self) -> Precondition {
-        match self {
-            Self::Overwrite | Self::IfUnchanged(Some(RemoteVersion::ModifiedAt { .. })) => Precondition::None,
+    fn precondition(&self) -> Result<Precondition, CloudError> {
+        Ok(match self {
+            Self::Overwrite => Precondition::None,
+            Self::IfUnchanged(Some(RemoteVersion::ModifiedAt { .. })) => return Err(CloudError::UnsupportedPrecondition),
             Self::IfUnchanged(None) => Precondition::Absent,
             Self::IfUnchanged(Some(RemoteVersion::Revision { value })) => Precondition::Matches(Revision::new(value.clone())),
-        }
+        })
     }
 }
 
@@ -131,6 +132,12 @@ struct Session {
 }
 
 impl Session {
+    fn take_connection(&mut self) -> Option<Connection> {
+        let latest = self.connection.take()?;
+        self.client = self.client.with_connection(latest.clone());
+        Some(latest)
+    }
+
     fn client(&self) -> Client {
         match &self.connection {
             Some(connection) => self.client.with_connection(connection.clone()),
@@ -206,6 +213,10 @@ impl Fetch {
 impl Operation for Fetch {
     type Output = Option<RemoteBackup>;
 
+    fn take_connection(&mut self) -> Option<Connection> {
+        self.session.take_connection()
+    }
+
     fn advance(&mut self, response: Option<HttpResponse>) -> Result<Step<Option<RemoteBackup>>, CloudError> {
         match std::mem::replace(&mut self.state, FetchState::Finished) {
             FetchState::Start if response.is_none() => {
@@ -259,7 +270,7 @@ struct Upload {
     folder: RemotePath,
     data: Vec<u8>,
     metadata: Vec<u8>,
-    precondition: Precondition,
+    precondition: Result<Precondition, CloudError>,
     created_folder: bool,
     state: UploadState,
 }
@@ -268,7 +279,10 @@ type UploadStep = Result<Step<Option<RemoteVersion>>, CloudError>;
 
 impl Upload {
     fn write_vault(&mut self) -> UploadStep {
-        let operation = self.session.client().write(file_in(&self.folder, VAULT_FILE_NAME)?, self.data.clone(), self.precondition.clone());
+        if self.data.len() > self.session.client.config().limits.max_body_bytes {
+            return Err(CloudError::TooLarge);
+        }
+        let operation = self.session.client().write(file_in(&self.folder, VAULT_FILE_NAME)?, self.data.clone(), self.precondition.clone()?);
         let (subtask, progress) = Subtask::start(operation, &mut self.session.connection);
         self.on_vault(subtask, progress)
     }
@@ -326,6 +340,10 @@ impl Upload {
 impl Operation for Upload {
     type Output = Option<RemoteVersion>;
 
+    fn take_connection(&mut self) -> Option<Connection> {
+        self.session.take_connection()
+    }
+
     fn advance(&mut self, response: Option<HttpResponse>) -> UploadStep {
         match std::mem::replace(&mut self.state, UploadState::Finished) {
             UploadState::Start if response.is_none() => self.write_vault(),
@@ -353,6 +371,8 @@ pub fn l10n_key(error: &CloudError) -> &'static str {
         CloudError::ReauthRequired => "err.cloud.reauth",
         CloudError::Forbidden => "err.cloud.forbidden",
         CloudError::NotFound => "err.cloud.not_found",
+        CloudError::UnsupportedPrecondition => "err.cloud.unsupported_precondition",
+        CloudError::CommitUnconfirmed => "err.cloud.commit_unconfirmed",
         CloudError::PreconditionFailed => "err.cloud.conflict",
         CloudError::QuotaExceeded => "err.cloud.quota",
         CloudError::RateLimited { .. } => "err.cloud.rate_limited",
@@ -490,11 +510,11 @@ mod tests {
     #[test]
     fn upload_mode_preconditions() {
         let at = RemoteVersion::ModifiedAt { at: UNIX_EPOCH };
-        assert_eq!(UploadMode::Overwrite.precondition(), Precondition::None);
-        assert_eq!(UploadMode::IfUnchanged(None).precondition(), Precondition::Absent);
-        assert_eq!(UploadMode::IfUnchanged(Some(at)).precondition(), Precondition::None);
+        assert_eq!(UploadMode::Overwrite.precondition().unwrap(), Precondition::None);
+        assert_eq!(UploadMode::IfUnchanged(None).precondition().unwrap(), Precondition::Absent);
+        assert_eq!(UploadMode::IfUnchanged(Some(at)).precondition(), Err(CloudError::UnsupportedPrecondition));
         let rev = RemoteVersion::Revision { value: "\"1\"".into() };
-        assert_eq!(UploadMode::IfUnchanged(Some(rev)).precondition(), Precondition::Matches(Revision::new("\"1\"")));
+        assert_eq!(UploadMode::IfUnchanged(Some(rev)).precondition().unwrap(), Precondition::Matches(Revision::new("\"1\"")));
     }
 
     #[test]
@@ -504,6 +524,8 @@ mod tests {
             CloudError::Forbidden,
             CloudError::NotFound,
             CloudError::PreconditionFailed,
+            CloudError::UnsupportedPrecondition,
+            CloudError::CommitUnconfirmed,
             CloudError::QuotaExceeded,
             CloudError::RateLimited { retry_after: None },
             CloudError::Server { status: 500 },

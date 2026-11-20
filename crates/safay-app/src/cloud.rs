@@ -62,7 +62,7 @@ pub enum TransportError {
     PinMismatch,
 }
 
-/// Sends one request as is: no redirects, no cookies, no cache, at most `request.limits` of body.
+/// Sends one request as is: no redirects, no cookies, no cache, at most the configured body limit plus one byte.
 pub trait Http: Send + Sync {
     fn execute(&self, request: HttpRequest, pin: Option<&cloudset::CertificatePin>) -> Result<HttpResponse, TransportError>;
 }
@@ -93,12 +93,30 @@ pub fn services() -> Result<Services, SyncError> {
 pub fn run<T>(
     services: &Services,
     credential: Option<&str>,
+    operation: BoxOperation<T>,
+    pin: Option<cloudset::CertificatePin>,
+) -> Result<T, SyncError> {
+    drive(services, operation, pin, |connection| {
+        if let Some(id) = credential {
+            services.credentials.save(id, &connection.to_bytes())?;
+        }
+        Ok(())
+    })
+}
+
+fn drive<T>(
+    services: &Services,
     mut operation: BoxOperation<T>,
     pin: Option<cloudset::CertificatePin>,
+    mut refreshed: impl FnMut(Connection) -> Result<(), SyncError>,
 ) -> Result<T, SyncError> {
     let mut response = None;
     loop {
-        match operation.advance(response.take()).map_err(map_error)? {
+        let step = operation.advance(response.take());
+        if let Some(connection) = operation.take_connection() {
+            refreshed(connection)?;
+        }
+        match step.map_err(map_error)? {
             Step::Send(request) => {
                 let reply = services.http.execute(request, pin.as_ref()).map_err(|e| match e {
                     TransportError::Unreachable => SyncError::Network,
@@ -109,8 +127,8 @@ pub fn run<T>(
                 response = Some(reply);
             }
             Step::Done(done) => {
-                if let (Some(id), Some(connection)) = (credential, done.connection.as_ref()) {
-                    services.credentials.save(id, &connection.to_bytes())?;
+                if let Some(connection) = done.connection {
+                    refreshed(connection)?;
                 }
                 return Ok(done.value);
             }
@@ -124,6 +142,8 @@ pub fn map_error(e: CloudError) -> SyncError {
         CloudError::Forbidden => SyncError::Forbidden,
         CloudError::NotFound => SyncError::NoRemote,
         CloudError::PreconditionFailed => SyncError::RemoteChanged,
+        CloudError::UnsupportedPrecondition => SyncError::ManualWriteRequired,
+        CloudError::CommitUnconfirmed => SyncError::CommitUnconfirmed,
         CloudError::QuotaExceeded => SyncError::Quota,
         CloudError::RateLimited { .. } => SyncError::RateLimited,
         CloudError::Server { status } => SyncError::Server(status),
@@ -139,11 +159,18 @@ impl CloudBackend {
     pub fn new(credential: String) -> Self {
         Self { credential }
     }
-    fn client(&self, services: &Services) -> Result<(Client, Option<cloudset::CertificatePin>), SyncError> {
+    fn client(&self, services: &Services) -> Result<Client, SyncError> {
         let blob = services.credentials.load(&self.credential).ok_or(SyncError::SignIn)?;
         let connection = Connection::from_bytes(&blob).map_err(|_| SyncError::SignIn)?;
-        let pin = connection.certificate_pin();
-        Ok((Client::new(connection, ClientConfig::new(services.user_agent.clone())), pin))
+        let limits = cloudset::Limits::default().with_max_body_bytes(crate::storage::MAX_FILE_BYTES as usize);
+        Ok(Client::new(connection, ClientConfig::new(services.user_agent.clone()).with_limits(limits)))
+    }
+
+    // Each operation starts with the connection persisted by the previous one.
+    fn file_operation<T>(&self, services: &Services, make: impl FnOnce(&Client, &RemotePath) -> BoxOperation<T>) -> Result<T, SyncError> {
+        let client = self.client(services)?;
+        let folder = backup_folder(client.connection());
+        run(services, Some(&self.credential), make(&client, &folder), client.connection().certificate_pin())
     }
 }
 /// The folder that holds the backup. A sign-in limited to the app's own folder (Dropbox "Apps › Safay", OneDrive's app
@@ -161,15 +188,14 @@ fn path(folder: &RemotePath, name: &str) -> RemotePath {
 impl Backend for CloudBackend {
     fn read(&self) -> Result<Option<Remote>, SyncError> {
         let services = services()?;
-        let (client, pin) = self.client(&services)?;
-        let folder = backup_folder(client.connection());
-        let Some(file) = run(&services, Some(&self.credential), client.read(path(&folder, VAULT_FILE_NAME)), pin.clone())? else {
+        let Some(file) = self.file_operation(&services, |client, folder| client.read(path(folder, VAULT_FILE_NAME)))? else {
             return Ok(None);
         };
         if !vault::is_valid_envelope(&file.data) {
             return Err(SyncError::Corrupt);
         }
-        let device = run(&services, Some(&self.credential), client.read(path(&folder, METADATA_FILE_NAME)), pin)
+        let device = self
+            .file_operation(&services, |client, folder| client.read(path(folder, METADATA_FILE_NAME)))
             .ok()
             .flatten()
             .and_then(|m| BackupMetadata::device_name(&m.data));
@@ -177,29 +203,50 @@ impl Backend for CloudBackend {
         Ok(Some(Remote { data: file.data, version, device }))
     }
     fn write(&self, data: &[u8], metadata: &BackupMetadata, expect: &Expect) -> Result<Option<RemoteVersion>, SyncError> {
-        let services = services()?;
-        let (client, pin) = self.client(&services)?;
-        let folder = backup_folder(client.connection());
-        // The folder may exist already; any other failure surfaces on the write itself.
-        if !folder.is_root() {
-            let _ = run(&services, Some(&self.credential), client.create_dir(folder.clone()), pin.clone());
+        if data.len() as u64 > crate::storage::MAX_FILE_BYTES {
+            return Err(SyncError::TooLarge);
         }
+        let services = services()?;
         let precondition = match expect {
             Expect::Any => Precondition::None,
             Expect::Absent => Precondition::Absent,
             Expect::Unchanged(RemoteVersion::Revision { value }) => Precondition::Matches(Revision::new(value.clone())),
-            Expect::Unchanged(RemoteVersion::ModifiedAt { .. }) => Precondition::None,
+            Expect::Unchanged(RemoteVersion::ModifiedAt { .. }) => return Err(SyncError::ManualWriteRequired),
         };
-        let entry =
-            run(&services, Some(&self.credential), client.write(path(&folder, VAULT_FILE_NAME), data.to_vec(), precondition), pin.clone())?;
-        // Metadata is only for display; a failed write does not fail the backup.
-        let _ = run(
-            &services,
-            Some(&self.credential),
-            client.write(path(&folder, METADATA_FILE_NAME), metadata.encode(), Precondition::None),
-            pin,
-        );
-        Ok(entry.revision.map(|r| RemoteVersion::Revision { value: r.as_str().to_owned() }))
+        let upload = || {
+            self.file_operation(&services, |client, folder| {
+                client.write(path(folder, VAULT_FILE_NAME), data.to_vec(), precondition.clone())
+            })
+        };
+        let result = match upload() {
+            Err(SyncError::NoRemote) => {
+                let client = self.client(&services)?;
+                let folder = backup_folder(client.connection());
+                if folder.is_root() {
+                    return Err(SyncError::NoRemote);
+                }
+                run(&services, Some(&self.credential), client.create_dir(folder), client.connection().certificate_pin())?;
+                upload()
+            }
+            result => result,
+        };
+        let version = match result {
+            Ok(entry) => entry.revision.map(|r| RemoteVersion::Revision { value: r.as_str().to_owned() }),
+            Err(SyncError::CommitUnconfirmed | SyncError::Network) => {
+                let observed = self.file_operation(&services, |client, folder| client.read(path(folder, VAULT_FILE_NAME)));
+                match observed {
+                    Ok(Some(file)) if file.data == data => {
+                        file.entry.revision.map(|r| RemoteVersion::Revision { value: r.as_str().to_owned() })
+                    }
+                    _ => return Err(SyncError::CommitUnconfirmed),
+                }
+            }
+            Err(e) => return Err(e),
+        };
+        let _ = self.file_operation(&services, |client, folder| {
+            client.write(path(folder, METADATA_FILE_NAME), metadata.encode(), Precondition::None)
+        });
+        Ok(version)
     }
 }
 
@@ -315,12 +362,15 @@ pub fn endpoint(address: &str, allow_http: bool) -> Result<cloudset::Endpoint, A
 }
 
 /// Checks a new connection by reading its root, then stores it under a fresh credential ID. Returns the location to link.
-pub fn connect(connection: Connection) -> Result<crate::sync::Location, SyncError> {
+pub fn connect(mut connection: Connection) -> Result<crate::sync::Location, SyncError> {
     let provider = Provider::of(connection.provider()).ok_or(SyncError::Protocol)?;
     let services = services()?;
     let pin = connection.certificate_pin();
     let client = Client::new(connection.clone(), ClientConfig::new(services.user_agent.clone()));
-    run(&services, None, client.stat(RemotePath::root()), pin)?;
+    drive(&services, client.stat(RemotePath::root()), pin, |latest| {
+        connection = latest;
+        Ok(())
+    })?;
     let credential = uuid::Uuid::new_v4().to_string();
     services.credentials.save(&credential, &connection.to_bytes())?;
     let account = match connection.provider() {

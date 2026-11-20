@@ -10,6 +10,9 @@ publish = false
 resolver = "3"
 members = [".", "crates/safay-core", "crates/safay-app"]
 
+[workspace.dependencies]
+cloudset = "=0.3.0"
+
 [workspace.package]
 version = "1.3.0"
 edition = "2024"

@@ -1,4 +1,9 @@
 {
+  "Replace cloud backup?": "取代雲端備份？",
+  "Replace Backup": "取代備份",
+  "This provider cannot protect this write against changes from another device. Replacing the backup uploads this device’s vault.": "此服務無法防止本次寫入覆蓋其他裝置的更改。取代備份將上傳此裝置上的保險庫。",
+  "This provider needs your approval to replace the backup.": "此服務需要您確認才能取代備份。",
+  "The upload could not be confirmed. Check the backup before retrying.": "無法確認上傳結果。請先檢查備份，再重試。",
   "30 seconds": "30 秒",
   "60 seconds": "60 秒",
   "A new version of Safay is available!": "新版本的 Safay 已經發佈",

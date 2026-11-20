@@ -301,7 +301,7 @@ fn overview(s: Store) -> impl IntoElement {
                                 .items_end()
                                 .gap(px(6.0))
                                 .child(when(
-                                    move || !matches!(st(), Status::Conflict | Status::Unreadable),
+                                    move || !matches!(st(), Status::Conflict | Status::Unreadable | Status::Failed(safay_app::sync::SyncError::ManualWriteRequired)),
                                     move || {
                                         push_button(
                                             move || s.label(if s.syncing.get() { "Syncing" } else { "Back Up Now" }),
@@ -369,6 +369,17 @@ fn overview(s: Store) -> impl IntoElement {
                     note(move || s.label("Backups are end-to-end encrypted with your master password; only you can open them.")).flex_1(),
                 ),
         )
+        .child(when(
+            move || st() == Status::Failed(safay_app::sync::SyncError::ManualWriteRequired),
+            move || callout(
+                s,
+                move || tok("warning"),
+                "Replace cloud backup?",
+                "This provider cannot protect this write against changes from another device. Replacing the backup uploads this device’s vault.",
+                "Replace Backup",
+                move || s.resolve_conflict(1),
+            ),
+        ))
         .child(when(
             move || st() == Status::Conflict,
             move || {

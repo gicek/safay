@@ -169,6 +169,10 @@ pub enum SyncError {
     Unreadable,
     #[error("the backup changed during the sync")]
     RemoteChanged,
+    #[error("the provider requires an explicit overwrite for this backup")]
+    ManualWriteRequired,
+    #[error("the uploaded backup could not be confirmed")]
+    CommitUnconfirmed,
     #[error("no local vault to back up")]
     NoLocal,
     #[error("the vault is locked")]
@@ -415,7 +419,7 @@ impl Session {
             (SyncDecision::Upload, Some(local), _) => {
                 let expect = match remote {
                     None => Expect::Absent,
-                    Some(r) => r.version.clone().map(Expect::Unchanged).unwrap_or(Expect::Any),
+                    Some(r) => Expect::Unchanged(r.version.clone().ok_or(SyncError::ManualWriteRequired)?),
                 };
                 Plan::Upload(local, expect)
             }
@@ -676,12 +680,16 @@ pub fn merge_both(controller: &Controller, epoch: u64, device: &str, prefer_remo
                 let ours = &s.contents.as_ref().ok_or(Error::Locked)?.0;
                 let merged = crate::session::Sensitive(merge::merge(ours, &theirs.0, &prefer_remote, &placeholders()));
                 s.persist_sync(merged)?;
-                let expect = remote.version.clone().map(Expect::Unchanged).unwrap_or(Expect::Any);
+                let expect = remote.version.clone().map(Expect::Unchanged);
                 Ok((s.local(), expect))
             })
             .map_err(session_error)?;
         let local = local.ok_or(SyncError::NoLocal)?;
-        let version = location.backend().write(&local.data, &metadata(device, &local, SystemTime::now()), &expect)?;
+        let version = location.backend().write(
+            &local.data,
+            &metadata(device, &local, SystemTime::now()),
+            &expect.ok_or(SyncError::ManualWriteRequired)?,
+        )?;
         controller
             .run(epoch, |s| {
                 s.sync.set_marks(local.vault_updated_at, version.as_ref());

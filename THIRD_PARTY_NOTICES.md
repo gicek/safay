@@ -35,7 +35,7 @@ Versions below are exact pins. Cargo.lock records the full production build grap
 | dispatch2 | 0.3.1 | MIT | macOS main-thread work |
 | block2 | 0.6.2 | MIT | macOS lifecycle callbacks |
 | libc | 0.2.189 | MIT OR Apache-2.0 | macOS process information (the app that sent a launcher's Apple event) |
-| cloudset | 0.2.0 | MIT OR Apache-2.0 | Cloud storage protocols (WebDAV, Nextcloud, Dropbox, OneDrive, Google Drive), sans-IO; replace the cloud backend |
+| cloudset | 0.3.0 | MIT OR Apache-2.0 | Cloud storage protocols (WebDAV, Nextcloud, Dropbox, OneDrive, Google Drive), sans-IO; replace the cloud backend |
 | ureq | 3.5.1 | MIT OR Apache-2.0 | HTTP executor for cloud backup and site icons (rustls, system certificate verification); already used by NSH |
 | rustls, rustls-pki-types, rustls-platform-verifier | 0.23.46, 1.15.1, 0.7.1 | Apache-2.0 OR ISC OR MIT, MIT OR Apache-2.0, MIT OR Apache-2.0 | The pinned-certificate TLS step for self-signed WebDAV / Nextcloud servers (`src/platform/tls.rs`); the same versions ureq already uses |
 | sha2 | 0.11.0 | MIT OR Apache-2.0 | Certificate fingerprints; already used by the core |
@@ -104,7 +104,7 @@ This includes test tools; the production graph is narrower. NSH-generated test r
 | chacha20 | 0.10.2 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/chacha20/0.10.2) |
 | chrono | 0.4.45 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/chrono/0.4.45) |
 | cipher | 0.5.2 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/cipher/0.5.2) |
-| cloudset | 0.2.0 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/cloudset/0.2.0) |
+| cloudset | 0.3.0 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/cloudset/0.3.0) |
 | cmov | 0.5.4 | Apache-2.0 OR MIT | [crates.io](https://crates.io/crates/cmov/0.5.4) |
 | codespan-reporting | 0.13.1 | Apache-2.0 | [crates.io](https://crates.io/crates/codespan-reporting/0.13.1) |
 | color_quant | 1.1.0 | MIT | [crates.io](https://crates.io/crates/color_quant/1.1.0) |

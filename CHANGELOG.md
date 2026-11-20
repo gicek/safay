@@ -5,6 +5,16 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+### Changed
+
+- **Backup & Sync**: when a server can't guarantee an upload won't overwrite another device's changes, Safay asks
+  first with "Replace Backup" instead of uploading on its own.
+
+### Fixed
+
+- An upload whose result is unclear is checked against the backup before the sync counts as done.
+- Connecting to Nextcloud finishes even when the server fails to report your user ID after you approve.
+
 ## [1.3.0] - 2026-11-19
 
 Back up through Dropbox, and follow each step while connecting a server.

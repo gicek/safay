@@ -79,6 +79,15 @@ are debounced into one sync after two seconds; unlocking and linking sync at onc
 On a conflict the user reviews the differences and merges (`safay_core::merge`). A deleted account is never a
 difference: a merge keeps the deletion of an account deleted on either side, so it reaches the other devices.
 
+### Cloud backup consistency
+
+Automatic uploads require an atomic create or revision check. If the provider cannot enforce it, Backup & Sync
+offers **Replace Backup** for a user-initiated overwrite. Google Drive path writes require this choice, as do
+versioned OneDrive writes that use an upload session and WebDAV overwrites with a weak or missing revision.
+A completed upload with an uncertain outcome is checked by reading back the ciphertext. Sync records its baseline
+only when the upload succeeded or the read returned the same bytes. The cloud upload and restore limits both use
+`storage::MAX_FILE_BYTES` (16 MiB). Refreshed credentials go to the credential store before the next HTTP request.
+
 ## Recently Deleted
 
 Deleting an account sets its `deletedAt` (`safay_core::trash`); it keeps its secret, place and categories, and is left

@@ -2651,6 +2651,8 @@ pub fn sync_error_key(e: safay_app::sync::SyncError) -> &'static str {
             "The backup here can’t be opened with this vault’s key. It belongs to another vault, or its master password was changed on another device."
         }
         RemoteChanged => "The backup changed during the sync. Try again.",
+        ManualWriteRequired => "This provider needs your approval to replace the backup.",
+        CommitUnconfirmed => "The upload could not be confirmed. Check the backup before retrying.",
         NoLocal => "No local encrypted vault available to sync.",
         Locked => "Unlock Safay to continue.",
         TooLarge => "The file exceeds the size or image limit.",
