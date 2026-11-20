@@ -29,11 +29,8 @@ fn cloud_keys() {
             let value = value.trim().trim_matches('"').trim();
             let name = match (section.as_str(), key.trim()) {
                 ("dropbox", "app_key") => "SAFAY_DROPBOX_APP_KEY",
-                ("dropbox", "full_app_key") => "SAFAY_DROPBOX_FULL_APP_KEY",
                 ("microsoft", "client_id") => "SAFAY_MICROSOFT_CLIENT_ID",
-                ("microsoft", "full_access") => "SAFAY_MICROSOFT_FULL",
                 ("google", "client_id") => "SAFAY_GOOGLE_CLIENT_ID",
-                ("google", "full_access") => "SAFAY_GOOGLE_FULL",
                 ("dropbox", "redirect_uri") => "SAFAY_DROPBOX_REDIRECT_URI",
                 ("microsoft", "redirect_uri") => "SAFAY_MICROSOFT_REDIRECT_URI",
                 ("google", "redirect_uri") => "SAFAY_GOOGLE_REDIRECT_URI",

@@ -155,7 +155,8 @@ pub fn DemoSettingsApp() -> impl IntoElement {
 }
 
 /// Opens one page for a capture: `SAFAY_DEMO_SCENE` = add-scan | add-key | add-text | export | import |
-/// backup | detail | change-password | auth | list | category | category-empty | settings[-security|-shortcuts|-advanced|-about] |
+/// backup | backup-choose | backup-dropbox | backup-onedrive | backup-google-drive | backup-webdav | backup-nextcloud |
+/// detail | change-password | auth | list | category | category-empty | settings[-security|-shortcuts|-advanced|-about] |
 /// alert. Debug demo builds only.
 pub fn scene(s: crate::store::Store) {
     use crate::store::{AddTab, Sheet};
@@ -181,9 +182,14 @@ pub fn scene(s: crate::store::Store) {
                 s.open_sheet(Sheet::Backup);
                 s.backup_page.set(crate::store::BackupPage::Choose);
             }
-            "backup-dropbox" => {
+            "backup-dropbox" | "backup-onedrive" | "backup-google-drive" => {
+                use safay_app::cloud::Provider;
                 s.open_sheet(Sheet::Backup);
-                s.open_cloud_setup(safay_app::cloud::Provider::Dropbox);
+                s.open_cloud_setup(match scene.as_str() {
+                    "backup-onedrive" => Provider::Onedrive,
+                    "backup-google-drive" => Provider::GoogleDrive,
+                    _ => Provider::Dropbox,
+                });
             }
             "backup-webdav" | "backup-nextcloud" => {
                 s.open_sheet(Sheet::Backup);

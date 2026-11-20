@@ -35,7 +35,8 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
   ([Development](DEVELOPMENT.md#signing-and-icloud)); ad-hoc packages show iCloud as unavailable.
 - Dropbox, OneDrive and Google Drive appear only when the build has OAuth client IDs (`cloud-keys.toml`), on every
   system.
-- Cloud locations use the provider's app folder (`Safay`); choosing an arbitrary remote folder is not implemented.
+- Dropbox, OneDrive and Google Drive keep the backup in Safay's app folder: "Apps › Safay", or the folder named for
+  it in My Drive.
 - Selecting a QR code on screen needs Screen Recording permission; the camera needs a packaged app.
 
 ## Linux details

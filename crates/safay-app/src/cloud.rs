@@ -173,9 +173,9 @@ impl CloudBackend {
         run(services, Some(&self.credential), make(&client, &folder), client.connection().certificate_pin())
     }
 }
-/// The folder that holds the backup. A sign-in limited to the app's own folder (Dropbox "Apps › Safay", OneDrive's app
-/// folder, Google Drive's "My Drive › Safay") already points at Safay's folder, so the backup lives at its root; a
-/// sign-in that reaches the whole account (WebDAV, Nextcloud) keeps it in a `Safay` folder at the root.
+/// The folder that holds the backup. On Dropbox, OneDrive and Google Drive the sign-in is to Safay's app folder
+/// ("Apps › Safay", or the folder named for it in My Drive), so the backup lives at its root; a WebDAV or Nextcloud
+/// account keeps it in a `Safay` folder at the root.
 fn backup_folder(connection: &Connection) -> RemotePath {
     match connection.access_scope() {
         Some(cloudset::AccessScope::AppFolder) => RemotePath::root(),
@@ -282,7 +282,7 @@ pub fn reconnect(connection: &[u8]) -> Result<crate::sync::Location, SyncError> 
 /// The cloud sign-ins made during first-run restore, one per service, so choosing the service again needs no new
 /// sign-in: after "no backup found", an error, or going back from the password step. Memory only (never the keychain or
 /// disk) and gone when the app quits. For WebDAV and Nextcloud the form submitted (`F`, with the WebDAV password) is kept
-/// too, to prefill it. Safay signs in to the app folder only, so one sign-in per service is enough.
+/// too, to prefill it. Every sign-in to a service is to the same app folder, so one per service is enough.
 ///
 /// A connection is held here only while it is stored nowhere else: the restore location's own sign-in stays in the
 /// credential store until that location is dropped ([`take`]). The caller revokes what [`Self::signed_in`] replaces and

@@ -67,7 +67,7 @@ so a development build never touches a release build's data:
 Exports are encrypted files of the same format with their own salt, marked `"app": "safay"`. A backup location holds
 `vault.safayvault` (the vault as is) and `vault.metadata.json` (device name and time): in a `Safay` folder inside the
 chosen folder or the WebDAV and Nextcloud account, and at the root of Safay's app folder on Dropbox, OneDrive and Google
-Drive, which is already named Safay. iCloud keeps them in one CloudKit record.
+Drive ("Apps › Safay", or the folder named for it in My Drive). iCloud keeps them in one CloudKit record.
 
 ## Backup and sync
 

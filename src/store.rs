@@ -1901,7 +1901,7 @@ impl Store {
         self.open_cloud_setup(provider);
         self.sheet.set(Some(Sheet::Backup));
         // Chosen again: WebDAV and Nextcloud show the form as submitted (Nextcloud's Connect reuses the sign-in); the
-        // other services, signed in to their app folder only, look for the backup again straight away.
+        // other services, already signed in to Safay's app folder, look for the backup again straight away.
         if let Some(form) = self.restore_sign_ins.with(|k| k.form(provider)) {
             self.cloud_form.set(form);
         }
@@ -2213,7 +2213,7 @@ impl Store {
         }
     }
     /// Dropbox / OneDrive / Google Drive: sign in through `ASWebAuthenticationSession`, exchange the code (the core checks
-    /// the callback and `state`), check and store the connection, then link it. Safay's own app folder only.
+    /// the callback and `state`), check and store the connection, then link it. The backup lives in Safay's app folder.
     pub fn connect_oauth(self, provider: safay_app::cloud::Provider) {
         if self.fixture || self.cloud_form.with(|f| f.working) {
             return;

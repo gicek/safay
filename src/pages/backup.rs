@@ -666,7 +666,8 @@ pub fn oauth_client(provider: Provider) -> Option<safay_app::cloudset::OAuthClie
 }
 fn choose(s: Store) -> impl IntoElement {
     let row = move |kind: LocationIcon, title: &'static str, subtitle: Option<&'static str>, enabled: bool, press: Box<dyn Fn()>| {
-        location_row(s, kind, title, subtitle, move || s.syncing.get() || !enabled, press).into_element()
+        let row = location_row(s, kind, title, subtitle, move || s.syncing.get() || !enabled, press);
+        view().flex_1().min_w(px(0.0)).child(row.flex_1()).into_element()
     };
     // iCloud needs a build signed with the iCloud entitlement; otherwise the row stays disabled with the reason.
     let icloud = safay_app::icloud::available();
@@ -701,7 +702,19 @@ fn choose(s: Store) -> impl IntoElement {
     view()
         .gap(px(14.0))
         .child(text(move || s.label("Choose where to keep the encrypted backup. Only one location is used at a time.")).text_size(px(12.0)))
-        .child(view().gap(px(8.0)).children(rows))
+        .child(location_grid(rows))
+}
+/// Location cells two per line, as the restore page lists them; a last cell on its own keeps the column width. A cell
+/// is an unpadded flex item around its row, so a line with an empty slot keeps the same column widths (a padded item's
+/// flex basis is at least its padding).
+pub fn location_grid(cells: Vec<AnyElement>) -> impl IntoElement {
+    let mut lines = Vec::new();
+    let mut cells = cells.into_iter();
+    while let Some(first) = cells.next() {
+        let second = cells.next().unwrap_or_else(|| view().flex_1().into_element());
+        lines.push(view().flex_row().gap(px(8.0)).child(first).child(second).into_element());
+    }
+    view().gap(px(8.0)).children(lines)
 }
 
 /// The pairing header: Safay's icon, a locked link, the service's mark, then the headline and a note.
@@ -768,9 +781,13 @@ fn pairing_header(s: Store, provider: Provider) -> impl IntoElement {
                 ),
         )
 }
-/// The OAuth form: pairing header, the Safay-folder promise, and the three steps (they become progress).
+/// The OAuth form: pairing header, where the backup is kept, and the three steps (they become progress).
 fn oauth_setup(s: Store, provider: Provider) -> impl IntoElement {
-    let folder = move || s.label(if provider == Provider::GoogleDrive { "My Drive › Safay" } else { "Apps › Safay" });
+    // The app folder as the service's own app shows it: Google Drive's is the folder named in `cloud-keys.toml`.
+    let folder = move || match provider {
+        Provider::GoogleDrive => s.fmt("My Drive › {}", &[option_env!("SAFAY_GOOGLE_FOLDER_NAME").unwrap_or_default()]),
+        _ => s.label("Apps › Safay"),
+    };
     let steps: Vec<Box<dyn Fn() -> SharedString>> = vec![
         Box::new(move || s.fmt("Sign in to {} and allow Safay", &[provider.name()])),
         Box::new(move || s.fmt("Connect to your {} account", &[provider.name()])),
@@ -802,19 +819,20 @@ fn oauth_setup(s: Store, provider: Provider) -> impl IntoElement {
                 .bg(move || tok("code-accent").opacity(0.07))
                 .border_1()
                 .border_color(move || tok("code-accent").opacity(0.18))
+                .child(view().w(px(22.0)).items_center().child(crate::icons::symbol(Icon::FolderFill, 17.0, move || tok("code-accent"))))
                 .child(
-                    view().w(px(22.0)).items_center().child(crate::icons::symbol(Icon::LockShieldFill, 17.0, move || tok("code-accent"))),
-                )
-                .child(
-                    view()
-                        .flex_1()
-                        .gap(px(3.0))
-                        .child(text(move || s.label("Safay Folder Only")).text_size(px(13.0)).font_weight(FontWeight::SEMIBOLD))
-                        .child(
-                            text(move || s.fmt("Safay can only see its own folder, {}, in your {}.", &[&folder(), provider.name()]))
-                                .text_size(px(12.0))
-                                .text_color(move || theme().muted_foreground),
-                        ),
+                    view().flex_1().gap(px(3.0)).child(text(folder).text_size(px(13.0)).font_weight(FontWeight::SEMIBOLD)).child(
+                        text(move || {
+                            let key = if s.cloud_restore.get() {
+                                "Safay looks for your backup in this folder in your {}."
+                            } else {
+                                "Your backup is kept in this folder in your {}."
+                            };
+                            s.fmt(key, &[provider.name()])
+                        })
+                        .text_size(px(12.0))
+                        .text_color(move || theme().muted_foreground),
+                    ),
                 ),
         )
         .child(progress_steps(steps, phase))

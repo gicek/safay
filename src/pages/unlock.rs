@@ -822,13 +822,6 @@ fn restore_locations(s: Store) -> impl IntoElement {
         )
         .into_element(),
     );
-    // Two per line; a last cell on its own keeps the column width.
-    let mut lines = Vec::new();
-    let mut cells = cells.into_iter();
-    while let Some(first) = cells.next() {
-        let second = cells.next().unwrap_or_else(|| view().flex_1().into_element());
-        lines.push(view().flex_row().gap(px(8.0)).child(first).child(second).into_element());
-    }
     view()
         .gap(px(14.0))
         .on_file_drag_enter(move |_: &()| over.set(true))
@@ -848,7 +841,7 @@ fn restore_locations(s: Store) -> impl IntoElement {
                 });
             }
         })
-        .child(view().gap(px(8.0)).children(lines))
+        .child(super::backup::location_grid(cells))
         .child(when(idle, move || {
             view()
                 .flex_row()

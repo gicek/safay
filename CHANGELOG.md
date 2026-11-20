@@ -9,6 +9,8 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 - **Backup & Sync**: when a server can't guarantee an upload won't overwrite another device's changes, Safay asks
   first with "Replace Backup" instead of uploading on its own.
+- **Choosing a backup location**: locations are listed two per line, and signing in to a cloud service shows the
+  folder your backup is kept in.
 
 ### Fixed
 
