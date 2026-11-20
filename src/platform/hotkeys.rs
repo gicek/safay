@@ -2,6 +2,8 @@
 //! (`register_global_shortcut`, in `desktop.rs`); the preferences store a macOS virtual key
 //! code with Carbon modifier bits. Linux stores the same form: its editor maps NSH's key events onto it
 //! ([`recorded`]), and Command is the Super key there.
+//!
+//! Built on macOS and Linux; Windows has no global shortcuts yet (`platform/mod.rs`).
 
 /// The keystroke NSH registers for `h` (`"alt+cmd+z"`): the key by its US-layout name, as [`label`] shows it. `None`
 /// for a key outside the names below, which is then not registered.

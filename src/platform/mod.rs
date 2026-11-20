@@ -1,49 +1,75 @@
 //! OS services. Tests supply in-memory services and never call these paths.
-#[cfg(target_os = "macos")]
-pub mod automation;
+//!
+//! File names say where a module is built. A file without a suffix is built on every system (it may hold a few
+//! branches of its own). A file ending in `_macos`, `_linux` or `_windows` is built on that system only, and the
+//! implementations of one feature share its name (`camera_macos.rs`, `camera_linux.rs`). `macos.rs`, `linux.rs` and
+//! `windows.rs` hold each system's remaining integration. Module names carry no suffix, so callers read
+//! `platform::camera` everywhere.
+
+// Every system.
 pub mod clipboard;
 pub mod credentials;
 pub mod files;
+/// One implementation for macOS and Linux; Windows has no global shortcuts yet.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub mod hotkeys;
 pub mod http;
 pub mod local_time;
-#[cfg(target_os = "macos")]
-pub mod macos;
+/// The loopback redirect of a browser sign-in; macOS signs in in a system session and has no use for it.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+pub mod loopback;
 pub mod site_icons;
 pub mod tls;
 pub mod updates;
 
-/// Placing the tray's quick panel where Hyprland lets an app ask for it.
-#[cfg(target_os = "linux")]
-pub mod hyprland;
+// Each system's own integration.
 #[cfg(target_os = "linux")]
 pub mod linux;
+#[cfg(target_os = "macos")]
+pub mod macos;
 #[cfg(target_os = "windows")]
 pub mod windows;
 
+// macOS only.
 #[cfg(target_os = "macos")]
+#[path = "automation_macos.rs"]
+pub mod automation;
+#[cfg(target_os = "macos")]
+#[path = "biometric_macos.rs"]
 pub mod biometric;
 #[cfg(target_os = "macos")]
+#[path = "icloud_macos.rs"]
+pub mod icloud;
+#[cfg(target_os = "macos")]
+#[path = "symbols_macos.rs"]
+pub mod symbols;
+#[cfg(target_os = "macos")]
+#[path = "web_auth_macos.rs"]
+pub mod web_auth;
+
+// Linux only.
+/// Placing the tray's quick panel where Hyprland lets an app ask for it.
+#[cfg(target_os = "linux")]
+#[path = "hyprland_linux.rs"]
+pub mod hyprland;
+
+// One feature, an implementation per system.
+#[cfg(target_os = "macos")]
+#[path = "camera_macos.rs"]
 pub mod camera;
 // The same interface on Linux, through the desktop portal and GStreamer.
 #[cfg(target_os = "linux")]
 #[path = "camera_linux.rs"]
 pub mod camera;
-#[cfg(any(target_os = "macos", target_os = "linux"))]
-pub mod hotkeys;
+/// "Select on Screen" on macOS: Safay's own selection over a picture of each display.
 #[cfg(target_os = "macos")]
-pub mod icloud;
-/// The loopback redirect of a browser sign-in; macOS signs in in a system session and has no use for it.
-#[cfg_attr(target_os = "macos", allow(dead_code))]
-pub mod loopback;
-#[cfg(target_os = "macos")]
+#[path = "screen_capture_macos.rs"]
 pub mod screen_capture;
-/// Linux's "Select on Screen": the desktop portal's screenshot (`screen_capture` is macOS's own selection).
+/// "Select on Screen" on Linux: the desktop portal's screenshot. Its interface differs from macOS's, hence the module
+/// name of its own.
 #[cfg(target_os = "linux")]
+#[path = "screen_capture_linux.rs"]
 pub mod screenshot;
-#[cfg(target_os = "macos")]
-pub mod symbols;
-#[cfg(target_os = "macos")]
-pub mod web_auth;
 /// How a web sign-in (OAuth backup services) ended.
 pub enum Signed {
     /// The provider redirected to the callback URL.

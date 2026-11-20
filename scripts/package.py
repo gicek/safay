@@ -161,7 +161,7 @@ def package_macos(metadata: dict, exe: Path, out: Path, release: bool) -> Path:
     shutil.copy2(root / "assets/fonts/AtkinsonHyperlegibleMono-OFL.txt", resources / "AtkinsonHyperlegibleMono-OFL.txt")
     for file in ["LICENSE", "THIRD_PARTY_NOTICES.md"]:
         shutil.copy2(root / file, resources / file)
-    # The launchers' AppleScript commands (src/platform/automation.rs) and the Alfred workflow, signed with the app.
+    # The launchers' AppleScript commands (src/platform/automation_macos.rs) and the Alfred workflow, signed with the app.
     shutil.copy2(root / "resources/Safay.sdef", resources / "Safay.sdef")
     subprocess.run([sys.executable, str(root / "scripts/integrations.py"), "--check", "--alfred", str(resources / "Safay.alfredworkflow")], check=True)
 
@@ -188,7 +188,7 @@ def package_macos(metadata: dict, exe: Path, out: Path, release: bool) -> Path:
             entitlements["com.apple.developer.aps-environment"] = push
         else:
             print(f"note: the profile for {bundle_id} has no push capability; iCloud changes arrive without silent push")
-        # The app creates its CloudKit container only when this key is present (src/platform/icloud.rs).
+        # The app creates its CloudKit container only when this key is present (src/platform/icloud_macos.rs).
         info["SafayICloudContainer"] = ICLOUD_CONTAINER
     if update_url:
         write_updater(app / "Contents/Resources/nsh", bundle_id, metadata["version"], update_url)

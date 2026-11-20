@@ -14,6 +14,9 @@ there applies. This file adds what an automated agent most often gets wrong.
 - Never modify NSH's sources, the generated runner in `.nsh/`, or maintain a fork. Missing capabilities go in
   `src/platform/`, gated by `platform::supports`, and are listed in the Architecture table with the condition for
   moving back. Check NSH `main` for the capability first.
+- Name files in `src/platform/` by where they are built: no suffix for a module built on every system, `_macos`,
+  `_linux` or `_windows` for one built on that system only, with one name for the implementations of one feature
+  (`camera_macos.rs`, `camera_linux.rs`). Module names carry no suffix (`#[path]` in `platform/mod.rs`).
 - Upgrading NSH is a deliberate step ([Development](docs/DEVELOPMENT.md#nsh)): update the lock, rebuild the CLI from the
   same commit, run `make all`, review the Architecture table.
 

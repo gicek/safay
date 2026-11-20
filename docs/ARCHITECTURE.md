@@ -106,7 +106,7 @@ the pinned-certificate path for self-signed servers. The rules are in [Security]
 
 ```
 Alfred / Raycast / Tinycast ── osascript ── integrations/shared/safay.applescript
-        ── Apple event ──► src/platform/automation.rs (NSScriptCommand)
+        ── Apple event ──► src/platform/automation_macos.rs (NSScriptCommand)
                              ├─ find accounts ► Controller::launcher() (index, masked)
                              └─ copy code     ► src/launcher.rs: Touch ID ► Session ► clipboard ► desktop notice
                                                 └─ no Touch ID: main window asks for the master password
@@ -122,6 +122,10 @@ All interface code uses NSH: components, windows (main window, settings window, 
 tray, global shortcuts, the application menu. NSH's API is taken from the Rust sources of the commit pinned in
 `Cargo.lock`. Capabilities NSH does not offer are implemented in `src/platform/` and listed below with the condition for
 moving back to NSH. Review this list on every NSH upgrade.
+
+A file's name in `src/platform/` says where it is built: without a suffix on every system, with `_macos`, `_linux` or
+`_windows` on that system only. The implementations of one feature share its name, and the module is named without
+the suffix: `camera_macos.rs` and `camera_linux.rs` are both `platform::camera`.
 
 ### Working around NSH issues
 
@@ -146,7 +150,7 @@ moving back to NSH. Review this list on every NSH upgrade.
 | Credential storage | `platform::credentials` (`keyring`; the Secret Service on Linux) | all |
 | Secret clipboard (concealed, expiring) | `platform::clipboard` | all |
 | iCloud backup; silent pushes | `platform::icloud`; `platform::macos::enable_remote_push` (adds the push callback to NSH's app delegate class at runtime — recheck on every NSH upgrade) | macOS |
-| Camera and on-screen QR selection | macOS: `platform::camera`, `platform::screen_capture`, `scan` (the overlay). Linux: `platform::camera` (`camera_linux.rs`: the Camera portal, PipeWire and GStreamer) and `platform::screenshot` (the Screenshot portal, the desktop's own selection) | macOS, Linux |
+| Camera and on-screen QR selection | macOS: `platform::camera`, `platform::screen_capture`, `scan` (the overlay). Linux: `platform::camera` (the Camera portal, PipeWire and GStreamer) and `platform::screenshot` (`screen_capture_linux.rs`: the Screenshot portal, the desktop's own selection) | macOS, Linux |
 | QR decoding and generation | `platform::files` (`rqrr`, `qrcode`) | all |
 | SF Symbols | `platform::symbols` (rendered to template PNGs; SVG icons elsewhere) | macOS |
 | Lock on sleep, screen lock and user switch | `platform::macos::observe`, `platform::windows`, `platform::linux` | all |
