@@ -51,7 +51,7 @@ pub fn manual(s: Store, nav: Nav) -> impl IntoElement {
             nav.back();
         }))
         .child(
-            scroll().flex_1().keyboard_dismiss_mode(KeyboardDismissMode::OnDrag).keyboard_taps(KeyboardTaps::Handled).child(
+            scroll().flex_1().keyboard_dismiss_mode(KeyboardDismissMode::None).keyboard_taps(KeyboardTaps::Handled).child(
                 view().items_center().pb_safe_area_plus(px(24.0)).child(
                     view()
                         .w_full()

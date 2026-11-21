@@ -44,10 +44,10 @@ fn content(s: Store, id: Uuid) -> impl IntoElement {
         s.save_detail(id);
         editing.set(false);
     };
-    scroll().keyboard_dismiss_mode(KeyboardDismissMode::OnDrag).keyboard_taps(KeyboardTaps::Handled).child(
+    scroll().max_h(move || ui::sheet_room(0.0)).keyboard_dismiss_mode(KeyboardDismissMode::None).keyboard_taps(KeyboardTaps::Handled).child(
         view()
             .px(px(24.0))
-            .pb_safe_area_plus(px(16.0))
+            .pb(move || ui::sheet_bottom(16.0))
             .gap(px(16.0))
             // Names, and the control that edits them.
             .child(

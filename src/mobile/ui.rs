@@ -92,6 +92,19 @@ pub fn primary_button(
                 .text_color(move || if enabled() { theme().primary_foreground } else { theme().foreground.opacity(0.38) })
         }))
 }
+/// A secondary action beside or under a primary one: 48 pt, outlined.
+pub fn outlined_button(label_: impl Fn() -> SharedString + 'static) -> nsh_base::ButtonElement {
+    button()
+        .h(move || px(48.0) * font_scale())
+        .px(px(24.0))
+        .items_center()
+        .justify_center()
+        .rounded_full()
+        .border_1()
+        .border_color(move || tok("outline").opacity(0.6))
+        .active(|s| s.bg(move || tok("pressed")))
+        .child(label(text(label_)).text_color(move || theme().primary))
+}
 /// A filled action of its text's width, with an optional leading icon: 48 pt.
 pub fn filled_button(glyph: Option<Icon>, label_: impl Fn() -> SharedString + 'static) -> nsh_base::ButtonElement {
     button()
@@ -494,6 +507,19 @@ pub fn dialog(
             ),
     )
 }
+/// How tall a bottom sheet's scroll view may be, besides `chrome` (what the sheet shows around it, in points at the
+/// default text size): the room between the status bar and the keyboard (the screen's bottom when it is down), less
+/// the handle. A scroll view needs a height of its own: without one it is as tall as its content, nothing scrolls, and a
+/// drag in it moves the sheet instead, which takes the keyboard down.
+pub fn sheet_room(chrome: f32) -> Points {
+    let keyboard = (keyboard_height() - safe_area().bottom).max(px(0.0));
+    let bottom = if keyboard > px(0.0) { px(0.0) } else { safe_area().bottom };
+    (window().height - safe_area().top - px(12.0) - keyboard - bottom - px(28.0) - px(chrome) * font_scale()).max(px(120.0))
+}
+/// The space under a bottom sheet's content: the home indicator's while the keyboard is down, nothing above it.
+pub fn sheet_bottom(extra: f32) -> Points {
+    px(extra) + if keyboard_height() > px(0.0) { px(0.0) } else { safe_area().bottom }
+}
 /// A panel from the bottom over a scrim, as tall as its content, with a handle; a press on the scrim, a swipe down and
 /// the back key close it.
 pub fn bottom_sheet(
@@ -508,19 +534,32 @@ pub fn bottom_sheet(
                 close()
             }
         })
-        .close_on_swipe(true)
+        // Not while the keyboard is up: the sheet's drag would take the drag from the scroll view inside (and NSH takes
+        // the keyboard down as it starts), so the fields under the keyboard could not be reached.
+        .close_on_swipe(move || keyboard_height() <= px(0.0))
         .backdrop_style(|s| s.bg(move || tok("scrim")))
+        // Android: the sheet's window is resized to end at the keyboard's top (NSH's modal host asks the system for
+        // that), so the panel is above the keyboard already; NSH lifting it by the keyboard's height as well put it
+        // that far above, off the top of the screen.
+        .popup_style(|s| if cfg!(target_os = "android") { s.bottom(px(0.0)) } else { s })
         .child(
             view()
                 .rounded_t(px(28.0))
                 .bg(move || theme().background)
-                .max_h(move || window().height - safe_area().top - px(12.0))
+                // Below the status bar, and above the keyboard while it is up: NSH lifts the panel to the keyboard's
+                // top, so a panel taller than the room left would run off the top of the screen.
+                .max_h(move || {
+                    let keyboard = (keyboard_height() - safe_area().bottom).max(px(0.0));
+                    window().height - safe_area().top - px(12.0) - keyboard
+                })
+                .overflow_hidden()
                 .child(
                     view()
                         .items_center()
                         .py(px(12.0))
                         .child(view().w(px(32.0)).h(px(4.0)).rounded_full().bg(move || tok("outline").opacity(0.5))),
                 )
-                .child(content),
+                // The content gives way first: its scroll view takes what is left.
+                .child(view().flex_shrink(1.0).min_h(px(0.0)).child(content)),
         )
 }

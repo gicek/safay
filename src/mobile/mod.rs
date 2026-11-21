@@ -1,6 +1,7 @@
 //! The phone and tablet interface: one job per screen, all starting from the list. It shares the store, the vault and
 //! the sync with the desktop interface and has its own pages and controls (`ui`), drawn with `theme-mobile.json`.
 mod add;
+mod backup;
 mod categories;
 mod detail;
 mod dialogs;
@@ -29,6 +30,8 @@ pub enum Page {
     Deleted,
     /// "Add Account": what a scan, a photo or pasted links hold, before it is added.
     Review,
+    /// "Resolve Conflict", from the backup card in settings.
+    Conflict,
 }
 /// A dialog of settings or of the add menu.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -53,6 +56,10 @@ pub struct Nav {
     /// The account "Add to" is choosing categories for.
     pub add_to: Signal<Option<safay_app::Uuid>>,
     pub dialog: Signal<Option<Dialog>>,
+    /// "Choose Location" is open.
+    pub choosing: Signal<bool>,
+    /// The master password of a backup this vault cannot open is asked for.
+    pub restoring: Signal<bool>,
     /// The pages under the one showing, the list excepted.
     pub stack: Signal<Vec<Page>>,
 }
@@ -104,6 +111,8 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
         add_to: signal(None),
         dialog: signal(None),
         stack: signal(Vec::new()),
+        choosing: signal(false),
+        restoring: signal(false),
     };
     // Locking leaves no page over the list for the next unlock.
     effect(move || {
@@ -115,6 +124,8 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
             nav.add_to.set(None);
             nav.dialog.set(None);
             nav.stack.set(Vec::new());
+            nav.choosing.set(false);
+            nav.restoring.set(false);
         }
     });
     // A backup file was chosen: one that needs no password is imported at once, another asks for its password.
@@ -148,11 +159,12 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
             untracked(|| nav.push(Page::Review));
         }
     });
-    // Release builds keep the unlocked vault out of screenshots, recordings and the recent apps' pictures.
+    // The unlocked vault stays out of screenshots, recordings and the recent apps' pictures, except in development
+    // packages (`scripts/android.py` marks them; `nsh package` builds the crate without debug assertions).
     #[cfg(target_os = "android")]
     effect(move || {
         let unlocked = s.unlocked();
-        if !cfg!(debug_assertions) {
+        if option_env!("SAFAY_ALLOW_SCREENSHOTS").is_none() {
             crate::platform::android::set_secure(unlocked);
         }
     });
@@ -166,6 +178,15 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
             if !s.busy.get_untracked() {
                 s.cancel_auth();
             }
+            return true;
+        }
+        if s.sheet.get_untracked() == Some(crate::store::Sheet::Backup) {
+            s.close_sheet();
+            return true;
+        }
+        if nav.choosing.get_untracked() || nav.restoring.get_untracked() {
+            nav.choosing.set(false);
+            nav.restoring.set(false);
             return true;
         }
         if s.unlocked() {
@@ -197,6 +218,8 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
             })
         }))
         .child(when(move || s.unlocked(), move || view().child(detail::sheet(s)).child(menus::add_to(s, nav))))
+        .child(when(move || s.unlocked(), move || backup::dialogs(s, nav)))
+        .child(backup::setup_sheet(s))
         .child(dialogs::all(s))
         .child(dialogs::of(s, nav))
         // Above the add button while the list shows.
@@ -212,6 +235,7 @@ fn unlocked(s: Store, nav: Nav) -> impl IntoElement {
         .child(when(move || nav.page.get() == Some(Page::Settings), move || settings::page(s, nav)))
         .child(when(move || nav.page.get() == Some(Page::Deleted), move || settings::deleted(s, nav)))
         .child(when(move || nav.page.get() == Some(Page::Review), move || add::review(s, nav)))
+        .child(when(move || nav.page.get() == Some(Page::Conflict), move || backup::conflict(s, nav)))
 }
 
 /// One line at the bottom about what just happened, above the navigation bar; it takes no input.

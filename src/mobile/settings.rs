@@ -164,6 +164,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
                         .px(px(ui::MARGIN))
                         .child(ui::section_title(move || s.label("Security")))
                         .child(security)
+                        .child(super::backup::section(s, nav))
                         .child(ui::section_title(move || s.label("Data")))
                         .child(data)
                         .child(ui::section_title(move || s.label("Appearance")))

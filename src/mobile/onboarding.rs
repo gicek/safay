@@ -19,12 +19,18 @@ pub fn leave(s: Store) {
 }
 
 pub fn page(s: Store) -> impl IntoElement {
-    when(move || s.stage.get() == Stage::Create, move || create(s)).otherwise(move || welcome(s))
+    when(move || s.stage.get() == Stage::Create, move || create(s)).otherwise(move || {
+        when(
+            move || super::backup::restoring(s),
+            move || super::backup::restore_page(s, |top, content| scaffold(top, content).into_element()),
+        )
+        .otherwise(move || welcome(s))
+    })
 }
 
 /// A page of onboarding: scrolls, clear of the system bars and the keyboard, its column at most 480 pt wide.
 fn scaffold(top: impl IntoElement, content: impl IntoElement) -> impl IntoElement {
-    scroll().flex_1().keyboard_dismiss_mode(KeyboardDismissMode::OnDrag).keyboard_taps(KeyboardTaps::Handled).child(
+    scroll().flex_1().keyboard_dismiss_mode(KeyboardDismissMode::None).keyboard_taps(KeyboardTaps::Handled).child(
         view()
             .pt_safe_area()
             .pb_safe_area_plus(px(24.0))
@@ -50,19 +56,37 @@ fn welcome(s: Store) -> impl IntoElement {
                 .text_center()
                 .mb(px(16.0)),
             )
-            .child(view().w_full().gap(px(ui::GROUP_GAP)).child(choice(
-                s,
-                Icon::PlusCircleFill,
-                "primary-container",
-                "primary-container-foreground",
-                "Start fresh",
-                "Set a master password to get started.",
-                true,
-                move || {
-                    s.clear();
-                    s.stage.set(Stage::Create)
-                },
-            ))),
+            .child(
+                view()
+                    .w_full()
+                    .gap(px(ui::GROUP_GAP))
+                    .child(choice(
+                        s,
+                        Icon::PlusCircleFill,
+                        "primary-container",
+                        "primary-container-foreground",
+                        "Start fresh",
+                        "Set a master password to get started.",
+                        true,
+                        move || {
+                            s.clear();
+                            s.stage.set(Stage::Create)
+                        },
+                    ))
+                    .child(choice(
+                        s,
+                        Icon::CloudDown,
+                        "secondary",
+                        "foreground",
+                        "Restore a backup",
+                        "From a cloud service or an exported file.",
+                        true,
+                        move || {
+                            s.clear();
+                            s.stage.set(Stage::Restore)
+                        },
+                    )),
+            ),
     )
 }
 
