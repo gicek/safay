@@ -191,7 +191,10 @@ impl Reorder {
         effect(move || {
             if !s.busy.get() && r.pending.get() {
                 r.pending.replace(false);
-                untracked(|| r.order.set(None));
+                // A drag that started meanwhile keeps its own preview; the projection has the saved order now.
+                if untracked(|| r.dragged.get().is_none()) {
+                    untracked(|| r.order.set(None));
+                }
             }
         });
         r
@@ -272,7 +275,6 @@ impl Reorder {
         self.hovered.replace(Some(id));
         self.last.replace(Some(at));
         self.grid.replace(None);
-        self.pending.replace(false);
         if self.kind == Kind::Accounts {
             self.standin.set(self.s.projection.with(|p| p.rows.iter().find(|r| r.id == id).cloned()));
         }
@@ -444,7 +446,14 @@ impl Reorder {
         if self.dragged.get_untracked().is_none() && self.order.with_untracked(|o| o.is_none()) {
             return;
         }
-        self.pending.replace(false);
+        // A save still on its way: back to the order this drag started from, which is that save's (the projection
+        // does not have it yet). The preview goes once the save is in.
+        if self.pending.get() {
+            let original = self.original.get();
+            if !original.is_empty() {
+                self.order.set(Some(original));
+            }
+        }
         self.finish();
     }
 
