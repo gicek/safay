@@ -8,7 +8,8 @@ tracked, so the tracked nsh.json cannot list them: this writes `build/android/ap
 schemes added and its paths pointing back at the project, and packages from there.
 
 Output: `build/android/debug/Safay.apk` with the development app ID (`--release`: `build/android/release`, the app's own
-ID). Other arguments go to `nsh package` (`--run`, `--keystore …`, `--format aab`).
+ID). Other arguments go to `nsh package` (`--run`, `--keystore …`, `--format aab`). The launcher icon is the adaptive
+icon in assets/android/.
 """
 from pathlib import Path
 import argparse
@@ -54,9 +55,18 @@ def main() -> None:
     back = Path("../../..")
     manifest = dict(project)
     manifest["rust"] = str(back / project["rust"])
-    for key in ("theme", "icon"):
-        if isinstance(project.get(key), str):
-            manifest[key] = str(back / project[key])
+    if isinstance(project.get("theme"), str):
+        manifest["theme"] = str(back / project["theme"])
+    # The launcher icon: the layers of an adaptive icon (scripts/android_icon.py derives them from the app icon), not the
+    # app icon itself, which a launcher would shrink inside its own shape.
+    icon = back / "assets/android"
+    manifest["icon"] = {
+        "android": {
+            "foreground": str(icon / "foreground.png"),
+            "background": "#222222",
+            "monochrome": str(icon / "monochrome.png"),
+        }
+    }
     android = dict(project.get("android", {}))
     android["dex"] = [str(back / dex) for dex in android.get("dex", [])]
     manifest["android"] = android

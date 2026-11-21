@@ -130,8 +130,9 @@ lock when the screen goes off. Rust reaches them through JNI (`src/platform/andr
 
 `make android` runs `scripts/android.py`, which packages from `build/android/app/nsh.json`: the project's `nsh.json`
 with the sign-in callback schemes of the local `cloud-keys.toml` added, since Android hands a callback link only to an
-app whose manifest claims its scheme. Development and demo packages allow screenshots of the unlocked app
-(`SAFAY_ALLOW_SCREENSHOTS`); release packages keep it out of screenshots and the recent apps' pictures.
+app whose manifest claims its scheme, and the adaptive launcher icon in `assets/android/` in place of the app icon.
+Development and demo packages allow screenshots of the unlocked app (`SAFAY_ALLOW_SCREENSHOTS`); release packages keep
+it out of screenshots and the recent apps' pictures.
 
 On Android, cloud credentials are files in the app's data directory, sealed with an AES-GCM key kept in the hardware
 key store (`android/java/.../Secrets.java`). HTTPS certificates are checked by rustls against the system's CA store
