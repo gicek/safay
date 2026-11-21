@@ -151,7 +151,7 @@ build/android/java/classes.dex: $(ANDROID_JAVA)
 	"$(D8)" --min-api 26 --lib "$(ANDROID_JAR)" --output build/android/java $$(find build/android/java/classes -name '*.class')
 
 android: nsh-ready build/android/java/classes.dex ## Development APK in build/android/debug, signed with the debug key (needs the Android SDK and NDK)
-	$(NSH) package --target android --id $(ID).debug --out build/android/debug
+	$(PYTHON) scripts/android.py
 
 android-run: android ## Install it on the running emulator or the connected device, and start it
 	adb install -r "build/android/debug/$(NAME).apk"

@@ -750,8 +750,14 @@ impl Store {
                 });
                 self.task(async move {
                     match platform::files::save_export(data, self.label("Export Encrypted File").to_string()).await {
+                        Ok(true) if cfg!(any(target_os = "android", target_os = "ios")) => {
+                            self.show_toast(Tone::Success, self.count("exported", n))
+                        }
                         Ok(true) => self.status.set(Some(Status { tone: Tone::Success, text: self.count("exported", n) })),
                         Ok(false) => {}
+                        Err(_) if cfg!(any(target_os = "android", target_os = "ios")) => {
+                            self.show_toast(Tone::Error, self.label("Couldn’t save the file"))
+                        }
                         Err(_) => self.status.set(Some(Status { tone: Tone::Error, text: self.label("Couldn’t save the file") })),
                     };
                 });

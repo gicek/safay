@@ -22,7 +22,8 @@ import android.view.WindowManager;
  */
 public final class Bridge {
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
-    private static Application application;
+    private static volatile Application application;
+    private static boolean started;
     private static Activity front;
     private static boolean secure;
     private static int copies;
@@ -34,13 +35,15 @@ public final class Bridge {
 
     /** Called once, from any thread, with the application. */
     public static void start(final Application app) {
+        // Known at once: what asks for it next (whether a biometric is enrolled) may run before the main thread does.
+        application = app;
         MAIN.post(new Runnable() {
             @Override
             public void run() {
-                if (application != null) {
+                if (started) {
                     return;
                 }
-                application = app;
+                started = true;
                 // The activity that is up already: the callbacks below tell only of what happens from now on.
                 front = running();
                 if (front != null) {
@@ -116,6 +119,30 @@ public final class Bridge {
 
     static Application application() {
         return application;
+    }
+
+    /**
+     * Opens `url` in a Custom Tab: a view intent carrying the Custom Tabs session extra (null: no session), which a
+     * browser that supports them shows as a tab over the app, in the app's task. Whether an app took it.
+     */
+    public static boolean openCustomTab(String url) {
+        android.content.Context context = front != null ? front : application;
+        if (context == null) {
+            return false;
+        }
+        Intent intent = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url));
+        Bundle extras = new Bundle();
+        extras.putBinder("android.support.customtabs.extra.SESSION", null);
+        intent.putExtras(extras);
+        if (!(context instanceof Activity)) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        }
+        try {
+            context.startActivity(intent);
+            return true;
+        } catch (RuntimeException e) {
+            return false;
+        }
     }
 
     /** Keeps the app's windows out of screenshots, recordings and the recent apps' pictures while `on`. */

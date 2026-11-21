@@ -8,6 +8,20 @@
   "appearance": "system",
   "capabilities": {
     "clipboard": true,
+    "fs": {
+      "read": [
+        "${dataDir}/exports"
+      ]
+    },
+    "openUrl": {
+      "schemes": [
+        "https",
+        "http"
+      ]
+    },
+    "picker": true,
+    "share": true,
+    "statusBar": true,
     "windows": true
   },
   "theme": "theme.json",

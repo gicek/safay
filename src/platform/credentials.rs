@@ -8,8 +8,36 @@ use safay_app::{Zeroizing, cloud::Credentials, sync::SyncError};
 const SERVICE: &str = if cfg!(debug_assertions) { "com.gicek.safay.debug.cloud" } else { "com.gicek.safay.cloud" };
 
 pub struct Keychain;
-// Spike: phones and tablets have no store yet (Keychain, Keystore); sign-ins are kept in memory (`install_network`).
-#[cfg(any(target_os = "android", target_os = "ios"))]
+// Android: a file for each sign-in in the app's own directory, sealed by a key of the hardware keystore
+// (`com.gicek.safay.Secrets`). The file name is the id's SHA-256, so an id never names a path.
+#[cfg(target_os = "android")]
+fn file(id: &str) -> Option<std::path::PathBuf> {
+    use sha2::{Digest, Sha256};
+    let name: String = Sha256::digest(id.as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect();
+    Some(super::android::private_directory()?.join("cloud").join(name))
+}
+#[cfg(target_os = "android")]
+impl Credentials for Keychain {
+    fn load(&self, id: &str) -> Option<Zeroizing<Vec<u8>>> {
+        let sealed = std::fs::read(file(id)?).ok()?;
+        super::android::unseal(&sealed)
+    }
+    fn save(&self, id: &str, blob: &[u8]) -> Result<(), SyncError> {
+        let path = file(id).ok_or(SyncError::Storage)?;
+        let sealed = super::android::seal(blob).ok_or(SyncError::Storage)?;
+        std::fs::create_dir_all(path.parent().ok_or(SyncError::Storage)?).map_err(|_| SyncError::Storage)?;
+        // Written beside it and moved into place: a sign-in is whole or absent.
+        let partial = path.with_extension("new");
+        std::fs::write(&partial, sealed).and_then(|()| std::fs::rename(&partial, &path)).map_err(|_| SyncError::Storage)
+    }
+    fn delete(&self, id: &str) {
+        if let Some(path) = file(id) {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+// iOS has no store yet (the Keychain); sign-ins are kept in memory (`install_network`).
+#[cfg(target_os = "ios")]
 impl Credentials for Keychain {
     fn load(&self, _: &str) -> Option<Zeroizing<Vec<u8>>> {
         None

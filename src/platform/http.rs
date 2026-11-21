@@ -15,7 +15,7 @@ pub struct Executor {
 }
 impl Executor {
     fn config(connect: Duration, total: Duration) -> ureq::config::Config {
-        let tls = ureq::tls::TlsConfig::builder().root_certs(ureq::tls::RootCerts::PlatformVerifier).build();
+        let tls = ureq::tls::TlsConfig::builder().root_certs(super::tls::root_certs()).build();
         ureq::Agent::config_builder()
             .max_redirects(0)
             // WebDAV's PROPFIND and MKCOL: without this, ureq refuses them before sending anything.

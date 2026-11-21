@@ -97,11 +97,11 @@ fn unhosted() -> AnyElement {
     static MOBILE: OnceLock<Option<Arc<Controller>>> = OnceLock::new();
     let controller = MOBILE.get_or_init(|| {
         let directory = nsh_core::element::data_dir()?;
-        let repo = safay_app::storage::DiskRepository::open(directory).ok()?;
+        let repo = safay_app::storage::DiskRepository::open(directory.clone()).ok()?;
         let controller = Controller::new(Box::new(repo), Arc::new(safay_app::session::SystemClock::default())).ok()?;
-        platform::install_network(false);
         #[cfg(target_os = "android")]
-        platform::android::start(controller.clone());
+        platform::android::start(controller.clone(), directory);
+        platform::install_network(false);
         Some(controller)
     });
     match controller {

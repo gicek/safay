@@ -1,7 +1,9 @@
 use base64::Engine;
+#[cfg(not(target_os = "android"))]
+use nsh_core::{file_dialog::SaveDialog, prelude::pick_save_path};
 use nsh_core::{
-    file_dialog::{FileFilter, OpenDialog, SaveDialog},
-    prelude::{pick_paths, pick_save_path},
+    file_dialog::{FileFilter, OpenDialog},
+    prelude::pick_paths,
 };
 use safay_app::{
     session::Error,
@@ -26,6 +28,7 @@ async fn open_paths(dialog: OpenDialog) -> Result<Option<Vec<PathBuf>>, Error> {
     }
     pick_paths(dialog).await.map_err(|_| Error::Storage)
 }
+#[cfg(not(target_os = "android"))]
 async fn save_path(dialog: SaveDialog) -> Result<Option<PathBuf>, Error> {
     #[cfg(target_os = "macos")]
     if crate::hosted() {
@@ -76,6 +79,30 @@ pub fn export_file_name(now: std::time::SystemTime) -> String {
 fn export_file_name_of((y, m, d, hour, minute): (i64, i64, i64, i64, i64)) -> String {
     format!("Safay-export-{y:04}{m:02}{d:02}-{hour:02}{minute:02}.json")
 }
+/// Android has no save dialog in NSH: the file goes to the share sheet, where the user picks Files, a drive or an app.
+/// It waits in `exports/` of the app's directory (the one folder `capabilities.fs.read` grants) until the next export.
+#[cfg(target_os = "android")]
+pub async fn save_export(data: Vec<u8>, _title: String) -> Result<bool, Error> {
+    use nsh_core::{
+        prelude::*,
+        share::{ShareAction, ShareRequest},
+    };
+    let directory = nsh_core::element::data_dir().ok_or(Error::Storage)?.join("exports");
+    let path = directory.join(export_file_name(std::time::SystemTime::now()));
+    let written = path.clone();
+    blocking(move || {
+        drop(std::fs::remove_dir_all(&directory));
+        std::fs::create_dir_all(&directory).map_err(|_| Error::Storage)?;
+        atomic_write(&written, &data).map_err(|_| Error::Storage)
+    })
+    .await
+    .map_err(|_| Error::Storage)??;
+    match share(ShareRequest::new().file(path)).await {
+        Ok(outcome) => Ok(outcome.action == ShareAction::Shared),
+        Err(_) => Err(Error::Storage),
+    }
+}
+#[cfg(not(target_os = "android"))]
 pub async fn save_export(data: Vec<u8>, title: String) -> Result<bool, Error> {
     let name = export_file_name(std::time::SystemTime::now());
     let dialog = SaveDialog::new().title(title).file_name(name).filter(FileFilter::new("JSON", ["json"]));

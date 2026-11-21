@@ -34,6 +34,9 @@ pub mod android;
 pub mod linux;
 #[cfg(target_os = "macos")]
 pub mod macos;
+#[cfg(target_os = "android")]
+#[path = "web_sign_in_android.rs"]
+mod web_sign_in_android;
 #[cfg(target_os = "windows")]
 pub mod windows;
 
@@ -102,6 +105,12 @@ pub fn web_sign_in(url: &str, callback_scheme: &str) -> std::sync::mpsc::Receive
     {
         use nsh_core::{auth_session::AuthSessionOutcome, prelude::*};
         let (sender, receiver) = std::sync::mpsc::channel();
+        // A callback scheme NSH's session refuses (Google's, longer than it takes): Safay's own Custom Tab.
+        #[cfg(target_os = "android")]
+        if web_sign_in_android::needed(callback_scheme) {
+            web_sign_in_android::start(url, callback_scheme, sender);
+            return receiver;
+        }
         let session = open_auth_session(nsh_core::auth_session::AuthSessionRequest::new(url, callback_scheme));
         spawn(async move {
             drop(sender.send(match session.await {
@@ -136,6 +145,8 @@ pub fn cancel_web_sign_in() {
     web_auth::cancel();
     #[cfg(not(target_os = "macos"))]
     nsh_core::prelude::close_auth_session();
+    #[cfg(target_os = "android")]
+    web_sign_in_android::cancel();
 }
 
 use std::sync::Mutex;
@@ -162,14 +173,14 @@ pub mod supports {
     pub const CAMERA: bool = cfg!(any(target_os = "macos", target_os = "linux"));
     /// iCloud backup is listed among the locations: macOS has it (in a signed package); Windows lists it as unavailable;
     /// Linux, which never has it, does not list it.
-    pub const ICLOUD: bool = cfg!(not(target_os = "linux"));
+    pub const ICLOUD: bool = cfg!(any(target_os = "macos", target_os = "windows"));
     /// Cloud storage backup: its sign-ins go to the system credential store (Linux: the Secret Service).
     pub const CLOUD: bool = true;
     /// OAuth sign-in for Dropbox, OneDrive and Google Drive (macOS: `ASWebAuthenticationSession`; Linux and Windows:
     /// the default browser, through NSH's web sign-in session). Listed only in builds with the service's client ID.
     pub const OAUTH: bool = true;
     /// The OAuth sign-in page opens in the default browser, outside Safay (elsewhere a system sign-in window).
-    pub const BROWSER_SIGN_IN: bool = cfg!(not(target_os = "macos"));
+    pub const BROWSER_SIGN_IN: bool = cfg!(any(target_os = "windows", target_os = "linux"));
     /// Updating the app itself (NSH's `nsh-updater`; active only in packages that carry an update source).
     pub const UPDATES: bool = true;
     /// Launchers (Alfred, Raycast, Tinycast) through AppleScript: the third-party plugin interface.
@@ -374,7 +385,7 @@ pub fn device_name() -> String {
 /// preview never touches the keychain).
 pub fn install_network(preview: bool) {
     use safay_app::cloud::{Credentials, Services};
-    let credentials: std::sync::Arc<dyn Credentials> = if preview || cfg!(any(target_os = "android", target_os = "ios")) {
+    let credentials: std::sync::Arc<dyn Credentials> = if preview || cfg!(target_os = "ios") {
         std::sync::Arc::new(MemoryCredentials::default())
     } else {
         std::sync::Arc::new(credentials::Keychain)

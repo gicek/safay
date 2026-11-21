@@ -9,6 +9,12 @@ use safay_app::controller::Controller;
 use std::sync::{Arc, OnceLock};
 
 static CONTROLLER: OnceLock<Arc<Controller>> = OnceLock::new();
+static DIRECTORY: OnceLock<std::path::PathBuf> = OnceLock::new();
+
+/// The app's own directory (the vault's): what [`start`] was given.
+pub(super) fn private_directory() -> Option<&'static std::path::Path> {
+    DIRECTORY.get().map(std::path::PathBuf::as_path)
+}
 static BRIDGE: OnceLock<GlobalRef> = OnceLock::new();
 
 /// The process's Java VM. NSH's runner is started by it and keeps its handle to itself, so it is asked of the runtime:
@@ -77,10 +83,11 @@ fn application<'a>(env: &mut JNIEnv<'a>) -> jni::errors::Result<JObject<'a>> {
 
 /// Starts the bridge: it follows the activity in front and tells when the screen goes off, which locks `controller`'s
 /// vault at once.
-pub fn start(controller: Arc<Controller>) {
+pub fn start(controller: Arc<Controller>, directory: std::path::PathBuf) {
     if CONTROLLER.set(controller).is_err() {
         return;
     }
+    let _ = DIRECTORY.set(directory);
     with_env(|env| {
         let application = application(env)?;
         let bridge = bridge(env)?;
@@ -116,4 +123,35 @@ pub extern "system" fn Java_com_gicek_safay_Bridge_screenOff(_env: JNIEnv<'_>, _
     if let Some(controller) = CONTROLLER.get() {
         controller.request_lock();
     }
+}
+
+/// Seals `plain` with the keystore's key for cloud sign-ins (`Secrets.seal`).
+pub(super) fn seal(plain: &[u8]) -> Option<Vec<u8>> {
+    secrets("seal", plain).map(|sealed| sealed.to_vec())
+}
+/// Opens what [`seal`] sealed on this device.
+pub(super) fn unseal(sealed: &[u8]) -> Option<safay_app::Zeroizing<Vec<u8>>> {
+    secrets("open", sealed)
+}
+fn secrets(method: &str, input: &[u8]) -> Option<safay_app::Zeroizing<Vec<u8>>> {
+    with_env(|env| {
+        let class = class(env, "com.gicek.safay.Secrets")?;
+        let input = env.byte_array_from_slice(input)?;
+        let output = env.call_static_method(class, method, "([B)[B", &[JValue::Object(&input)])?.l()?;
+        if output.is_null() {
+            return Ok(None);
+        }
+        Ok(Some(safay_app::Zeroizing::new(env.convert_byte_array(jni::objects::JByteArray::from(output))?)))
+    })
+    .flatten()
+}
+
+/// Opens `url` in a Custom Tab over Safay (the browser's own tab for an app, with its cookies). Whether it opened.
+pub fn open_custom_tab(url: &str) -> bool {
+    with_env(|env| {
+        let bridge = bridge(env)?;
+        let url = env.new_string(url)?;
+        env.call_static_method(bridge, "openCustomTab", "(Ljava/lang/String;)Z", &[JValue::Object(&url)])?.z()
+    })
+    .unwrap_or(false)
 }

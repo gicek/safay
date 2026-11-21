@@ -361,7 +361,7 @@ struct Https {
 }
 impl Https {
     fn new() -> Self {
-        let tls = ureq::tls::TlsConfig::builder().root_certs(ureq::tls::RootCerts::PlatformVerifier).build();
+        let tls = ureq::tls::TlsConfig::builder().root_certs(super::tls::root_certs()).build();
         // Release builds speak HTTPS only; debug builds may also reach this machine (`nsh-updater` accepts plain HTTP
         // to loopback only), for a local end-to-end test.
         let config = ureq::Agent::config_builder()

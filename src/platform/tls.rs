@@ -37,6 +37,52 @@ fn provider() -> Arc<CryptoProvider> {
     Arc::new(rustls::crypto::ring::default_provider())
 }
 
+/// Android: the system's CA certificates, read once. The platform verifier's Android side asks the system for a
+/// revocation check that throws for a certificate naming no OCSP responder (as CAs that publish only CRLs issue), and
+/// reports it as revoked; so Android verifies with rustls against the roots the system trusts, without that check, as
+/// the system's browser does. The Conscrypt module's store (updated through Google Play from Android 14) comes first.
+#[cfg(target_os = "android")]
+fn android_roots() -> &'static [CertificateDer<'static>] {
+    use rustls_pki_types::pem::PemObject;
+    static ROOTS: std::sync::OnceLock<Vec<CertificateDer<'static>>> = std::sync::OnceLock::new();
+    ROOTS.get_or_init(|| {
+        for directory in ["/apex/com.android.conscrypt/cacerts", "/system/etc/security/cacerts"] {
+            let Ok(entries) = std::fs::read_dir(directory) else { continue };
+            let roots: Vec<_> = entries
+                .flatten()
+                .filter_map(|entry| std::fs::read(entry.path()).ok())
+                .filter_map(|pem| CertificateDer::from_pem_slice(&pem).ok())
+                .collect();
+            if !roots.is_empty() {
+                return roots;
+            }
+        }
+        Vec::new()
+    })
+}
+
+/// The roots an HTTPS agent trusts: the system's (see [`android_roots`] on Android).
+pub fn root_certs() -> ureq::tls::RootCerts {
+    #[cfg(target_os = "android")]
+    if !android_roots().is_empty() {
+        return ureq::tls::RootCerts::Specific(Arc::new(
+            android_roots().iter().map(|der| ureq::tls::Certificate::from_der(der.as_ref()).to_owned()).collect(),
+        ));
+    }
+    ureq::tls::RootCerts::PlatformVerifier
+}
+
+/// The system's own validation, as [`root_certs`] chooses it.
+fn system_verifier(provider: Arc<CryptoProvider>) -> Option<Arc<dyn ServerCertVerifier>> {
+    #[cfg(target_os = "android")]
+    if !android_roots().is_empty() {
+        let mut store = rustls::RootCertStore::empty();
+        store.add_parsable_certificates(android_roots().iter().cloned());
+        return Some(rustls::client::WebPkiServerVerifier::builder_with_provider(Arc::new(store), provider).build().ok()?);
+    }
+    Some(Arc::new(rustls_platform_verifier::Verifier::new(provider).ok()?))
+}
+
 /// The system's validation, then the pinned fingerprint.
 #[derive(Debug)]
 struct PinVerifier {
@@ -106,8 +152,8 @@ pub struct PinnedConnector {
 impl PinnedConnector {
     pub fn new(pin: [u8; 32]) -> Option<Self> {
         let provider = provider();
-        let system = rustls_platform_verifier::Verifier::new(provider.clone()).ok()?;
-        let verifier = PinVerifier { system: Arc::new(system), pin, algorithms: provider.signature_verification_algorithms };
+        let system = system_verifier(provider.clone())?;
+        let verifier = PinVerifier { system, pin, algorithms: provider.signature_verification_algorithms };
         let config = ClientConfig::builder_with_provider(provider)
             .with_safe_default_protocol_versions()
             .ok()?

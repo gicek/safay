@@ -113,19 +113,30 @@ Packages go to `build/` at the repository root (untracked), each system in a fol
 | `make package-release` | `build/macos/release/Safay.app`, `Safay-<version>-macos-<arch>.zip` | Developer ID release package, not notarized: for testing on this Mac |
 | `make release` | `build/dist/` | Notarized app, zip and DMG, update archive and manifest: what is published |
 
-Development packages for phones and tablets go there too. They are early builds: the app starts, with the desktop's
-layout.
+Development packages for phones and tablets go there too. Both start in the phone interface (`src/mobile`); the Android
+one is tested on devices, the iOS one only builds so far.
 
 | Command | Output | Needs |
 |---|---|---|
 | `make android` | `build/android/debug/Safay.apk` (debug key, `arm64-v8a` and `armeabi-v7a`) | The Android SDK with `platforms;android-35`, build tools and an NDK; a JDK; `rustup target add aarch64-linux-android armv7-linux-androideabi` |
 | `make android-run` | Installs it on the running emulator or the connected device, and starts it | `adb` |
+| `python3 scripts/android.py --demo` | `build/android/demo/Safay Demo.apk` (`com.gicek.safay.demo`, "Safay Demo"): a package of its own, for trying a build on a device without touching the development package's vault | Same as `make android` |
 | `make ios-simulator` | `build/ios-simulator/debug/Safay.app` | Xcode (`DEVELOPER_DIR` when `xcode-select` names the command line tools); `rustup target add aarch64-apple-ios-sim` |
 | `make ios-simulator-run` | Builds it, then installs and starts it in the booted simulator | An iOS simulator runtime |
 
 The Android package carries Java classes of its own (`android/java`, compiled by `make android` into the dex that
 `nsh.json` lists): Android's APIs that take a class of the app, such as the clipboard entry marked sensitive and the
 lock when the screen goes off. Rust reaches them through JNI (`src/platform/android.rs`).
+
+`make android` runs `scripts/android.py`, which packages from `build/android/app/nsh.json`: the project's `nsh.json`
+with the sign-in callback schemes of the local `cloud-keys.toml` added, since Android hands a callback link only to an
+app whose manifest claims its scheme. Development and demo packages allow screenshots of the unlocked app
+(`SAFAY_ALLOW_SCREENSHOTS`); release packages keep it out of screenshots and the recent apps' pictures.
+
+On Android, cloud credentials are files in the app's data directory, sealed with an AES-GCM key kept in the hardware
+key store (`android/java/.../Secrets.java`). HTTPS certificates are checked by rustls against the system's CA store
+(`platform::tls::system_verifier`): the platform verifier there reports a certificate without an OCSP responder as
+revoked.
 
 Release builds use the app ID `com.gicek.safay`; development builds use `com.gicek.safay.debug`, with their own data
 directory, keychain items and provisioning profile. `python3 scripts/package.py --out <folder>` writes elsewhere. On
