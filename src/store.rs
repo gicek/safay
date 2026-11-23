@@ -1439,7 +1439,7 @@ impl Store {
         let (name, count) =
             self.projection.with(|p| p.categories.iter().find(|c| c.id == id).map(|c| (c.name.clone(), c.count))).unwrap_or_default();
         let chosen = crate::alert::alert(self.fmt("Delete the category “{}”?", &[&name]))
-            .description(self.count("category_kept", count))
+            .description(if count == 0 { self.label("There are no accounts in it.") } else { self.count("category_kept", count) })
             .cancel("cancel", self.label("Cancel"))
             .destructive("delete", self.label("Delete Category"))
             .show();

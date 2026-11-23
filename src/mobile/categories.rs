@@ -45,7 +45,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
                                         s.editing.set(Some(CategoryEdit { id: Some(id), name, ..Default::default() }))
                                     })
                                     .child(ui::body_large(text(move || c.with(|c| SharedString::from(c.name.clone())))).number_of_lines(1))
-                                    .child(ui::dim(ui::body(text(move || c.with(|c| SharedString::from(c.count.to_string())))))),
+                                    .child(ui::dim(ui::body(text(move || s.count("accounts_n", c.with(|c| c.count)))))),
                             )
                             .child(when(
                                 move || index.get() > 0,

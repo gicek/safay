@@ -30,5 +30,7 @@
   "deleted-for-good.one": "{} account will be deleted for good. You can’t undo this action.",
   "deleted-for-good.other": "{} accounts will be deleted for good. You can’t undo this action.",
   "days-left.one": "{} day",
-  "days-left.other": "{} days"
+  "days-left.other": "{} days",
+  "accounts_n.one": "{} account",
+  "accounts_n.other": "{} accounts"
 }

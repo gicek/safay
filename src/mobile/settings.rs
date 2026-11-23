@@ -96,7 +96,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
         ui::row(
             ui::round_tile(Icon::Trash, false),
             move || s.label("Recently Deleted"),
-            Some(Rc::new(move || SharedString::from(s.projection.with(|p| p.deleted_count).to_string()))),
+            Some(Rc::new(move || s.count("accounts_n", s.projection.with(|p| p.deleted_count)))),
             chevron(),
         )
         .test_id("deleted")
