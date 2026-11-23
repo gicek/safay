@@ -148,7 +148,7 @@ fn options<T: Copy + PartialEq + 'static>(
     pick: impl Fn(T) + Copy + 'static,
 ) -> impl IntoElement {
     use crate::components::tok;
-    use nsh_base::{button, theme};
+    use nsh_base::theme;
     let close = move || nav.dialog.set(None);
     ui::dialog(
         move || s.label(title),
@@ -160,14 +160,15 @@ fn options<T: Copy + PartialEq + 'static>(
             ))
             .children(values.into_iter().map(move |(value, name)| {
                 let on = move || current() == value;
-                button()
+                let said = name.clone();
+                ui::toggle(AccessibilityRole::Radio, move || said.clone(), on)
                     .h(px(48.0))
                     .px(px(24.0))
                     .flex_row()
                     .items_center()
                     .gap(px(24.0))
                     .active(|st| st.bg(move || tok("pressed")))
-                    .on_press(move || {
+                    .on_press(move |_: &()| {
                         pick(value);
                         close()
                     })

@@ -86,7 +86,9 @@ pub fn account(s: Store, nav: Nav) -> impl IntoElement {
                             move || category.is_some(),
                             move || {
                                 let name = category_name.clone().unwrap_or_default();
+                                let said = name.clone();
                                 button()
+                                    .accessibility_label(move || Some(s.fmt("Remove from “{}”", &[&said])))
                                     .h(px(48.0))
                                     .px(px(12.0))
                                     .flex_row()
@@ -118,6 +120,7 @@ pub fn account(s: Store, nav: Nav) -> impl IntoElement {
 fn item(s: Store, glyph: Icon, name: &'static str, destructive: bool, press: impl Fn() + 'static) -> impl IntoElement {
     button()
         .test_id(name)
+        .accessibility_label(move || Some(s.label(name)))
         .h(px(48.0))
         .px(px(12.0))
         .flex_row()
@@ -199,14 +202,14 @@ pub fn add_to(s: Store, nav: Nav) -> impl IntoElement {
                     let id = c.with_untracked(|c| c.id);
                     let on = move || staged.with(|st| st.contains(&id));
                     let ink = move || if on() { theme().primary } else { theme().foreground };
-                    button()
+                    ui::toggle(AccessibilityRole::Checkbox, move || c.with(|c| SharedString::from(c.name.clone())), on)
                         .h(px(48.0))
                         .px(px(24.0))
                         .flex_row()
                         .items_center()
                         .gap(px(16.0))
                         .active(|st| st.bg(move || tok("pressed")))
-                        .on_press(move || {
+                        .on_press(move |_: &()| {
                             staged.update(|st| {
                                 if !st.remove(&id) {
                                     st.insert(id);

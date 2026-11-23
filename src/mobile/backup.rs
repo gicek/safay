@@ -1218,17 +1218,19 @@ pub fn restore_page(s: Store, scaffold: impl FnOnce(AnyElement, AnyElement) -> A
                                 .gap(px(12.0))
                                 .child(
                                     ui::form_card().child(
-                                        button()
-                                            .flex_row()
-                                            .items_center()
-                                            .gap(px(16.0))
-                                            .px(px(4.0))
-                                            .on_press(move || use_as_master.update(|v| *v = !*v))
-                                            .child(
-                                                view().text_color(move || theme().muted_foreground).child(icon(Icon::Key).size(px(28.0))),
-                                            )
-                                            .child(ui::body_large(text(move || s.label("Use as Master Password"))).flex_1())
-                                            .child(ui::switch(move || use_as_master.get())),
+                                        ui::toggle(
+                                            AccessibilityRole::Switch,
+                                            move || s.label("Use as Master Password"),
+                                            move || use_as_master.get(),
+                                        )
+                                        .flex_row()
+                                        .items_center()
+                                        .gap(px(16.0))
+                                        .px(px(4.0))
+                                        .on_press(move |_: &()| use_as_master.update(|v| *v = !*v))
+                                        .child(view().text_color(move || theme().muted_foreground).child(icon(Icon::Key).size(px(28.0))))
+                                        .child(ui::body_large(text(move || s.label("Use as Master Password"))).flex_1())
+                                        .child(ui::switch(move || use_as_master.get())),
                                     ),
                                 )
                                 .child(when(

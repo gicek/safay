@@ -24,6 +24,17 @@ pub const EFFECTS_MS: f32 = 160.0;
 /// Shape and position changes.
 pub const SPATIAL_MS: f32 = 280.0;
 
+/// The state screen readers announce for a checked control: a switch, a radio, a checkbox. A button has no checked
+/// state, so those are views (`toggle`).
+fn checked_state(checked: bool) -> AccessibilityState {
+    AccessibilityState { checked: Some(if checked { nsh_core::Checked::True } else { nsh_core::Checked::False }), ..Default::default() }
+}
+/// A press target that is on or off for screen readers: `role` (a switch, a radio, a checkbox), `name` and whether it
+/// is on. The page lays it out and gives it its press.
+pub fn toggle(role: AccessibilityRole, name: impl Fn() -> SharedString + 'static, on: impl Fn() -> bool + Copy + 'static) -> View {
+    view().accessible(true).role(role).label(name).accessibility_state(move || checked_state(on()))
+}
+
 // ---- Type scale ----------------------------------------------------------------------------------------------------
 
 pub fn display<E: Styled>(e: E) -> E {
@@ -76,6 +87,7 @@ pub fn primary_button(
     busy: impl Fn() -> bool + Copy + 'static,
 ) -> nsh_base::ButtonElement {
     button()
+        .accessibility_label(move || Some(label_()))
         .h(move || px(CONTROL) * font_scale())
         .items_center()
         .justify_center()
@@ -93,8 +105,9 @@ pub fn primary_button(
         }))
 }
 /// A secondary action beside or under a primary one: 48 pt, outlined.
-pub fn outlined_button(label_: impl Fn() -> SharedString + 'static) -> nsh_base::ButtonElement {
+pub fn outlined_button(label_: impl Fn() -> SharedString + Copy + 'static) -> nsh_base::ButtonElement {
     button()
+        .accessibility_label(move || Some(label_()))
         .h(move || px(48.0) * font_scale())
         .px(px(24.0))
         .items_center()
@@ -106,8 +119,9 @@ pub fn outlined_button(label_: impl Fn() -> SharedString + 'static) -> nsh_base:
         .child(label(text(label_)).text_color(move || theme().primary))
 }
 /// A filled action of its text's width, with an optional leading icon: 48 pt.
-pub fn filled_button(glyph: Option<Icon>, label_: impl Fn() -> SharedString + 'static) -> nsh_base::ButtonElement {
+pub fn filled_button(glyph: Option<Icon>, label_: impl Fn() -> SharedString + Copy + 'static) -> nsh_base::ButtonElement {
     button()
+        .accessibility_label(move || Some(label_()))
         .h(move || px(48.0) * font_scale())
         .px(px(24.0))
         .flex_row()
@@ -279,11 +293,13 @@ pub fn field_note(
 
 /// A filter chip: 32 pt, filled when selected, outlined otherwise.
 pub fn chip(
-    label_: impl Fn() -> SharedString + 'static,
+    label_: impl Fn() -> SharedString + Copy + 'static,
     selected: impl Fn() -> bool + Copy + 'static,
     glyph: Option<Icon>,
 ) -> nsh_base::ButtonElement {
     button()
+        .accessibility_label(move || Some(label_()))
+        .selected(selected)
         .h(move || px(32.0) * font_scale())
         .pl(px(if glyph.is_some() { 8.0 } else { 16.0 }))
         .pr(px(16.0))
@@ -336,33 +352,63 @@ pub fn top_bar(s: Store, title_: Option<&'static str>, back: impl Fn() + 'static
 pub fn section_title(text_: impl Fn() -> SharedString + 'static) -> impl IntoElement + Styled {
     label(text(text_)).text_color(move || theme().primary).pl(px(16.0)).pt(px(24.0)).pb(px(8.0))
 }
+/// The line of detail under a row's title.
+pub type Detail = std::rc::Rc<dyn Fn() -> SharedString>;
 /// A row of a group: a leading mark, a title over an optional line of detail, a trailing control. A row with an action
-/// is pressed as a whole.
+/// is pressed as a whole; screen readers say its title and its detail ("Auto-Lock, 5 minutes").
 pub fn row(
     leading: impl IntoElement,
-    title_: impl Fn() -> SharedString + 'static,
-    detail: Option<Box<dyn Fn() -> SharedString>>,
+    title_: impl Fn() -> SharedString + Copy + 'static,
+    detail: Option<Detail>,
     trailing: impl IntoElement,
 ) -> nsh_base::ButtonElement {
-    let has_detail = detail.is_some();
-    let detail = std::rc::Rc::new(detail);
+    let said = row_label(title_, detail.clone());
     button()
-        .min_h(move || px(if has_detail { 72.0 } else { 56.0 }) * font_scale())
+        .accessibility_label(move || Some(said()))
+        .bg(move || theme().card)
+        .active(|s| s.bg(move || tok("surface-high")))
+        .child(row_body(leading, title_, detail, trailing))
+}
+/// A row that turns something on or off, with a switch at its end; screen readers announce it as a switch, on or off.
+pub fn switch_row(
+    leading: impl IntoElement,
+    title_: impl Fn() -> SharedString + Copy + 'static,
+    detail: Detail,
+    on: impl Fn() -> bool + Copy + 'static,
+) -> View {
+    toggle(AccessibilityRole::Switch, row_label(title_, Some(detail.clone())), on)
+        .bg(move || theme().card)
+        .active(|s| s.bg(move || tok("surface-high")))
+        .child(row_body(leading, title_, Some(detail), switch(on)))
+}
+fn row_label(title_: impl Fn() -> SharedString + Copy + 'static, detail: Option<Detail>) -> impl Fn() -> SharedString + 'static {
+    move || match &detail {
+        Some(d) => SharedString::from(format!("{}, {}", title_(), d())),
+        None => title_(),
+    }
+}
+fn row_body(
+    leading: impl IntoElement,
+    title_: impl Fn() -> SharedString + Copy + 'static,
+    detail: Option<Detail>,
+    trailing: impl IntoElement,
+) -> View {
+    let tall = detail.is_some();
+    view()
+        .min_h(move || px(if tall { 72.0 } else { 56.0 }) * font_scale())
         .px(px(16.0))
         .py(px(10.0))
         .flex_row()
         .items_center()
         .gap(px(16.0))
-        .bg(move || theme().card)
-        .active(|s| s.bg(move || tok("surface-high")))
         .child(leading)
-        .child(view().flex_1().min_w(px(0.0)).child(body_large(text(title_))).child(when(
-            move || has_detail,
-            move || {
-                let detail = detail.clone();
-                dim(body(text(move || detail.as_ref().as_ref().map(|d| d()).unwrap_or_default())))
-            },
-        )))
+        .child(
+            view()
+                .flex_1()
+                .min_w(px(0.0))
+                .child(body_large(text(title_)))
+                .child(detail.map(|d| dim(body(text(move || d()))).into_element())),
+        )
         .child(trailing)
 }
 /// A round tile around a glyph: the leading mark of a settings row.
@@ -422,7 +468,11 @@ pub fn choice<T: Copy + PartialEq + 'static>(
     let count = options.len();
     view().flex_row().gap(px(GROUP_GAP)).children(options.into_iter().enumerate().map(move |(index, (value, name))| {
         let on = move || get() == value;
+        let name: std::rc::Rc<dyn Fn() -> SharedString> = name.into();
+        let said = name.clone();
         button()
+            .accessibility_label(move || Some(said()))
+            .selected(on)
             .flex_1()
             .min_w(px(0.0))
             .h(move || px(48.0) * font_scale())
@@ -437,17 +487,20 @@ pub fn choice<T: Copy + PartialEq + 'static>(
             .ease_out()
             .on_press(move || set(value))
             .child(
-                label(text(name)).number_of_lines(1).text_color(move || if on() { theme().primary_foreground } else { theme().foreground }),
+                label(text(move || name()))
+                    .number_of_lines(1)
+                    .text_color(move || if on() { theme().primary_foreground } else { theme().foreground }),
             )
     }))
 }
 /// A tonal action: 56 pt, with a leading glyph.
 pub fn tonal_button(
     glyph: impl Fn() -> Icon + Copy + 'static,
-    label_: impl Fn() -> SharedString + 'static,
+    label_: impl Fn() -> SharedString + Copy + 'static,
     destructive: bool,
 ) -> nsh_base::ButtonElement {
     button()
+        .accessibility_label(move || Some(label_()))
         .h(move || px(CONTROL) * font_scale())
         .px(px(16.0))
         .flex_row()
@@ -461,8 +514,9 @@ pub fn tonal_button(
         .child(label(text(label_)).number_of_lines(1))
 }
 /// An action of a dialog or a bar: text only, 40 pt.
-pub fn text_button(label_: impl Fn() -> SharedString + 'static, destructive: bool) -> nsh_base::ButtonElement {
+pub fn text_button(label_: impl Fn() -> SharedString + Copy + 'static, destructive: bool) -> nsh_base::ButtonElement {
     button()
+        .accessibility_label(move || Some(label_()))
         .h(move || px(40.0) * font_scale())
         .px(px(12.0))
         .items_center()

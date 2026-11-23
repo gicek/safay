@@ -7,6 +7,7 @@ use crate::{
 use nsh_base::theme;
 use nsh_core::prelude::*;
 use safay_app::preferences::{Appearance, Language};
+use std::rc::Rc;
 
 pub const AUTO_LOCK_MINUTES: [u64; 4] = [1, 5, 15, 30];
 
@@ -33,16 +34,16 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
     // Shown where the device has a strong biometric enrolled.
     if s.biometrics.get_untracked() {
         security_rows.push(
-            ui::row(
+            ui::switch_row(
                 ui::round_tile(Icon::TouchId, false),
                 move || s.label("Unlock with biometrics"),
-                Some(Box::new(move || {
+                Rc::new(move || {
                     s.label("The vault key is protected by this device’s hardware keystore. After you change enrolled fingerprints or faces, turn it on again with your master password.")
-                })),
-                ui::switch(move || preferences().touch_id),
+                }),
+                move || preferences().touch_id,
             )
             .test_id("biometrics")
-            .on_press(move || s.set_touch_id(!preferences().touch_id))
+            .on_press(move |_: &()| s.set_touch_id(!preferences().touch_id))
             .into_element(),
         );
     }
@@ -50,7 +51,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
         ui::row(
             ui::round_tile(Icon::Lock, false),
             move || s.label("Auto-Lock"),
-            Some(Box::new(move || s.count("minutes", preferences().auto_lock_minutes as usize))),
+            Some(Rc::new(move || s.count("minutes", preferences().auto_lock_minutes as usize))),
             chevron(),
         )
         .test_id("auto-lock")
@@ -63,16 +64,16 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
                 nav.dialog.set(Some(Dialog::ChangePassword))
             })
             .into_element(),
-        ui::row(
+        ui::switch_row(
             ui::round_tile(Icon::Photo, false),
             move || s.label("Show Site Icons"),
-            Some(Box::new(move || {
+            Rc::new(move || {
                 s.label("When you add an account or change its website, Safay gets the icon directly from that website. No other service is involved.")
-            })),
-            ui::switch(move || preferences().site_icons),
+            }),
+            move || preferences().site_icons,
         )
         .test_id("site-icons")
-        .on_press(move || {
+        .on_press(move |_: &()| {
             let on = !preferences().site_icons;
             s.update_preferences(move |p| p.site_icons = on)
         })
@@ -95,7 +96,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
         ui::row(
             ui::round_tile(Icon::Trash, false),
             move || s.label("Recently Deleted"),
-            Some(Box::new(move || SharedString::from(s.projection.with(|p| p.deleted_count).to_string()))),
+            Some(Rc::new(move || SharedString::from(s.projection.with(|p| p.deleted_count).to_string()))),
             chevron(),
         )
         .test_id("deleted")
@@ -104,7 +105,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
         ui::row(
             ui::round_tile(Icon::Warning, true),
             move || s.label("Reset App"),
-            Some(Box::new(move || s.label("Erases the vault and settings on this device. Your backup isn’t affected."))),
+            Some(Rc::new(move || s.label("Erases the vault and settings on this device. Your backup isn’t affected."))),
             nothing(),
         )
         .test_id("reset")
@@ -133,7 +134,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
         ui::row(
             ui::round_tile(Icon::Keyboard, false),
             move || s.label("Language"),
-            Some(Box::new(move || language_name(s, preferences().language))),
+            Some(Rc::new(move || language_name(s, preferences().language))),
             chevron(),
         )
         .test_id("language")
@@ -144,7 +145,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
         ui::row(
             ui::round_tile(Icon::Info, false),
             move || s.label("Version"),
-            Some(Box::new(|| SharedString::from(format!("{} ({})", env!("CARGO_PKG_VERSION"), crate::BUILD)))),
+            Some(Rc::new(|| SharedString::from(format!("{} ({})", env!("CARGO_PKG_VERSION"), crate::BUILD)))),
             nothing(),
         )
         .into_element(),
