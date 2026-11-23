@@ -142,15 +142,11 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
             _ => s.import_file(),
         });
     });
-    // Imported: the file and its dialog go.
+    // The file's password is asked only while there is a file: an import that worked lets it go (with the sheet it
+    // closes), and so does "Cancel".
     effect(move || {
-        if s.toast.get().is_some() && untracked(|| s.has_file()) && !s.busy.get() && untracked(|| s.error.get().is_none()) {
-            untracked(|| {
-                s.remove_file();
-                if nav.dialog.get() == Some(Dialog::BackupPassword) {
-                    nav.dialog.set(None)
-                }
-            });
+        if !s.has_file() && untracked(|| nav.dialog.get()) == Some(Dialog::BackupPassword) {
+            untracked(|| nav.dialog.set(None));
         }
     });
     // Codes read from photos wait in the scanned list: they are reviewed before they are added.
