@@ -31,67 +31,75 @@ pub fn page(s: Store) -> impl IntoElement {
         }
     });
     scroll().flex_1().keyboard_dismiss_mode(KeyboardDismissMode::OnDrag).keyboard_taps(KeyboardTaps::Handled).child(
-        view().flex_grow(1.0).items_center().justify_center().pt_safe_area_plus(px(32.0)).pb_safe_area_plus(px(72.0)).px(px(24.0)).child(
-            view()
-                .w_full()
-                .max_w(px(400.0))
-                .items_center()
-                .child(app_icon(120.0))
-                .child(
-                    text(move || s.label("Safay is locked"))
-                        .text_size(px(24.0))
-                        .line_height(px(32.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .mt(px(16.0))
-                        .mb(px(56.0)),
-                )
-                .child(
-                    ui::field(
-                        s,
-                        "password",
-                        Entry::Password,
-                        move || s.label("Master Password"),
-                        move || s.form.with(|f| f.password.to_string()),
-                        move |v| {
-                            s.error.set(None);
-                            s.form.update(|f| f.password = Zeroizing::new(v.to_owned()));
-                        },
-                        submit,
-                        |_| {},
-                        move || s.error.get().is_some(),
-                        ReturnKeyType::Go,
-                        None,
+        view()
+            .flex_grow(1.0)
+            .items_center()
+            .justify_center()
+            .pt_safe_area_plus(px(32.0))
+            // Centered in what the keyboard leaves: the window does not shrink for it, and the field is typed into.
+            .pb(move || px(72.0) + keyboard_height().max(safe_area().bottom))
+            .px(px(24.0))
+            .child(
+                view()
+                    .w_full()
+                    .max_w(px(400.0))
+                    .items_center()
+                    .child(app_icon(120.0))
+                    .child(
+                        text(move || s.label("Safay is locked"))
+                            .text_size(px(24.0))
+                            .line_height(px(32.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .mt(px(16.0))
+                            .mb(px(56.0)),
                     )
-                    .w_full(),
-                )
-                .child(
-                    ui::caption(text(move || message().unwrap_or_else(|| " ".into())))
-                        .test_id("error")
-                        .text_center()
-                        .mt(px(12.0))
-                        .text_color(move || theme().destructive),
-                )
-                .child(when(
-                    move || s.touch_id_ready(),
-                    move || {
-                        nsh_base::button()
-                            .test_id("biometric")
-                            .accessibility_label(move || Some(s.label("Unlock with biometrics")))
-                            .size(px(68.0))
-                            .mt(px(8.0))
-                            .items_center()
-                            .justify_center()
-                            .rounded_full()
-                            .text_color(move || theme().primary)
-                            .active(|st| st.bg(move || crate::components::tok("pressed")))
-                            .disabled(move || s.busy.get())
-                            .on_press(move || {
-                                dismiss_keyboard();
-                                s.unlock_touch_id()
-                            })
-                            .child(crate::icons::icon(crate::icons::Icon::TouchId).size(px(44.0)))
-                    },
-                )),
-        ),
+                    .child(
+                        ui::field(
+                            s,
+                            "password",
+                            Entry::Password,
+                            move || s.label("Master Password"),
+                            move || s.form.with(|f| f.password.to_string()),
+                            move |v| {
+                                s.error.set(None);
+                                s.form.update(|f| f.password = Zeroizing::new(v.to_owned()));
+                            },
+                            submit,
+                            |_| {},
+                            move || s.error.get().is_some(),
+                            ReturnKeyType::Go,
+                            None,
+                        )
+                        .w_full(),
+                    )
+                    .child(
+                        ui::caption(text(move || message().unwrap_or_else(|| " ".into())))
+                            .test_id("error")
+                            .text_center()
+                            .mt(px(12.0))
+                            .text_color(move || theme().destructive),
+                    )
+                    .child(when(
+                        move || s.touch_id_ready(),
+                        move || {
+                            nsh_base::button()
+                                .test_id("biometric")
+                                .accessibility_label(move || Some(s.label("Unlock with biometrics")))
+                                .size(px(68.0))
+                                .mt(px(8.0))
+                                .items_center()
+                                .justify_center()
+                                .rounded_full()
+                                .text_color(move || theme().primary)
+                                .active(|st| st.bg(move || crate::components::tok("pressed")))
+                                .disabled(move || s.busy.get())
+                                .on_press(move || {
+                                    dismiss_keyboard();
+                                    s.unlock_touch_id()
+                                })
+                                .child(crate::icons::icon(crate::icons::Icon::TouchId).size(px(44.0)))
+                        },
+                    )),
+            ),
     )
 }
