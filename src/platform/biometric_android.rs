@@ -51,7 +51,9 @@ pub fn seal(vault_key: &[u8]) -> Result<Vec<u8>, Failure> {
     super::android::with_env(|env| {
         let class = class(env)?;
         let key = env.byte_array_from_slice(vault_key)?;
-        let sealed = env.call_static_method(class, "seal", "([B)[B", &[JValue::Object(&key)])?.l()?;
+        let sealed = env.call_static_method(class, "seal", "([B)[B", &[JValue::Object(&key)]).and_then(|v| v.l());
+        super::android::wipe(env, &key);
+        let sealed = sealed?;
         if sealed.is_null() {
             return Ok(None);
         }

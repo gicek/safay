@@ -58,16 +58,10 @@ static SHARED: Mutex<Option<Shared>> = Mutex::new(None);
 /// Which session is current: a stopped one's thread sees a newer number and ends.
 static SESSION: AtomicU64 = AtomicU64::new(0);
 static RUNNING_THREAD: AtomicBool = AtomicBool::new(false);
-static CLASS: std::sync::OnceLock<GlobalRef> = std::sync::OnceLock::new();
 
-/// `com.gicek.safay.Camera`, looked up once through the app's class loader.
+/// `com.gicek.safay.Camera`.
 fn camera<'a>(env: &mut JNIEnv<'a>) -> jni::errors::Result<JClass<'a>> {
-    if let Some(class) = CLASS.get() {
-        return Ok(JClass::from(env.new_local_ref(class.as_obj())?));
-    }
-    let found = class(env, "com.gicek.safay.Camera")?;
-    let _ = CLASS.set(env.new_global_ref(&found)?);
-    Ok(found)
+    class(env, "com.gicek.safay.Camera")
 }
 
 fn with_shared<R>(f: impl FnOnce(&mut Shared) -> R) -> R {
@@ -91,11 +85,16 @@ pub fn start() {
         }
         let opened = with_env(|env| {
             let camera = camera(env)?;
-            env.call_static_method(camera, "open", "()Z", &[])?.z()
-        })
-        .unwrap_or(false);
-        if !opened {
+            env.call_static_method(camera, "open", "()V", &[])?;
+            Ok(())
+        });
+        if opened.is_none() {
             with_shared(|s| s.error = Some(CameraError::Unavailable));
+            return;
+        }
+        // Left while it opened: what `stop` closed has just been opened again.
+        if SESSION.load(Ordering::SeqCst) != session {
+            close();
             return;
         }
         // One reader at a time: a session started again waits for the last one's thread to see it ended.
@@ -111,6 +110,10 @@ pub fn start() {
 pub fn stop() {
     SESSION.fetch_add(1, Ordering::SeqCst);
     with_shared(|s| *s = Shared::default());
+    close();
+}
+
+fn close() {
     with_env(|env| {
         let camera = camera(env)?;
         env.call_static_method(camera, "close", "()V", &[])?;
@@ -126,27 +129,23 @@ pub fn poll() -> Poll {
 fn read(session: u64) {
     let mut frames = 0_u64;
     while SESSION.load(Ordering::SeqCst) == session {
-        // In a frame of local references of its own each time: this thread stays attached for the session, so the
-        // references a call makes (each frame's array among them) would otherwise pile up until Java runs out of
-        // memory.
+        // `with_env` gives each round its own frame of local references (each frame's array among them).
         let taken = with_env(|env| {
-            env.with_local_frame(16, |env| {
-                let camera = camera(env)?;
-                let state = env.call_static_method(&camera, "state", "()I", &[])?.i()?;
-                if state == FAILED {
-                    return Ok(Err(()));
-                }
-                if state != RUNNING {
-                    return Ok(Ok(None));
-                }
-                let w = env.call_static_method(&camera, "width", "()I", &[])?.i()?.max(0) as usize;
-                let h = env.call_static_method(&camera, "height", "()I", &[])?.i()?.max(0) as usize;
-                let luma = env.call_static_method(&camera, "takeLuma", "()[B", &[])?.l()?;
-                if luma.is_null() {
-                    return Ok(Ok(Some(None)));
-                }
-                Ok(Ok(Some(Some((Zeroizing::new(env.convert_byte_array(JByteArray::from(luma))?), w, h)))))
-            })
+            let camera = camera(env)?;
+            let state = env.call_static_method(&camera, "state", "()I", &[])?.i()?;
+            if state == FAILED {
+                return Ok(Err(()));
+            }
+            if state != RUNNING {
+                return Ok(Ok(None));
+            }
+            let w = env.call_static_method(&camera, "width", "()I", &[])?.i()?.max(0) as usize;
+            let h = env.call_static_method(&camera, "height", "()I", &[])?.i()?.max(0) as usize;
+            let luma = env.call_static_method(&camera, "takeLuma", "()[B", &[])?.l()?;
+            if luma.is_null() {
+                return Ok(Ok(Some(None)));
+            }
+            Ok(Ok(Some(Some((Zeroizing::new(env.convert_byte_array(JByteArray::from(luma))?), w, h)))))
         });
         let luma = match taken {
             Some(Ok(Some(luma))) => {
@@ -218,21 +217,29 @@ pub fn register(components: &nsh::Components) {
     components.register(
         PREVIEW,
         std::rc::Rc::new(|context: nsh::ComponentContext| -> Box<dyn nsh::NativeComponent> {
-            let view = context
-                .with_env(|env| {
-                    let class = camera(env)?;
-                    let view = env
-                        .call_static_method(
-                            class,
-                            "view",
-                            "(Landroid/content/Context;)Landroid/view/View;",
-                            &[JValue::Object(context.android_context().as_obj())],
-                        )?
-                        .l()?;
-                    env.new_global_ref(view)
-                })
-                .ok();
-            Box::new(Preview { view })
+            let android = context.android_context();
+            let view = context.with_env(|env| {
+                let made = camera(env).and_then(|class| {
+                    env.call_static_method(
+                        class,
+                        "view",
+                        "(Landroid/content/Context;)Landroid/view/View;",
+                        &[JValue::Object(android.as_obj())],
+                    )?
+                    .l()
+                });
+                // Without the preview (the app's classes missing from the package), a plain view holds its place: the
+                // page says the camera can't be opened.
+                let view = match made {
+                    Ok(view) => view,
+                    Err(_) => {
+                        let _ = env.exception_clear();
+                        env.new_object("android/view/View", "(Landroid/content/Context;)V", &[JValue::Object(android.as_obj())])?
+                    }
+                };
+                env.new_global_ref(view)
+            });
+            Box::new(Preview { view: view.ok() })
         }),
     );
 }
@@ -244,9 +251,19 @@ struct Preview {
 
 impl nsh::NativeComponent for Preview {
     fn view(&self) -> &GlobalRef {
-        // A view Java could not make is never asked for: the factory's `with_env` fails only when the VM does.
+        // The factory makes a plain view when the preview can't be made; only a VM that fails outright leaves none.
         self.view.as_ref().expect("the preview's view")
     }
 
     fn set_prop(&mut self, _env: &mut JNIEnv<'_>, _name: &str, _value: Option<&nsh_core::JsonValue>) {}
+
+    /// The page is gone: Java lets the view go.
+    fn destroy(&mut self, env: &mut JNIEnv<'_>) {
+        if let Some(view) = &self.view
+            && let Ok(class) = camera(env)
+        {
+            let _ = env.call_static_method(class, "forget", "(Landroid/view/View;)V", &[JValue::Object(view.as_obj())]);
+            let _ = env.exception_clear();
+        }
+    }
 }

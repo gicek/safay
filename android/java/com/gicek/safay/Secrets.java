@@ -17,7 +17,7 @@ public final class Secrets {
 
     private Secrets() {}
 
-    private static SecretKey key() throws Exception {
+    private static synchronized SecretKey key() throws Exception {
         KeyStore store = KeyStore.getInstance("AndroidKeyStore");
         store.load(null);
         SecretKey held = (SecretKey) store.getKey(ALIAS, null);

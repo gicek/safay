@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.app.Application;
 import android.content.BroadcastReceiver;
 import android.content.ClipData;
-import android.content.ClipDescription;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
@@ -63,10 +62,13 @@ public final class Bridge {
                     public void onActivityResumed(Activity activity) {
                         front = activity;
                         apply(activity);
+                        Camera.resumed();
                     }
 
                     @Override
-                    public void onActivityPaused(Activity activity) {}
+                    public void onActivityPaused(Activity activity) {
+                        Camera.paused();
+                    }
 
                     @Override
                     public void onActivityStopped(Activity activity) {}
@@ -168,22 +170,30 @@ public final class Bridge {
 
     /**
      * Puts `text` on the clipboard marked sensitive (the system's preview hides it), and takes it off again after
-     * `ttlMillis` unless something else was copied meanwhile.
+     * `ttlMillis` unless something else was copied meanwhile. False when there is no clipboard to put it on yet.
      */
-    public static void copySensitive(final String text, final long ttlMillis) {
+    public static boolean copySensitive(final String text, final long ttlMillis) {
+        final Application app = application;
+        if (app == null) {
+            return false;
+        }
         MAIN.post(new Runnable() {
             @Override
             public void run() {
-                if (application == null) {
+                final ClipboardManager clipboard = (ClipboardManager) app.getSystemService(Context.CLIPBOARD_SERVICE);
+                if (clipboard == null) {
                     return;
                 }
-                final ClipboardManager clipboard = (ClipboardManager) application.getSystemService(Context.CLIPBOARD_SERVICE);
                 ClipData clip = ClipData.newPlainText("", text);
                 PersistableBundle extras = new PersistableBundle();
                 // ClipDescription.EXTRA_IS_SENSITIVE (API 33); the same key is read by earlier keyboards.
                 extras.putBoolean("android.content.extra.IS_SENSITIVE", true);
                 clip.getDescription().setExtras(extras);
-                clipboard.setPrimaryClip(clip);
+                try {
+                    clipboard.setPrimaryClip(clip);
+                } catch (RuntimeException e) {
+                    return;
+                }
                 final int mine = ++copies;
                 MAIN.postDelayed(new Runnable() {
                     @Override
@@ -210,5 +220,6 @@ public final class Bridge {
                 }, ttlMillis);
             }
         });
+        return true;
     }
 }

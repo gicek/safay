@@ -124,10 +124,12 @@ public final class Biometric {
                     cipher = Cipher.getInstance(TRANSFORMATION);
                     cipher.init(Cipher.DECRYPT_MODE, key, oaep());
                 } catch (KeyPermanentlyInvalidatedException e) {
+                    // The biometrics changed: the key is gone for good.
                     result(token, STALE, null);
                     return;
                 } catch (Exception e) {
-                    result(token, STALE, null);
+                    // The keystore failing this once (busy, unreachable) leaves the key as it is.
+                    result(token, FAILED, null);
                     return;
                 }
                 Executor executor = new Executor() {
@@ -149,10 +151,22 @@ public final class Biometric {
                         new BiometricPrompt.AuthenticationCallback() {
                             @Override
                             public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult answer) {
+                                byte[] key = null;
                                 try {
-                                    result(token, OK, answer.getCryptoObject().getCipher().doFinal(sealed));
-                                } catch (Exception e) {
+                                    key = answer.getCryptoObject().getCipher().doFinal(sealed);
+                                } catch (javax.crypto.BadPaddingException e) {
+                                    // The file no longer opens with this key.
                                     result(token, STALE, null);
+                                    return;
+                                } catch (Exception e) {
+                                    result(token, FAILED, null);
+                                    return;
+                                }
+                                try {
+                                    result(token, OK, key);
+                                } finally {
+                                    // Rust has its own copy now.
+                                    java.util.Arrays.fill(key, (byte) 0);
                                 }
                             }
 
