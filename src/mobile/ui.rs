@@ -419,7 +419,7 @@ pub fn top_bar(s: Store, title_: Option<&'static str>, back: impl Fn() + 'static
         .items_center()
         .h(move || px(56.0) * font_scale())
         .px(px(4.0))
-        .child(icon_button(move || s.label("Back"), || Icon::Back).text_color(move || theme().foreground).on_press(back))
+        .child(icon_button(move || s.label("Back"), || Icon::ChevronLeft).text_color(move || theme().foreground).on_press(back))
         .child(when(
             move || title_.is_some(),
             move || title_large(text(move || s.label(title_.unwrap_or_default()))).number_of_lines(1).flex_1().text_center(),

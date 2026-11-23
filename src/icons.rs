@@ -70,6 +70,7 @@ pub enum Icon {
     DocFill,
     SealFill,
     Pencil,
+    ChevronLeft,
 }
 fn shape(name: Icon) -> &'static str {
     match name {
@@ -112,6 +113,8 @@ fn shape(name: Icon) -> &'static str {
         Icon::Back => "<path d='m11 5-7 7 7 7M4 12h16'/>",
         Icon::ChevronDown => "<path d='m6 9 6 6 6-6'/>",
         Icon::ChevronRight => "<path d='m9 6 6 6-6 6'/>",
+        // The back button's: as wide and as heavy as Android's own back chevron, heavier than the other line glyphs.
+        Icon::ChevronLeft => "<path d='m15.5 4.5-7.5 7.5 7.5 7.5' stroke-width='2.2'/>",
         Icon::ChevronUpDown => "<path d='m8 9 4-4 4 4M8 15l4 4 4-4'/>",
         Icon::Open => "<path d='M14 3h7v7M21 3l-9 9M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5'/>",
         Icon::External => "<rect x='3.5' y='3.5' width='17' height='17' rx='3'/><path d='M10 14l6-6M10.5 8H16v5.5'/>",
@@ -252,6 +255,7 @@ fn sf_name(name: Icon) -> Option<&'static str> {
         Icon::Info => "info.circle",
         Icon::Close => "xmark",
         Icon::ChevronRight => "chevron.right",
+        Icon::ChevronLeft => "chevron.left",
         Icon::ChevronDown => "chevron.down",
         Icon::Hand => "hand.point.up.left",
         _ => return None,
