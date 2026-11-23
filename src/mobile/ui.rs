@@ -160,8 +160,80 @@ pub enum Entry {
     /// characters typed while the system's text field is set up again (the second one, typed quickly).
     Key,
 }
-/// The one text field: 56 pt, 16 pt corners, its label inside, floating above the text once there is any or the field
-/// has the focus. The outline is the primary color with the focus and the error color while `error` holds.
+/// The outline of a text field, as Android draws one: 16 pt corners, the primary color and 2 pt with the focus, the
+/// error color while `error` holds. A press anywhere in it focuses `me`.
+fn outlined(focused: Signal<bool>, error: impl Fn() -> bool + Copy + 'static, me: ElementRef) -> View {
+    view()
+        .rounded(px(16.0))
+        .bg(move || theme().card)
+        .border(move || px(outline_width(focused, error)))
+        .border_color(move || {
+            if error() {
+                theme().destructive
+            } else if focused.get() {
+                theme().primary
+            } else {
+                tok("outline").opacity(0.55)
+            }
+        })
+        .on_press(move |_: &()| me.focus())
+}
+fn outline_width(focused: Signal<bool>, error: impl Fn() -> bool) -> f32 {
+    if focused.get() || error() { 2.0 } else { 1.0 }
+}
+/// A field's label, over the text where it starts (4 pt of room on each side of it, where it breaks the outline).
+/// `rest` is the top of its 24 pt line while it stands in the field, in points from inside the outline at the default
+/// text size. Floated (`floated`), it shrinks to a 16 pt line centered on the outline, which a band of the field's own
+/// color breaks under it; above the outline it stands on whatever the field is on.
+fn floating_label(
+    label_: impl Fn() -> SharedString + 'static,
+    floated: impl Fn() -> bool + Copy + 'static,
+    focused: Signal<bool>,
+    error: impl Fn() -> bool + Copy + 'static,
+    rest: impl Fn(f32) -> f32 + 'static,
+) -> View {
+    let outline = move || outline_width(focused, error);
+    view()
+        .absolute()
+        .left(px(12.0))
+        .px(px(4.0))
+        .top(move || px(if floated() { -8.0 * font_scale() - outline() / 2.0 } else { rest(outline()) }))
+        .pointer_events(nsh_core::PointerEvents::None)
+        .transition()
+        .duration(EFFECTS_MS)
+        .ease_out()
+        .child(
+            view()
+                .absolute()
+                .left(px(0.0))
+                .right(px(0.0))
+                .top(move || px(8.0 * font_scale() - outline() / 2.0 - 0.5))
+                .h(move || px(outline() + 1.0))
+                .bg(move || theme().card)
+                .opacity(move || if floated() { 1.0_f32 } else { 0.0 }),
+        )
+        .child(
+            text(label_)
+                .number_of_lines(1)
+                .text_size(move || px(if floated() { 12.0 } else { 16.0 }))
+                .line_height(move || px(if floated() { 16.0 } else { 24.0 }))
+                .text_color(move || {
+                    if error() {
+                        theme().destructive
+                    } else if focused.get() {
+                        theme().primary
+                    } else {
+                        theme().muted_foreground
+                    }
+                })
+                .transition()
+                .duration(EFFECTS_MS)
+                .ease_out(),
+        )
+}
+
+/// The one text field: 56 pt and outlined. Empty and without the focus, its label stands in the middle as a
+/// placeholder; with the focus or a text, the label shrinks onto the outline (`floating_label`).
 #[allow(clippy::too_many_arguments)]
 pub fn field(
     s: Store,
@@ -182,89 +254,49 @@ pub fn field(
     let on_focus_change = std::rc::Rc::new(on_focus_change);
     let on_blur = on_focus_change.clone();
     let me = reference.unwrap_or_else(element_ref);
-    view()
+    outlined(focused, error, me)
         .flex_row()
         .items_center()
         .min_h(move || px(CONTROL) * font_scale())
         .pl(px(16.0))
         .pr(px(if entry == Entry::Password { 4.0 } else { 16.0 }))
-        .rounded(px(16.0))
-        .bg(move || theme().card)
-        .border(move || px(if focused.get() || error() { 2.0 } else { 1.0 }))
-        .border_color(move || {
-            if error() {
-                theme().destructive
-            } else if focused.get() {
-                theme().primary
-            } else {
-                tok("outline").opacity(0.55)
-            }
-        })
-        .on_press(move |_: &()| me.focus())
         .child(
-            view()
-                .flex_1()
-                .min_w(px(0.0))
-                .justify_center()
-                .child(
-                    text(label_)
-                        .number_of_lines(1)
-                        .absolute()
-                        .left(px(0.0))
-                        .top(move || px(if floated() { -9.0 } else { 7.0 }))
-                        .text_size(move || px(if floated() { 12.0 } else { 16.0 }))
-                        .line_height(move || px(if floated() { 16.0 } else { 24.0 }))
-                        .text_color(move || {
-                            if error() {
-                                theme().destructive
-                            } else if focused.get() {
-                                theme().primary
-                            } else {
-                                theme().muted_foreground
-                            }
-                        })
-                        .pointer_events(nsh_core::PointerEvents::None)
-                        .transition()
-                        .duration(EFFECTS_MS)
-                        .ease_out(),
-                )
-                .child(
-                    input()
-                        .element_ref(&me)
-                        .test_id(id)
-                        .label(label_)
-                        .masked(move || !shown.get())
-                        .font_family(move || {
-                            let code = match entry {
-                                Entry::Text => false,
-                                Entry::Password => shown.get(),
-                                Entry::Key => true,
-                            };
-                            SharedString::from(if code { CODE_FONT.family } else { "system-ui" })
-                        })
-                        .value(get)
-                        .on_change(move |v: &str| {
-                            s.controller.get().activity();
-                            set(v);
-                        })
-                        .on_submit(move |_: &str| on_submit())
-                        .on_focus(move |_: &()| {
-                            focused.set(true);
-                            on_focus_change(true)
-                        })
-                        .on_blur(move |_: &()| {
-                            focused.set(false);
-                            on_blur(false)
-                        })
-                        .return_key_type(return_key)
-                        .auto_correct(false)
-                        .auto_capitalize(nsh_core::AutoCapitalize::None)
-                        .auto_fill(nsh_core::AutoFill::Off)
-                        .mt(px(14.0))
-                        .text_size(px(16.0))
-                        .text_color(move || theme().foreground)
-                        .disabled(move || s.busy.get()),
-                ),
+            view().flex_1().min_w(px(0.0)).justify_center().child(
+                input()
+                    .element_ref(&me)
+                    .test_id(id)
+                    .label(label_)
+                    .masked(move || !shown.get())
+                    .font_family(move || {
+                        let code = match entry {
+                            Entry::Text => false,
+                            Entry::Password => shown.get(),
+                            Entry::Key => true,
+                        };
+                        SharedString::from(if code { CODE_FONT.family } else { "system-ui" })
+                    })
+                    .value(get)
+                    .on_change(move |v: &str| {
+                        s.controller.get().activity();
+                        set(v);
+                    })
+                    .on_submit(move |_: &str| on_submit())
+                    .on_focus(move |_: &()| {
+                        focused.set(true);
+                        on_focus_change(true)
+                    })
+                    .on_blur(move |_: &()| {
+                        focused.set(false);
+                        on_blur(false)
+                    })
+                    .return_key_type(return_key)
+                    .auto_correct(false)
+                    .auto_capitalize(nsh_core::AutoCapitalize::None)
+                    .auto_fill(nsh_core::AutoFill::Off)
+                    .text_size(px(16.0))
+                    .text_color(move || theme().foreground)
+                    .disabled(move || s.busy.get()),
+            ),
         )
         .child(when(
             move || entry == Entry::Password,
@@ -276,6 +308,56 @@ pub fn field(
                 .on_press(move || shown.update(|v| *v = !*v))
             },
         ))
+        // Down, its line is centered in the field.
+        .child(floating_label(label_, floated, focused, error, |outline| {
+            (CONTROL * font_scale() - 2.0 * outline - 24.0 * font_scale()) / 2.0
+        }))
+}
+
+/// A text field of several lines, `height` points tall at least, outlined as `field` is. Down, its label stands on
+/// the first line; `placeholder` shows only once the label has floated, while the field is empty.
+#[allow(clippy::too_many_arguments)]
+pub fn text_area(
+    s: Store,
+    id: &'static str,
+    label_: impl Fn() -> SharedString + Copy + 'static,
+    placeholder: impl Fn() -> SharedString + Copy + 'static,
+    get: impl Fn() -> String + Copy + 'static,
+    set: impl Fn(&str) + 'static,
+    error: impl Fn() -> bool + Copy + 'static,
+    height: f32,
+) -> impl IntoElement + Styled {
+    let focused = signal(false);
+    let floated = move || focused.get() || !get().is_empty();
+    let me = element_ref();
+    outlined(focused, error, me)
+        .min_h(px(height))
+        .px(px(16.0))
+        .py(px(14.0))
+        .child(
+            input()
+                .element_ref(&me)
+                .test_id(id)
+                .label(label_)
+                .placeholder(move || if focused.get() { placeholder().to_string() } else { String::new() })
+                .multiline(true)
+                .value(get)
+                .on_change(move |v: &str| {
+                    s.controller.get().activity();
+                    set(v);
+                })
+                .on_focus(move |_: &()| focused.set(true))
+                .on_blur(move |_: &()| focused.set(false))
+                .auto_correct(false)
+                .auto_capitalize(nsh_core::AutoCapitalize::None)
+                .auto_fill(nsh_core::AutoFill::Off)
+                .flex_1()
+                .text_size(px(16.0))
+                .text_color(move || theme().foreground)
+                .disabled(move || s.busy.get()),
+        )
+        // Down, its line is the first line's, under the field's top padding.
+        .child(floating_label(label_, floated, focused, error, |_| 14.0))
 }
 
 /// The line under a field: a problem in the error color, or nothing, in a height that is always there so the form does

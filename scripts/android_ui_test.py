@@ -459,7 +459,7 @@ def paste_links(r: Run):
     d.tap("Add Account")
     d.tap("Enter Setup Key", 0)
     d.tap("Paste otpauth")
-    d.tap("Paste one otpauth", exact=False)
+    d.tap("otpauth")
     d.type(DROPBOX_LINK)
     d.key(66)
     d.type(AWS_LINK)

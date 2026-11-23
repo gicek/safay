@@ -260,24 +260,19 @@ fn paste_mode(s: Store) -> impl IntoElement {
         .child(
             ui::form_card()
                 .gap(px(8.0))
-                .child(
-                    nsh_base::input()
-                        .test_id("otpauth")
-                        .label(move || s.label("Paste otpauth"))
-                        .placeholder(move || s.label("Paste one otpauth:// or migration link per line").to_string())
-                        .multiline(true)
-                        .value(move || s.form.with(|f| f.text.to_string()))
-                        .on_change(move |v: &str| {
-                            s.error.set(None);
-                            s.form.update(|f| f.text = Zeroizing::new(v.to_owned()))
-                        })
-                        .auto_correct(false)
-                        .auto_capitalize(nsh_core::AutoCapitalize::None)
-                        .auto_fill(nsh_core::AutoFill::Off)
-                        .min_h(px(120.0))
-                        .text_size(px(15.0))
-                        .text_color(move || nsh_base::theme().foreground),
-                )
+                .child(ui::text_area(
+                    s,
+                    "otpauth",
+                    move || s.label("Paste otpauth"),
+                    move || s.label("Paste one otpauth:// or migration link per line"),
+                    move || s.form.with(|f| f.text.to_string()),
+                    move |v| {
+                        s.error.set(None);
+                        s.form.update(|f| f.text = Zeroizing::new(v.to_owned()))
+                    },
+                    move || s.error.get().is_some(),
+                    132.0,
+                ))
                 .child(ui::field_note(
                     move || s.error.get().map(|_| s.label("The text doesn’t contain an otpauth or migration link.")),
                     || true,
