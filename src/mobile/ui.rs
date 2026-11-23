@@ -161,9 +161,11 @@ pub enum Entry {
     Key,
 }
 /// The outline of a text field, as Android draws one: 16 pt corners, the primary color and 2 pt with the focus, the
-/// error color while `error` holds. A press anywhere in it focuses `me`.
+/// error color while `error` holds. A press anywhere in it focuses `me`. It keeps room above itself for the half of its
+/// floated label that stands out over the outline, so whatever is above stays clear of the label.
 fn outlined(focused: Signal<bool>, error: impl Fn() -> bool + Copy + 'static, me: ElementRef) -> View {
     view()
+        .mt(move || px(8.0) * font_scale())
         .rounded(px(16.0))
         .bg(move || theme().card)
         .border(move || px(outline_width(focused, error)))

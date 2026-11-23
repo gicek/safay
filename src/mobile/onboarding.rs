@@ -219,7 +219,8 @@ pub fn new_password_fields(
             ReturnKeyType::Next,
             None,
         ))
-        .child(view().flex_row().gap(px(4.0)).px(px(4.0)).children((1..=4u8).map(move |i| {
+        // The strength meter, with a little more room under it than the gap: the next field's label stands above it.
+        .child(view().flex_row().gap(px(4.0)).px(px(4.0)).mb(px(4.0)).children((1..=4u8).map(move |i| {
             view()
                 .flex_1()
                 .h(px(4.0))
