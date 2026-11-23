@@ -76,7 +76,10 @@
       "outline": "#767883",
       "urgent": "#f08a00",
       "destructive-container": "#fbdcdf",
-      "destructive-container-foreground": "#7a1320"
+      "destructive-container-foreground": "#7a1320",
+      "sheet-surface": "#f1f2f6",
+      "elevated-rim": "#c5c7d273",
+      "float-rim": "#c5c7d2"
     },
     "dark": {
       "foreground": "#e9eaf0",
@@ -149,7 +152,10 @@
       "outline": "#8d8f9b",
       "urgent": "#ff9f0a",
       "destructive-container": "#5c1a22",
-      "destructive-container-foreground": "#ffd9dc"
+      "destructive-container-foreground": "#ffd9dc",
+      "sheet-surface": "#1c1d23",
+      "elevated-rim": "#ffffff26",
+      "float-rim": "#ffffff2e"
     }
   }
 }

@@ -105,10 +105,11 @@ fn search(s: Store, nav: Nav) -> impl IntoElement {
                 .flex_row()
                 .items_center()
                 .rounded_full()
-                // White as the rows it floats over, set off from them by its outline and a deep shadow.
+                // White as the rows it floats over, set off from them by its outline and a deep shadow (a light
+                // outline in dark appearance, where a shadow does not show).
                 .bg(move || theme().card)
                 .border_1()
-                .border_color(move || theme().border)
+                .border_color(move || tok("float-rim"))
                 .shadow_xl()
                 .pointer_events(move || if open() { nsh_core::PointerEvents::Auto } else { nsh_core::PointerEvents::None })
                 .transition()
@@ -150,7 +151,7 @@ fn search(s: Store, nav: Nav) -> impl IntoElement {
                 .rounded_full()
                 .bg(move || theme().primary)
                 .text_color(move || theme().primary_foreground)
-                .shadow_lg()
+                .shadow_xl()
                 .transition()
                 .duration(ui::SPATIAL_MS)
                 .ease_out()
@@ -187,7 +188,7 @@ fn chips(s: Store, nav: Nav) -> impl IntoElement {
             .flex_row()
             .gap(px(8.0))
             .px(px(ui::MARGIN))
-            .pb(px(4.0))
+            .pb(px(10.0))
             .child(ui::chip(move || s.label("All"), move || s.category.get().is_none(), None).on_press(move || select(None)))
             .child(each(
                 move || s.projection.with(|p| p.categories.clone()),
@@ -257,7 +258,9 @@ fn list(s: Store, nav: Nav) -> impl IntoElement {
             .estimated_item_size(move || px(ROW) * font_scale())
             .row_gap(px(ui::GROUP_GAP))
             .content_padding_x(px(ui::MARGIN))
-            .content_padding_y(px(8.0))
+            // The chips keep the room above the first row; the end keeps its own.
+            .content_padding_top(px(2.0))
+            .content_padding_bottom(px(8.0))
             .footer(view().h(px(CLEARANCE)))
             .on_scroll(move |e: &ScrollEvent| {
                 r.scrolled(e.offset.y.0);

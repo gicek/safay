@@ -162,10 +162,10 @@ pub fn themed_input(i: Input) -> Input {
         .caret_color(move || color(theme().primary))
         .selection_color(move || color(theme().primary.opacity(0.3)))
 }
-/// The look of a menu over the page: the popover color, a faint outline that draws its edge on any background, and a
-/// deep shadow.
+/// The look of a menu over the page: the popover color, a faint outline that draws its edge on any background (light in
+/// dark appearance, where a shadow does not show), and a deep shadow.
 pub fn popover<E: Styled>(e: E) -> E {
-    e.bg(move || tok("popover")).border_1().border_color(move || theme().border.opacity(0.45)).shadow_xl()
+    e.bg(move || tok("popover")).border_1().border_color(move || tok("elevated-rim")).shadow_xl()
 }
 
 // ---- Fields --------------------------------------------------------------------------------------------------------
@@ -662,6 +662,9 @@ pub fn dialog(
                 .max_w(px(560.0))
                 .rounded(px(28.0))
                 .bg(move || tok("surface-high"))
+                // A light rim in dark appearance, where the shadow does not show.
+                .border_1()
+                .border_color(move || tok("sheet-rim"))
                 .shadow_lg()
                 // A press inside stays inside.
                 .on_press(|_: &()| {})
@@ -712,7 +715,11 @@ pub fn bottom_sheet(
         .child(
             view()
                 .rounded_t(px(28.0))
-                .bg(move || theme().background)
+                // Lighter than the page in dark appearance, with a light rim: there a shadow does not show, and the
+                // page's own color under the scrim would make the sheet one with it.
+                .bg(move || tok("sheet-surface"))
+                .border_1()
+                .border_color(move || tok("sheet-rim"))
                 // `SHEET_TOP` under the status bar at most, and above the keyboard while it is up: NSH lifts the panel
                 // to the keyboard's top, so a panel taller than the room left would run off the top of the screen.
                 .max_h(move || {

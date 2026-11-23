@@ -59,7 +59,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
                     .rounded_full()
                     .bg(move || theme().primary)
                     .text_color(move || theme().primary_foreground)
-                    .shadow_lg()
+                    .shadow_xl()
                     .active(|st| st.scale(0.96))
                     .on_press(move || s.editing.set(Some(CategoryEdit::default())))
                     .child(icon(Icon::Plus).size(px(24.0))),
