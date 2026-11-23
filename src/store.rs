@@ -1580,6 +1580,13 @@ impl Store {
     pub fn start(self) {
         self.check_biometrics();
         self.refresh();
+        // Once there is a vault, first run is over: erasing it later ("Reset App") starts again at the welcome page,
+        // not at the step that made it.
+        effect(move || {
+            if self.projection.with(|p| p.exists) && untracked(|| self.stage.get()) != Stage::Welcome {
+                untracked(|| self.stage.set(Stage::Welcome));
+            }
+        });
         let listener = self.controller.get();
         self.task(async move {
             let mut seen = listener.epoch();
