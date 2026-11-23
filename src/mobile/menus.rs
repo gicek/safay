@@ -202,7 +202,6 @@ pub fn add_to(s: Store, nav: Nav) -> impl IntoElement {
                 move |c, _| {
                     let id = c.with_untracked(|c| c.id);
                     let on = move || staged.with(|st| st.contains(&id));
-                    let ink = move || if on() { theme().primary } else { theme().foreground };
                     ui::toggle(AccessibilityRole::Checkbox, move || c.with(|c| SharedString::from(c.name.clone())), on)
                         .h(px(48.0))
                         .px(px(24.0))
@@ -217,16 +216,12 @@ pub fn add_to(s: Store, nav: Nav) -> impl IntoElement {
                                 }
                             })
                         })
-                        .child(
-                            view()
-                                .text_color(move || if on() { theme().primary } else { theme().muted_foreground })
-                                .child(icon(Icon::Folder).size(px(24.0))),
-                        )
+                        .child(view().text_color(move || theme().foreground).child(icon(Icon::Folder).size(px(24.0))))
                         .child(
                             ui::body_large(text(move || c.with(|c| SharedString::from(c.name.clone()))))
                                 .number_of_lines(1)
                                 .flex_1()
-                                .text_color(ink),
+                                .text_color(move || theme().foreground),
                         )
                         .child(when(on, || view().text_color(move || theme().primary).child(icon(Icon::Check).size(px(24.0)))))
                 },

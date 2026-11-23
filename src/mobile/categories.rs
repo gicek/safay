@@ -2,7 +2,6 @@
 //! "Move Down" actions), delete, and make a new one.
 use super::{Nav, ui};
 use crate::{
-    components::tok,
     icons::{Icon, icon},
     reorder::{CATEGORY_GAP, Kind, Pickup, Reorder},
     store::{CategoryEdit, Store},
@@ -53,20 +52,17 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
             view().absolute().right(px(ui::MARGIN)).bottom(px(0.0)).pb_safe_area_plus(px(ui::MARGIN)).child(
                 button()
                     .test_id("new-category")
-                    .h(px(56.0))
-                    .pl(px(16.0))
-                    .pr(px(20.0))
-                    .flex_row()
+                    .accessibility_label(move || Some(s.label("New Category")))
+                    .size(px(56.0))
                     .items_center()
-                    .gap(px(12.0))
-                    .rounded(px(16.0))
-                    .bg(move || tok("primary-container"))
-                    .text_color(move || tok("primary-container-foreground"))
+                    .justify_center()
+                    .rounded_full()
+                    .bg(move || theme().primary)
+                    .text_color(move || theme().primary_foreground)
                     .shadow_lg()
-                    .active(|st| st.scale(0.97))
+                    .active(|st| st.scale(0.96))
                     .on_press(move || s.editing.set(Some(CategoryEdit::default())))
-                    .child(icon(Icon::FolderPlus).size(px(24.0)))
-                    .child(ui::label(text(move || s.label("New Category")))),
+                    .child(icon(Icon::Plus).size(px(24.0))),
             ),
         )
 }

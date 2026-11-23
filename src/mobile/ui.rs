@@ -375,7 +375,7 @@ pub fn field_note(
 
 // ---- Small parts ---------------------------------------------------------------------------------------------------
 
-/// A filter chip: 32 pt, filled when selected, outlined otherwise.
+/// A filter chip: 32 pt, filled with the primary color when selected, outlined otherwise.
 pub fn chip(
     label_: impl Fn() -> SharedString + Copy + 'static,
     selected: impl Fn() -> bool + Copy + 'static,
@@ -393,9 +393,17 @@ pub fn chip(
         .flex_shrink(0.0)
         .rounded(px(12.0))
         .border_1()
-        .border_color(move || if selected() { theme().secondary } else { theme().border })
-        .bg(move || if selected() { theme().secondary } else { theme().background.opacity(0.0) })
-        .text_color(move || if selected() || glyph.is_some() { theme().foreground } else { theme().muted_foreground })
+        .border_color(move || if selected() { theme().primary } else { theme().border })
+        .bg(move || if selected() { theme().primary } else { theme().background.opacity(0.0) })
+        .text_color(move || {
+            if selected() {
+                theme().primary_foreground
+            } else if glyph.is_some() {
+                theme().foreground
+            } else {
+                theme().muted_foreground
+            }
+        })
         .active(|s| s.bg(move || tok("pressed")))
         .child(when(move || glyph.is_some(), move || icon(glyph.unwrap_or(Icon::Sliders)).size(px(18.0))))
         .child(label(text(label_)).number_of_lines(1))
