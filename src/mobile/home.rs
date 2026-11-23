@@ -118,9 +118,10 @@ fn chips(s: Store, nav: Nav) -> impl IntoElement {
 fn list(s: Store, nav: Nav) -> impl IntoElement {
     let count = move || s.projection.with(|p| p.rows.len());
     virtual_list(count, move |at| {
-        let index = at.index();
-        let row = computed(move || s.projection.with(|p| p.rows.get(index).cloned()));
-        account_row(s, nav, row, move || index, count)
+        // The position is read in the bindings, not once here: a cell keeps its content as rows come and go or the
+        // list scrolls, and shows whichever row is now at its place (its data, its corners).
+        let row = computed(move || s.projection.with(|p| p.rows.get(at.index()).cloned()));
+        account_row(s, nav, row, move || at.index(), count)
     })
     .keys(move || s.projection.with(|p| p.rows.iter().map(|r| r.id.to_string()).collect::<Vec<_>>()))
     .estimated_item_size(move || px(ROW) * font_scale())

@@ -352,7 +352,7 @@ fn accounts_page(s: Store) -> impl IntoElement {
                         move |at| {
                             let row = computed(move || r.row(at.index()));
                             when(move || s.cards.get(), move || card(s, r, row, false))
-                                .otherwise(move || list_row(s, r, row, at.index(), false))
+                                .otherwise(move || list_row(s, r, row, move || at.index(), false))
                         },
                     )
                     .keys(move || r.ids())
@@ -399,7 +399,7 @@ fn standin(s: Store, r: Reorder) -> impl IntoElement {
         .h(move || px(frame().3))
         .pointer_events(nsh_core::PointerEvents::None)
         .accessibility_elements_hidden(true)
-        .child(when(move || s.cards.get(), move || card(s, r, row, true)).otherwise(move || list_row(s, r, row, 0, true)))
+        .child(when(move || s.cards.get(), move || card(s, r, row, true)).otherwise(move || list_row(s, r, row, || 0, true)))
 }
 
 /// The empty vault: the accent shield in its tile over two faint concentric round halos and the title; two hand-drawn
@@ -775,7 +775,7 @@ fn reorderable<E: Styled + Interactive>(
     let el = el.opacity(move || if r.is_dragging(id()) { 0.0_f32 } else { 1.0 }).transition_opacity().duration(reorder::SWAP_MS);
     r.item(el, me, id)
 }
-fn list_row(s: Store, r: Reorder, row: Memo<Option<Row>>, index: usize, ghost: bool) -> impl IntoElement {
+fn list_row(s: Store, r: Reorder, row: Memo<Option<Row>>, index: impl Fn() -> usize + Copy + 'static, ghost: bool) -> impl IntoElement {
     let hovered = signal(false);
     let id = move || row.with(|r| r.as_ref().map(|r| r.id));
     let target = move || !ghost && r.is_target(id());
@@ -813,6 +813,6 @@ fn list_row(s: Store, r: Reorder, row: Memo<Option<Row>>, index: usize, ghost: b
                     view().w(px(30.0)).opacity(move || if hovered.get() && !ghost { 1.0_f32 } else { 0.0 }).child(details_button(s, id)),
                 ),
         ))
-        .child(when(move || !ghost && index + 1 < r.count() && !r.is_dragging(id()), || view().ml(px(62.0)).child(divider())));
+        .child(when(move || !ghost && index() + 1 < r.count() && !r.is_dragging(id()), || view().ml(px(62.0)).child(divider())));
     reorderable(r, el, me, id, ghost)
 }
