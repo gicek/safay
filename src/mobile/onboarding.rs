@@ -30,13 +30,15 @@ pub fn page(s: Store) -> impl IntoElement {
 
 /// A page of onboarding: scrolls, clear of the system bars and the keyboard, its column at most 480 pt wide.
 fn scaffold(top: impl IntoElement, content: impl IntoElement) -> impl IntoElement {
-    scroll().flex_1().keyboard_dismiss_mode(KeyboardDismissMode::None).keyboard_taps(KeyboardTaps::Handled).child(
-        view()
-            .pt_safe_area()
-            .pb_safe_area_plus(px(24.0))
-            .items_center()
-            .child(view().w_full().child(top))
-            .child(view().w_full().max_w(px(480.0)).px(px(24.0)).gap(px(16.0)).items_center().child(content)),
+    // The status bar's room is outside the scroll view: what scrolls up ends below the status bar, not behind it.
+    view().flex_1().pt_safe_area().child(
+        scroll().flex_1().keyboard_dismiss_mode(KeyboardDismissMode::None).keyboard_taps(KeyboardTaps::Handled).child(
+            view()
+                .pb_safe_area_plus(px(24.0))
+                .items_center()
+                .child(view().w_full().child(top))
+                .child(view().w_full().max_w(px(480.0)).px(px(24.0)).gap(px(16.0)).items_center().child(content)),
+        ),
     )
 }
 

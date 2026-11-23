@@ -481,30 +481,27 @@ pub fn dialog(
     actions: impl IntoElement,
     dismiss: impl Fn() + Copy + 'static,
 ) -> impl IntoElement {
+    let scrim = view().flex_1().items_center().justify_center().px(px(27.0)).pt_safe_area();
+    // Android resizes the dialog's window to end at the keyboard's top (as it does a sheet's, below), so the panel
+    // centers above the keyboard already; making room for the keyboard as well lifted it that far again, its title and
+    // focused field under the status bar.
+    #[cfg(not(target_os = "android"))]
+    let scrim = scrim.pb_keyboard();
     // A modal of its own: over the page and over a sheet that is open on it. The back key asks to close it.
     nsh_base::dialog().animation(nsh_core::ModalAnimation::Fade).on_cancel(move |_: &()| dismiss()).child(
-        view()
-            .flex_1()
-            .items_center()
-            .justify_center()
-            .px(px(27.0))
-            .pt_safe_area()
-            .pb_keyboard()
-            .bg(move || tok("scrim"))
-            .on_press(move |_: &()| dismiss())
-            .child(
-                view()
-                    .w_full()
-                    .max_w(px(560.0))
-                    .rounded(px(28.0))
-                    .bg(move || tok("surface-high"))
-                    .shadow_lg()
-                    // A press inside stays inside.
-                    .on_press(|_: &()| {})
-                    .child(text(title_).text_size(px(22.0)).line_height(px(28.0)).px(px(24.0)).pt(px(22.0)).pb(px(12.0)))
-                    .child(view().px(px(24.0)).gap(px(8.0)).child(content))
-                    .child(view().flex_row().justify_end().gap(px(4.0)).px(px(12.0)).pt(px(12.0)).pb(px(12.0)).child(actions)),
-            ),
+        scrim.bg(move || tok("scrim")).on_press(move |_: &()| dismiss()).child(
+            view()
+                .w_full()
+                .max_w(px(560.0))
+                .rounded(px(28.0))
+                .bg(move || tok("surface-high"))
+                .shadow_lg()
+                // A press inside stays inside.
+                .on_press(|_: &()| {})
+                .child(text(title_).text_size(px(22.0)).line_height(px(28.0)).px(px(24.0)).pt(px(22.0)).pb(px(12.0)))
+                .child(view().px(px(24.0)).gap(px(8.0)).child(content))
+                .child(view().flex_row().justify_end().gap(px(4.0)).px(px(12.0)).pt(px(12.0)).pb(px(12.0)).child(actions)),
+        ),
     )
 }
 /// How tall a bottom sheet's scroll view may be, besides `chrome` (what the sheet shows around it, in points at the

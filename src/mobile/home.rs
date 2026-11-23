@@ -270,6 +270,8 @@ fn nothing(s: Store) -> impl IntoElement {
         .items_center()
         .justify_center()
         .p(px(32.0))
+        // Centered in what the keyboard leaves: a search with no match is typed with the keyboard up.
+        .pb_keyboard_plus(px(32.0))
         .child(
             view()
                 .size(px(48.0))
