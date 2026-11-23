@@ -166,7 +166,16 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
             untracked(|| nav.dialog.set(None));
         }
     });
-    // Codes read from photos wait in the scanned list: they are reviewed before they are added.
+    // Leaving "Add Account" by any way (its back button, the back key, locking) leaves what it held: the review below
+    // would otherwise open again at the next refresh.
+    let reviewed = stored(false);
+    effect(move || {
+        let reviewing = nav.page.get() == Some(Page::Review);
+        if reviewed.replace(reviewing) && !reviewing {
+            untracked(|| s.scanned.set(Default::default()));
+        }
+    });
+    // Codes read from photos or the camera wait in the scanned list: they are reviewed before they are added.
     effect(move || {
         if s.unlocked() && !s.scanned.with(|t| t.trim().is_empty()) && untracked(|| nav.page.get() != Some(Page::Review)) {
             untracked(|| nav.push(Page::Review));
