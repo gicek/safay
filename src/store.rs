@@ -2607,14 +2607,15 @@ impl Store {
             let controller = self.controller.get();
             let epoch = controller.epoch();
             // Android's prompt shows the reason as its title, and its other button hands over to the master password.
-            let reason = if cfg!(target_os = "android") {
+            let android = cfg!(target_os = "android");
+            let reason = if android {
                 let text = self.label(reason).to_string();
                 let mut letters = text.chars();
                 letters.next().map(|first| first.to_uppercase().collect::<String>() + letters.as_str()).unwrap_or_default()
             } else {
                 self.label(reason).to_string()
             };
-            let cancel = self.label(if cfg!(target_os = "android") { "Use Master Password" } else { "Cancel" }).to_string();
+            let cancel = self.label(if android { "Use Master Password" } else { "Cancel" }).to_string();
             self.task(async move {
                 let c = controller.clone();
                 let result = blocking(move || {
@@ -2637,17 +2638,19 @@ impl Store {
                         self.fail(Error::StaleKey);
                     }
                     Some(e) => {
-                        let text = self.label(match e {
-                            F::Lockout => "Touch ID is locked; use master password",
-                            F::Unavailable => "This Mac doesn’t support Touch ID or it’s unavailable",
-                            _ => "Touch ID failed; try again or enter master password",
+                        let android = cfg!(target_os = "android");
+                        let text = self.label(match (e, android) {
+                            (F::Lockout, false) => "Touch ID is locked; use master password",
+                            (F::Unavailable, false) => "This Mac doesn’t support Touch ID or it’s unavailable",
+                            (_, false) => "Touch ID failed; try again or enter master password",
+                            (F::Lockout, true) => "Biometric unlock is locked; use your master password",
+                            (F::Unavailable, true) => "Biometric unlock isn’t available on this device",
+                            (_, true) => "Biometric unlock failed; try again or enter your master password",
                         });
                         if self.auth.get().is_some() {
                             self.auth_error.set(None);
-                            self.status.set(Some(Status { tone: Tone::Error, text }));
-                        } else {
-                            self.status.set(Some(Status { tone: Tone::Error, text }));
                         }
+                        self.status.set(Some(Status { tone: Tone::Error, text }));
                     }
                 }
                 otherwise(false);

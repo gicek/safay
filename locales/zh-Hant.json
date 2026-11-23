@@ -602,5 +602,11 @@
   "Each icon comes straight from the account’s website.": "圖示直接從帳號的網站取得。",
   "Search": "搜尋",
   "This isn’t a 2FA QR code": "這不是 2FA QR 碼",
-  "Scan the QR code a service shows to add its account. Codes are encrypted on this device.": "掃描服務提供的 QR 碼即可加入帳號。驗證碼會在此裝置上加密儲存。"
+  "Scan the QR code a service shows to add its account. Codes are encrypted on this device.": "掃描服務提供的 QR 碼即可加入帳號。驗證碼會在此裝置上加密儲存。",
+  "Create": "建立",
+  "Use Master Password": "使用主密碼",
+  "Biometric unlock is locked; use your master password": "生物辨識暫時鎖定，請使用主密碼",
+  "Biometric unlock isn’t available on this device": "此裝置不支援生物辨識或目前不可用",
+  "Biometric unlock failed; try again or enter your master password": "生物辨識驗證失敗，請重試或輸入主密碼",
+  "Biometric unlock needs your master password once more. Unlock with it to turn biometric unlock back on.": "生物辨識需要再輸入一次主密碼。以主密碼解鎖後即可重新啟用。"
 }

@@ -51,6 +51,9 @@ pub fn error_key(e: safay_app::session::Error) -> &'static str {
         Crypto => "System cryptography is unavailable. Nothing was saved.",
         Locked | Cancelled => "Unlock Safay to continue.",
         Missing | NotFound => "That item is no longer available.",
+        StaleKey if cfg!(target_os = "android") => {
+            "Biometric unlock needs your master password once more. Unlock with it to turn biometric unlock back on."
+        }
         StaleKey => "Touch ID needs your master password once more. Unlock with it to turn Touch ID back on.",
     }
 }
@@ -69,5 +72,73 @@ mod tests {
         for key in maps[0].keys() {
             assert!(maps[1].contains_key(key), "missing zh-Hans for {key}");
         }
+    }
+    /// Every literal key the code passes to `label` or `fmt` (in the first argument, branches included) is translated:
+    /// a key missing from both Chinese tables would show in English. Names and formats that read the same in every
+    /// language are exempt.
+    #[test]
+    fn every_key_in_the_code_is_translated() {
+        const SAME_IN_EVERY_LANGUAGE: [&str; 3] = ["Steam", "Battle.net", "{} ({})"];
+        fn sources(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            for entry in std::fs::read_dir(dir).unwrap().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    sources(&path, out);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    out.push(path);
+                }
+            }
+        }
+        /// The string literals of a call's first argument, from just after its opening parenthesis.
+        fn first_argument_literals(rest: &str) -> Vec<String> {
+            let (mut depth, mut literal, mut found) = (0_i32, None::<String>, Vec::new());
+            let mut chars = rest.chars();
+            while let Some(c) = chars.next() {
+                if let Some(text) = literal.as_mut() {
+                    match c {
+                        '\\' => {
+                            if let Some(next) = chars.next() {
+                                text.push(next);
+                            }
+                        }
+                        '"' => found.push(literal.take().unwrap_or_default()),
+                        _ => text.push(c),
+                    }
+                    continue;
+                }
+                match c {
+                    '"' => literal = Some(String::new()),
+                    '(' | '[' | '{' => depth += 1,
+                    ')' | ']' | '}' if depth == 0 => break,
+                    ')' | ']' | '}' => depth -= 1,
+                    ',' if depth == 0 => break,
+                    _ => {}
+                }
+            }
+            found
+        }
+        let mut files = Vec::new();
+        sources(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"), &mut files);
+        let hans = &dictionaries()[1];
+        let mut missing = Vec::new();
+        for file in files {
+            let text = std::fs::read_to_string(&file).unwrap();
+            for receiver in ["s.", "self.", "store."] {
+                for call in ["label(", "fmt("] {
+                    let opening = format!("{receiver}{call}");
+                    for (at, _) in text.match_indices(&opening) {
+                        if text[..at].chars().next_back().is_some_and(|c| c.is_alphanumeric() || c == '_') {
+                            continue;
+                        }
+                        for key in first_argument_literals(&text[at + opening.len()..]) {
+                            if !key.is_empty() && !hans.contains_key(&key) && !SAME_IN_EVERY_LANGUAGE.contains(&key.as_str()) {
+                                missing.push(format!("{}:{}: {key}", file.display(), text[..at].lines().count()));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(missing.is_empty(), "untranslated keys:\n{}", missing.join("\n"));
     }
 }

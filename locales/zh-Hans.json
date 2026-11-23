@@ -288,7 +288,7 @@
   "Touch ID is locked; use master password": "Touch ID 暂时锁定，请使用主密码",
   "Touch ID is unavailable or not enrolled on this Mac": "此 Mac 不可用 Touch ID 或未录入指纹",
   "Touch ID is unavailable or not enrolled on this Mac.": "此 Mac 不可用 Touch ID 或未录入指纹。",
-  "Touch ID needs your master password once more. Unlock with it to turn Touch ID back on.": "触控 ID 需要再输入一次主密码。用主密码解锁后即可重新启用。",
+  "Touch ID needs your master password once more. Unlock with it to turn Touch ID back on.": "Touch ID 需要再输入一次主密码。用主密码解锁后即可重新启用。",
   "Tray Icon": "托盘图标",
   "Try Again": "重试",
   "Turn Off": "关闭",
@@ -602,5 +602,11 @@
   "Each icon comes straight from the account’s website.": "图标直接从账户的网站获取。",
   "Search": "搜索",
   "This isn’t a 2FA QR code": "这不是 2FA 二维码",
-  "Scan the QR code a service shows to add its account. Codes are encrypted on this device.": "扫描服务提供的二维码即可添加账户。验证码会在此设备上加密保存。"
+  "Scan the QR code a service shows to add its account. Codes are encrypted on this device.": "扫描服务提供的二维码即可添加账户。验证码会在此设备上加密保存。",
+  "Create": "创建",
+  "Use Master Password": "使用主密码",
+  "Biometric unlock is locked; use your master password": "生物识别暂时锁定，请使用主密码",
+  "Biometric unlock isn’t available on this device": "此设备不支持生物识别或当前不可用",
+  "Biometric unlock failed; try again or enter your master password": "生物识别验证失败，请重试或输入主密码",
+  "Biometric unlock needs your master password once more. Unlock with it to turn biometric unlock back on.": "生物识别需要再输入一次主密码。用主密码解锁后即可重新启用。"
 }

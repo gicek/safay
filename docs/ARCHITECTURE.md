@@ -159,7 +159,7 @@ named without the suffix: `camera_macos.rs`, `camera_linux.rs` and `camera_andro
 
 | Capability | Where | Platforms |
 |---|---|---|
-| Touch ID unlock (Secure Enclave key wrapping) | `platform::biometric` | macOS |
+| Biometric unlock (key wrapping: the Secure Enclave and Touch ID on macOS; a Keystore key that needs a strong biometric on Android, `android/java`'s `Biometric`) | `platform::biometric` | macOS, Android |
 | Credential storage | `platform::credentials` (`keyring`; the Secret Service on Linux; on Android, files sealed with a hardware-backed key) | macOS, Windows, Linux, Android |
 | Secret clipboard (concealed, expiring) | `platform::clipboard` | all |
 | iCloud backup; silent pushes | `platform::icloud`; `platform::macos::enable_remote_push` (adds the push callback to NSH's app delegate class at runtime — recheck on every NSH upgrade) | macOS |
