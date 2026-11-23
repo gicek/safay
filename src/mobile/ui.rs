@@ -137,6 +137,13 @@ pub fn filled_button(glyph: Option<Icon>, label_: impl Fn() -> SharedString + Co
 }
 /// An action in a bar or at a field's end: a 48 pt target around a 24 pt glyph.
 pub fn icon_button(name: impl Fn() -> SharedString + 'static, glyph: impl Fn() -> Icon + Copy + 'static) -> nsh_base::ButtonElement {
+    glyph_button(name, move || icon(glyph()).size(px(24.0)).into_element())
+}
+/// An action of a page's top bar: as `icon_button`, its glyph drawn heavier, as the bar's back chevron is.
+pub fn bar_button(name: impl Fn() -> SharedString + 'static, glyph: impl Fn() -> Icon + Copy + 'static) -> nsh_base::ButtonElement {
+    glyph_button(name, move || crate::icons::icon_bold(glyph()).size(px(24.0)).into_element()).text_color(move || theme().foreground)
+}
+fn glyph_button(name: impl Fn() -> SharedString + 'static, glyph: impl Fn() -> AnyElement + 'static) -> nsh_base::ButtonElement {
     button()
         .accessibility_label(move || Some(name()))
         .size(px(48.0))
@@ -145,7 +152,12 @@ pub fn icon_button(name: impl Fn() -> SharedString + 'static, glyph: impl Fn() -
         .rounded_full()
         .text_color(move || theme().muted_foreground)
         .active(|s| s.bg(move || tok("pressed")))
-        .child(view().size(px(24.0)).child(dynamic(move || icon(glyph()).size(px(24.0)).into_element())))
+        .child(view().size(px(24.0)).child(dynamic(glyph)))
+}
+/// The look of a menu over the page: the popover color, a faint outline that draws its edge on any background, and a
+/// deep shadow.
+pub fn popover<E: Styled>(e: E) -> E {
+    e.bg(move || tok("popover")).border_1().border_color(move || theme().border.opacity(0.45)).shadow_xl()
 }
 
 // ---- Fields --------------------------------------------------------------------------------------------------------

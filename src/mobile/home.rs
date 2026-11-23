@@ -60,27 +60,19 @@ fn header(s: Store, nav: Nav) -> impl IntoElement {
         .pl(px(ui::MARGIN + 4.0))
         .pr(px(4.0))
         .child(ui::title_large(text("Safay")).flex_1())
-        .child(
-            ui::icon_button(move || s.label("Add Account"), || Icon::Plus).test_id("add").text_color(move || theme().foreground).on_press(
-                move || {
-                    dismiss_keyboard();
-                    nav.menu.set(false);
-                    nav.adding.update(|v| *v = !*v)
-                },
-            ),
-        )
+        .child(ui::bar_button(move || s.label("Add Account"), || Icon::Plus).test_id("add").on_press(move || {
+            dismiss_keyboard();
+            nav.menu.set(false);
+            nav.adding.update(|v| *v = !*v)
+        }))
         // The glyph is the row of dots, upright here.
-        .child(
-            ui::icon_button(move || s.label("More"), || Icon::More)
-                .rotate(|| std::f32::consts::FRAC_PI_2)
-                .text_color(move || theme().foreground)
-                .test_id("more")
-                .on_press(move || {
-                    dismiss_keyboard();
-                    nav.adding.set(false);
-                    nav.menu.set(true)
-                }),
-        )
+        .child(ui::bar_button(move || s.label("More"), || Icon::More).rotate(|| std::f32::consts::FRAC_PI_2).test_id("more").on_press(
+            move || {
+                dismiss_keyboard();
+                nav.adding.set(false);
+                nav.menu.set(true)
+            },
+        ))
 }
 
 /// The search button at the bottom: a press opens the field to its left, the keyboard up, and the button closes it
@@ -111,8 +103,11 @@ fn search(s: Store, nav: Nav) -> impl IntoElement {
                 .flex_row()
                 .items_center()
                 .rounded_full()
+                // White as the rows it floats over, set off from them by its outline and a deep shadow.
                 .bg(move || theme().card)
-                .shadow_md()
+                .border_1()
+                .border_color(move || theme().border)
+                .shadow_xl()
                 .pointer_events(move || if open() { nsh_core::PointerEvents::Auto } else { nsh_core::PointerEvents::None })
                 .transition()
                 .duration(ui::SPATIAL_MS)
@@ -616,16 +611,16 @@ fn add_menu(s: Store, nav: Nav) -> impl IntoElement {
 }
 /// A menu under the top bar's buttons.
 fn dropdown() -> View {
-    view()
-        .absolute()
-        .right(px(ui::MARGIN))
-        .top(px(0.0))
-        .mt_safe_area_plus(px(HEADER - 4.0))
-        .min_w(px(220.0))
-        .py(px(8.0))
-        .rounded(px(16.0))
-        .bg(move || tok("surface-high"))
-        .shadow_lg()
+    ui::popover(
+        view()
+            .absolute()
+            .right(px(ui::MARGIN))
+            .top(px(0.0))
+            .mt_safe_area_plus(px(HEADER - 4.0))
+            .min_w(px(220.0))
+            .py(px(8.0))
+            .rounded(px(16.0)),
+    )
 }
 
 /// The menu of the top bar's dots.

@@ -12,7 +12,7 @@ use safay_app::Uuid;
 use std::collections::BTreeSet;
 
 /// The menu's width, and the room it keeps from the screen's edges.
-const WIDTH: f32 = 240.0;
+const WIDTH: f32 = 212.0;
 const EDGE: f32 = 8.0;
 
 /// The account's menu, a corner at the place of the press.
@@ -39,15 +39,7 @@ pub fn account(s: Store, nav: Nav) -> impl IntoElement {
                 .inset(px(0.0))
                 .on_press(move |_: &()| close())
                 .child(
-                    view()
-                        .absolute()
-                        .left(px(left))
-                        .top(px(top))
-                        .w(px(WIDTH))
-                        .py(px(8.0))
-                        .rounded(px(24.0))
-                        .bg(move || tok("surface-high"))
-                        .shadow_lg()
+                    ui::popover(view().absolute().left(px(left)).top(px(top)).w(px(WIDTH)).py(px(8.0)).rounded(px(20.0)))
                         .child(
                             view()
                                 .flex_row()
