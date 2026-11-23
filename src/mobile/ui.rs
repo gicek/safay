@@ -142,7 +142,8 @@ pub enum Entry {
     Text,
     /// Masked, with a show and hide control; Roman characters only.
     Password,
-    /// Shown in the code font once it has content: a setup key.
+    /// A setup key, in the code font. Always: an input whose font changes with its first character drops the
+    /// characters typed while the system's text field is set up again (the second one, typed quickly).
     Key,
 }
 /// The one text field: 56 pt, 16 pt corners, its label inside, floating above the text once there is any or the field
@@ -223,7 +224,7 @@ pub fn field(
                             let code = match entry {
                                 Entry::Text => false,
                                 Entry::Password => shown.get(),
-                                Entry::Key => !get().is_empty(),
+                                Entry::Key => true,
                             };
                             SharedString::from(if code { CODE_FONT.family } else { "system-ui" })
                         })
