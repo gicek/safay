@@ -643,14 +643,17 @@ pub fn dialog(
         ),
     )
 }
+/// The room a bottom sheet leaves above itself, under the status bar, however tall its content and wherever the
+/// keyboard is: the scrim shows there, so a sheet still reads as one over the page, and its content scrolls instead.
+pub const SHEET_TOP: f32 = 56.0;
 /// How tall a bottom sheet's scroll view may be, besides `chrome` (what the sheet shows around it, in points at the
-/// default text size): the room between the status bar and the keyboard (the screen's bottom when it is down), less
-/// the handle. A scroll view needs a height of its own: without one it is as tall as its content, nothing scrolls, and a
-/// drag in it moves the sheet instead, which takes the keyboard down.
+/// default text size): the room between `SHEET_TOP` under the status bar and the keyboard (the screen's bottom when it
+/// is down), less the handle. A scroll view needs a height of its own: without one it is as tall as its content,
+/// nothing scrolls, and a drag in it moves the sheet instead, which takes the keyboard down.
 pub fn sheet_room(chrome: f32) -> Points {
     let keyboard = (keyboard_height() - safe_area().bottom).max(px(0.0));
     let bottom = if keyboard > px(0.0) { px(0.0) } else { safe_area().bottom };
-    (window().height - safe_area().top - px(12.0) - keyboard - bottom - px(28.0) - px(chrome) * font_scale()).max(px(120.0))
+    (window().height - safe_area().top - px(SHEET_TOP) - keyboard - bottom - px(28.0) - px(chrome) * font_scale()).max(px(120.0))
 }
 /// The space under a bottom sheet's content: the home indicator's while the keyboard is down, nothing above it.
 pub fn sheet_bottom(extra: f32) -> Points {
@@ -682,11 +685,11 @@ pub fn bottom_sheet(
             view()
                 .rounded_t(px(28.0))
                 .bg(move || theme().background)
-                // Below the status bar, and above the keyboard while it is up: NSH lifts the panel to the keyboard's
-                // top, so a panel taller than the room left would run off the top of the screen.
+                // `SHEET_TOP` under the status bar at most, and above the keyboard while it is up: NSH lifts the panel
+                // to the keyboard's top, so a panel taller than the room left would run off the top of the screen.
                 .max_h(move || {
                     let keyboard = (keyboard_height() - safe_area().bottom).max(px(0.0));
-                    window().height - safe_area().top - px(12.0) - keyboard
+                    window().height - safe_area().top - px(SHEET_TOP) - keyboard
                 })
                 .overflow_hidden()
                 .child(
