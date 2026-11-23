@@ -50,7 +50,18 @@ pub async fn choose_import(title: String, filter: String) -> Result<Option<(Stri
     };
     read_named(path).await.map(Some)
 }
+/// Several QR images at once. Phones show the system's photo picker (Android's Photo Picker, iOS's), not a document
+/// picker that lists files: it needs no permission, and HEIC and the like come as JPEG.
+#[cfg(any(target_os = "android", target_os = "ios"))]
+pub async fn choose_images(_title: String, _filter: String) -> Result<Vec<(String, Vec<u8>)>, Error> {
+    let mut request = nsh_core::picker::PickRequest::new(true, 20);
+    // A camera's photo can be larger than `decode_qr` reads: scaled down to its limit, a QR code in it still reads.
+    request.max_dimension = Some(nsh_core::geometry::DevicePixels(4096));
+    let picked = nsh_core::prelude::pick_images(request).await;
+    Ok(picked.into_iter().filter(|f| !f.data.bytes().is_empty()).map(|f| (f.name, f.data.bytes().to_vec())).collect())
+}
 /// Several QR images at once.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub async fn choose_images(title: String, filter: String) -> Result<Vec<(String, Vec<u8>)>, Error> {
     let dialog = OpenDialog::files().multiple(true).title(title).filter(FileFilter::new(filter, ["png", "jpg", "jpeg"]));
     let Some(paths) = open_paths(dialog).await? else { return Ok(Vec::new()) };
