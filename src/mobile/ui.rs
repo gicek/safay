@@ -154,6 +154,14 @@ fn glyph_button(name: impl Fn() -> SharedString + 'static, glyph: impl Fn() -> A
         .active(|s| s.bg(move || tok("pressed")))
         .child(view().size(px(24.0)).child(dynamic(glyph)))
 }
+/// A text input in the theme's colors, in light and dark alike: the placeholder dimmed as other secondary text, the
+/// caret and the selection in the primary color (the platform's own are its accent, and its placeholder can all but
+/// vanish on a dark background).
+pub fn themed_input(i: Input) -> Input {
+    i.placeholder_color(move || color(theme().muted_foreground))
+        .caret_color(move || color(theme().primary))
+        .selection_color(move || color(theme().primary.opacity(0.3)))
+}
 /// The look of a menu over the page: the popover color, a faint outline that draws its edge on any background, and a
 /// deep shadow.
 pub fn popover<E: Styled>(e: E) -> E {
@@ -276,7 +284,7 @@ pub fn field(
         .pr(px(if entry == Entry::Password { 4.0 } else { 16.0 }))
         .child(
             view().flex_1().min_w(px(0.0)).justify_center().child(
-                input()
+                themed_input(input())
                     .element_ref(&me)
                     .test_id(id)
                     .label(label_)
@@ -349,7 +357,7 @@ pub fn text_area(
         .px(px(16.0))
         .py(px(14.0))
         .child(
-            input()
+            themed_input(input())
                 .element_ref(&me)
                 .test_id(id)
                 .label(label_)

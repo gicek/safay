@@ -115,7 +115,7 @@ fn search(s: Store, nav: Nav) -> impl IntoElement {
                 .on_press(move |_: &()| field.focus())
                 .child(view().pl(px(16.0)).text_color(move || theme().muted_foreground).child(icon(Icon::Search).size(px(22.0))))
                 .child(
-                    input()
+                    ui::themed_input(input())
                         .element_ref(&field)
                         .test_id("search")
                         .label(move || s.label("Search accounts or sites"))
