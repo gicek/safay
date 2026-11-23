@@ -125,6 +125,12 @@ fn content(s: Store, id: Uuid) -> impl IntoElement {
                     .child(info(s, "Algorithm", move || {
                         detail()
                             .map(|d| {
+                                // Steam Guard and Battle.net have fixed parameters: their name says it all.
+                                match d.otp_type {
+                                    safay_app::core::OtpType::Steam => return s.label("Steam"),
+                                    safay_app::core::OtpType::BattleNet => return s.label("Battle.net"),
+                                    safay_app::core::OtpType::Totp => {}
+                                }
                                 let algorithm = match d.algorithm {
                                     safay_app::core::TotpAlgorithm::Sha256 => "SHA256",
                                     safay_app::core::TotpAlgorithm::Sha512 => "SHA512",

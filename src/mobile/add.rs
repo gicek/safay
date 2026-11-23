@@ -285,11 +285,13 @@ fn paste_mode(s: Store) -> impl IntoElement {
         )
 }
 
-/// "Advanced Options": the algorithm, the digits and the interval, for the few services that do not use the defaults.
+/// "Advanced Options": the kind of code, and for a time-based one the algorithm, the digits and the interval, for the
+/// few services that do not use the defaults. Steam Guard and Battle.net have fixed parameters.
 fn advanced_options(s: Store, open: Signal<bool>) -> impl IntoElement {
     let group = move |name: &'static str, control: AnyElement| {
         view().gap(px(6.0)).child(ui::dim(ui::body(text(move || s.label(name))))).child(control)
     };
+    let time_based = move || s.form.with(|f| f.otp_type == 0);
     view()
         .rounded(px(24.0))
         .overflow_hidden()
@@ -304,6 +306,11 @@ fn advanced_options(s: Store, open: Signal<bool>) -> impl IntoElement {
                 .on_press(move || open.update(|v| *v = !*v))
                 .child(view().flex_1().child(ui::label(text(move || s.label("Advanced Options")))).child(ui::dim(ui::caption(text(
                     move || {
+                        match s.form.with(|f| f.otp_type) {
+                            1 => return s.label("Steam"),
+                            2 => return s.label("Battle.net"),
+                            _ => {}
+                        }
                         let (algorithm, digits, period) = s.form.with(|f| (f.algorithm, f.digits, f.period));
                         let algorithm = ["SHA1", "SHA256", "SHA512"].get(algorithm as usize).copied().unwrap_or("SHA1");
                         s.fmt("{} · {} digits · {} sec", &[algorithm, &digits.to_string(), &period.to_string()])
@@ -327,42 +334,59 @@ fn advanced_options(s: Store, open: Signal<bool>) -> impl IntoElement {
                     .pb(px(16.0))
                     .gap(px(16.0))
                     .child(group(
-                        "Algorithm",
+                        "Type",
                         ui::choice(
                             vec![
-                                (0u32, Box::new(|| SharedString::from("SHA1")) as Box<dyn Fn() -> SharedString>),
-                                (1, Box::new(|| SharedString::from("SHA256"))),
-                                (2, Box::new(|| SharedString::from("SHA512"))),
+                                (0u32, Box::new(move || s.label("Time Based")) as Box<dyn Fn() -> SharedString>),
+                                (2, Box::new(move || s.label("Battle.net"))),
+                                (1, Box::new(move || s.label("Steam"))),
                             ],
-                            move || s.form.with(|f| f.algorithm),
-                            move |v| s.form.update(|f| f.algorithm = v),
+                            move || s.form.with(|f| f.otp_type),
+                            move |v| s.form.update(|f| f.otp_type = v),
                         )
                         .into_element(),
                     ))
-                    .child(group(
-                        "Digits",
-                        ui::choice(
-                            vec![
-                                (6u32, Box::new(|| SharedString::from("6")) as Box<dyn Fn() -> SharedString>),
-                                (8, Box::new(|| SharedString::from("8"))),
-                            ],
-                            move || s.form.with(|f| f.digits),
-                            move |v| s.form.update(|f| f.digits = v),
-                        )
-                        .into_element(),
-                    ))
-                    .child(group(
-                        "Refresh Interval",
-                        ui::choice(
-                            vec![
-                                (30u32, Box::new(move || s.fmt("{} seconds", &["30"])) as Box<dyn Fn() -> SharedString>),
-                                (60, Box::new(move || s.fmt("{} seconds", &["60"]))),
-                            ],
-                            move || s.form.with(|f| f.period),
-                            move |v| s.form.update(|f| f.period = v),
-                        )
-                        .into_element(),
-                    ))
+                    .child(when(time_based, move || {
+                        view()
+                            .gap(px(16.0))
+                            .child(group(
+                                "Algorithm",
+                                ui::choice(
+                                    vec![
+                                        (0u32, Box::new(|| SharedString::from("SHA1")) as Box<dyn Fn() -> SharedString>),
+                                        (1, Box::new(|| SharedString::from("SHA256"))),
+                                        (2, Box::new(|| SharedString::from("SHA512"))),
+                                    ],
+                                    move || s.form.with(|f| f.algorithm),
+                                    move |v| s.form.update(|f| f.algorithm = v),
+                                )
+                                .into_element(),
+                            ))
+                            .child(group(
+                                "Digits",
+                                ui::choice(
+                                    vec![
+                                        (6u32, Box::new(|| SharedString::from("6")) as Box<dyn Fn() -> SharedString>),
+                                        (8, Box::new(|| SharedString::from("8"))),
+                                    ],
+                                    move || s.form.with(|f| f.digits),
+                                    move |v| s.form.update(|f| f.digits = v),
+                                )
+                                .into_element(),
+                            ))
+                            .child(group(
+                                "Refresh Interval",
+                                ui::choice(
+                                    vec![
+                                        (30u32, Box::new(move || s.fmt("{} seconds", &["30"])) as Box<dyn Fn() -> SharedString>),
+                                        (60, Box::new(move || s.fmt("{} seconds", &["60"]))),
+                                    ],
+                                    move || s.form.with(|f| f.period),
+                                    move |v| s.form.update(|f| f.period = v),
+                                )
+                                .into_element(),
+                            ))
+                    }))
             },
         ))
 }
