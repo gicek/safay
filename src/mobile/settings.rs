@@ -37,9 +37,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
             ui::switch_row(
                 ui::round_tile(Icon::TouchId, false),
                 move || s.label("Unlock with biometrics"),
-                Rc::new(move || {
-                    s.label("The vault key is protected by this device’s hardware keystore. After you change enrolled fingerprints or faces, turn it on again with your master password.")
-                }),
+                Rc::new(move || s.label("After you change fingerprints or faces, turn it on again.")),
                 move || preferences().touch_id,
             )
             .test_id("biometrics")
@@ -67,9 +65,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
         ui::switch_row(
             ui::round_tile(Icon::Photo, false),
             move || s.label("Show Site Icons"),
-            Rc::new(move || {
-                s.label("When you add an account or change its website, Safay gets the icon directly from that website. No other service is involved.")
-            }),
+            Rc::new(move || s.label("Each icon comes straight from the account’s website.")),
             move || preferences().site_icons,
         )
         .test_id("site-icons")

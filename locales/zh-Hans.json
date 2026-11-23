@@ -588,18 +588,18 @@
   "The backup here can’t be opened with this vault’s key. It belongs to another vault, or its master password was changed on another device. To use that backup, restore from it and unlock with its master password. This replaces the vault on this device.": "无法用此保险库的密钥打开这里的备份。它属于另一个保险库，或者主密码已在另一台设备上更改。要使用该备份，请从它恢复并用它的主密码解锁。这会替换此设备上的保险库。",
   "The backup is encrypted with this separate password. You’ll need it to import on another device.": "备份使用这个单独的密码加密，在其他设备上导入时需要它。",
   "The text doesn’t contain an otpauth or migration link.": "文本中没有 otpauth 链接或迁移链接。",
-  "The vault key is protected by this device’s hardware keystore. After you change enrolled fingerprints or faces, turn it on again with your master password.": "保险库密钥由此设备的硬件密钥库保护。更改已录入的指纹或面孔后，需要用主密码重新开启。",
   "The vault on this device is re-encrypted with the new password. If sync is on, your backup is updated too.": "此设备上的保险库会用新密码重新加密。如果开启了同步，备份也会一并更新。",
   "There are no accounts in it.": "其中没有账户。",
   "Unlock with biometrics": "使用生物识别解锁",
   "Verify your identity": "验证身份",
   "Version": "版本",
   "Waiting for you to grant access in the browser": "正在等待你在浏览器中授权",
-  "When you add an account or change its website, Safay gets the icon directly from that website. No other service is involved.": "添加账户或更改其网站时，Safay 直接从该网站获取图标，不经过其他服务。",
   "Your master password is never uploaded and can’t be recovered. If you forget it, this device and your backups can’t be decrypted.": "主密码不会上传，也无法找回。忘记后，此设备和备份都将无法解密。",
   "{} digits · {} sec": "{} 位 · {} 秒",
   "{} seconds": "{} 秒",
   "accounts_n.one": "{} 个账户",
   "accounts_n.other": "{} 个账户",
-  "Tap a category to rename it, or touch and hold it to drag it to another place. Deleting a category doesn’t delete its accounts.": "轻点分类可重命名，按住可拖动到其他位置。删除分类不会删除其中的账户。"
+  "Tap a category to rename it, or touch and hold it to drag it to another place. Deleting a category doesn’t delete its accounts.": "轻点分类可重命名，按住可拖动到其他位置。删除分类不会删除其中的账户。",
+  "After you change fingerprints or faces, turn it on again.": "更改指纹或面孔后，需要重新开启。",
+  "Each icon comes straight from the account’s website.": "图标直接从账户的网站获取。"
 }
