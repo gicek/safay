@@ -19,6 +19,16 @@ pub const GROUP_GAP: f32 = 2.0;
 pub const MARGIN: f32 = 16.0;
 /// Fields, primary buttons and the search bar.
 pub const CONTROL: f32 = 56.0;
+/// The smallest touch target, and a menu's rows.
+pub const TOUCH: f32 = 48.0;
+/// A page's top bar.
+pub const BAR: f32 = 56.0;
+/// The round button floating at a page's bottom corner.
+pub const FAB: f32 = 56.0;
+/// Room under a list for the floating button over its end: the button, its margins and some air.
+pub const FAB_CLEARANCE: f32 = 120.0;
+/// A list's rows: an account, a category.
+pub const ROW: f32 = 72.0;
 /// Color and opacity changes.
 pub const EFFECTS_MS: f32 = 160.0;
 /// Shape and position changes.
@@ -162,10 +172,68 @@ pub fn themed_input(i: Input) -> Input {
         .caret_color(move || color(theme().primary))
         .selection_color(move || color(theme().primary.opacity(0.3)))
 }
-/// The look of a menu over the page: the popover color, a faint outline that draws its edge on any background (light in
-/// dark appearance, where a shadow does not show), and a deep shadow.
+/// The look of a menu over the page: the popover color and corners, a faint outline that draws its edge on any
+/// background (light in dark appearance, where a shadow does not show), and a deep shadow.
 pub fn popover<E: Styled>(e: E) -> E {
-    e.bg(move || tok("popover")).border_1().border_color(move || tok("elevated-rim")).shadow_xl()
+    e.rounded(px(20.0)).py(px(8.0)).bg(move || tok("popover")).border_1().border_color(move || tok("elevated-rim")).shadow_xl()
+}
+
+/// A menu's row: its icon and its name, in the destructive color for an action that deletes.
+pub fn menu_item(glyph: Icon, name: impl Fn() -> SharedString + 'static, destructive: bool) -> nsh_base::ButtonElement {
+    let name = std::rc::Rc::new(name);
+    let said = name.clone();
+    button()
+        .accessibility_label(move || Some(said()))
+        .min_h(move || px(TOUCH) * font_scale())
+        .px(px(12.0))
+        .flex_row()
+        .items_center()
+        .gap(px(12.0))
+        .active(|st| st.bg(move || tok("pressed")))
+        .child(
+            view()
+                .text_color(move || if destructive { theme().destructive } else { theme().muted_foreground })
+                .child(icon(glyph).size(px(24.0))),
+        )
+        .child(
+            label(text(move || name()))
+                .number_of_lines(1)
+                .flex_1()
+                .text_color(move || if destructive { theme().destructive } else { theme().foreground }),
+        )
+}
+
+/// The circle of a choice among several: filled with the primary color when chosen. The row around it is the
+/// `toggle` screen readers name.
+pub fn radio_mark(on: impl Fn() -> bool + Copy + 'static) -> View {
+    view()
+        .size(px(20.0))
+        .rounded_full()
+        .items_center()
+        .justify_center()
+        .border(px(2.0))
+        .border_color(move || if on() { theme().primary } else { theme().muted_foreground })
+        .child(when(on, || view().size(px(10.0)).rounded_full().bg(move || theme().primary)))
+}
+
+/// The round button floating at a page's bottom corner, in the primary color: the page places it and gives it its icon.
+pub fn fab(name: impl Fn() -> SharedString + 'static) -> nsh_base::ButtonElement {
+    button()
+        .accessibility_label(move || Some(name()))
+        .size(px(FAB))
+        .items_center()
+        .justify_center()
+        .rounded_full()
+        .bg(move || theme().primary)
+        .text_color(move || theme().primary_foreground)
+        .shadow_xl()
+        .active(|st| st.scale(0.96))
+}
+
+/// A row picked up to drag, over the others: the card's color, raised by a deep shadow, and a rim that draws its edge in
+/// dark appearance, where the shadow does not show.
+pub fn lifted<E: Styled>(e: E) -> E {
+    e.rounded(px(GROUP_INNER * 2.0)).bg(move || theme().card).border_1().border_color(move || tok("elevated-rim")).shadow_xl()
 }
 
 // ---- Fields --------------------------------------------------------------------------------------------------------
@@ -447,7 +515,7 @@ pub fn top_bar(s: Store, title_: Option<&'static str>, back: impl Fn() + 'static
     view()
         .flex_row()
         .items_center()
-        .h(move || px(56.0) * font_scale())
+        .h(move || px(BAR) * font_scale())
         .px(px(4.0))
         .child(icon_button(move || s.label("Back"), || Icon::ChevronLeft).text_color(move || theme().foreground).on_press(back))
         .child(when(
@@ -455,7 +523,7 @@ pub fn top_bar(s: Store, title_: Option<&'static str>, back: impl Fn() + 'static
             move || title_large(text(move || s.label(title_.unwrap_or_default()))).number_of_lines(1).flex_1().text_center(),
         ))
         // The title stays centered: as wide as the back button.
-        .child(when(move || title_.is_some(), || view().w(px(48.0))))
+        .child(when(move || title_.is_some(), || view().w(px(TOUCH))))
 }
 
 // ---- Rows, groups and choices --------------------------------------------------------------------------------------

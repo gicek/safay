@@ -194,7 +194,14 @@ pub fn review(s: Store, nav: Nav) -> impl IntoElement {
                 let ok = move || item.with(|x| x.1);
                 let count = move || items().len();
                 ui::group_corners(
-                    view().flex_row().items_center().gap(px(16.0)).px(px(16.0)).py(px(12.0)).min_h(px(72.0)).bg(move || theme().card),
+                    view()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(16.0))
+                        .px(px(16.0))
+                        .py(px(12.0))
+                        .min_h(move || px(ui::ROW) * font_scale())
+                        .bg(move || theme().card),
                     move || index.get(),
                     count,
                 )

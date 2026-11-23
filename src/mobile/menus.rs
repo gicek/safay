@@ -6,7 +6,7 @@ use crate::{
     icons::{Icon, icon},
     store::{Auth, CategoryEdit, Sheet, Store},
 };
-use nsh_base::{button, theme};
+use nsh_base::theme;
 use nsh_core::prelude::*;
 use safay_app::Uuid;
 use std::collections::BTreeSet;
@@ -29,17 +29,21 @@ pub fn account(s: Store, nav: Nav) -> impl IntoElement {
             let category_name =
                 category.and_then(|c| s.projection.with_untracked(|p| p.categories.iter().find(|x| x.id == c).map(|x| x.name.clone())));
             let size = window();
-            // Below and right of the finger; left of it or above it where that does not fit.
-            let height = 76.0 + 48.0 * if category.is_some() { 5.0 } else { 4.0 } + 17.0;
+            let (inset, scale) = (safe_area(), font_scale());
+            // Below and right of the finger; left of it or above it where that does not fit, clear of the system's bars.
+            // Its height: the account's names, a row for each action, the line before "Delete" and the padding.
+            let rows = if category.is_some() { 5.0 } else { 4.0 };
+            let height = (76.0 + ui::TOUCH * rows) * scale + 17.0;
+            let (lowest, highest) = (size.height.0 - inset.bottom.0 - EDGE, inset.top.0 + EDGE);
             let left = if at.x.0 + EDGE + WIDTH + EDGE <= size.width.0 { at.x.0 + EDGE } else { (at.x.0 - EDGE - WIDTH).max(EDGE) };
-            let top = if at.y.0 + EDGE + height + 48.0 <= size.height.0 { at.y.0 + EDGE } else { (at.y.0 - EDGE - height).max(48.0) };
+            let top = if at.y.0 + EDGE + height <= lowest { at.y.0 + EDGE } else { (at.y.0 - EDGE - height).max(highest) };
             let shown = stored(row.clone());
             view()
                 .absolute()
                 .inset(px(0.0))
                 .on_press(move |_: &()| close())
                 .child(
-                    ui::popover(view().absolute().left(px(left)).top(px(top)).w(px(WIDTH)).py(px(8.0)).rounded(px(20.0)))
+                    ui::popover(view().absolute().left(px(left)).top(px(top)).w(px(WIDTH)))
                         .child(
                             view()
                                 .flex_row()
@@ -79,25 +83,12 @@ pub fn account(s: Store, nav: Nav) -> impl IntoElement {
                             move || category.is_some(),
                             move || {
                                 let name = category_name.clone().unwrap_or_default();
-                                let said = name.clone();
-                                button()
-                                    .accessibility_label(move || Some(s.fmt("Remove from “{}”", &[&said])))
-                                    .h(px(48.0))
-                                    .px(px(12.0))
-                                    .flex_row()
-                                    .items_center()
-                                    .gap(px(12.0))
-                                    .active(|st| st.bg(move || tok("pressed")))
-                                    .on_press(move || {
-                                        close();
-                                        if let Some(category) = category {
-                                            s.membership(category, id, false)
-                                        }
-                                    })
-                                    .child(
-                                        view().text_color(move || theme().muted_foreground).child(icon(Icon::FolderMinus).size(px(24.0))),
-                                    )
-                                    .child(ui::label(text(move || s.fmt("Remove from “{}”", &[&name]))).number_of_lines(1).flex_1())
+                                ui::menu_item(Icon::FolderMinus, move || s.fmt("Remove from “{}”", &[&name]), false).on_press(move || {
+                                    close();
+                                    if let Some(category) = category {
+                                        s.membership(category, id, false)
+                                    }
+                                })
                             },
                         ))
                         .child(view().h(px(1.0)).mx(px(16.0)).my(px(4.0)).bg(move || theme().border))
@@ -111,24 +102,7 @@ pub fn account(s: Store, nav: Nav) -> impl IntoElement {
     )
 }
 fn item(s: Store, glyph: Icon, name: &'static str, destructive: bool, press: impl Fn() + 'static) -> impl IntoElement {
-    button()
-        .test_id(name)
-        .accessibility_label(move || Some(s.label(name)))
-        .h(px(48.0))
-        .px(px(12.0))
-        .flex_row()
-        .items_center()
-        .gap(px(12.0))
-        .active(|st| st.bg(move || tok("pressed")))
-        .on_press(press)
-        .child(
-            view()
-                .text_color(move || if destructive { theme().destructive } else { theme().muted_foreground })
-                .child(icon(glyph).size(px(24.0))),
-        )
-        .child(
-            ui::label(text(move || s.label(name))).text_color(move || if destructive { theme().destructive } else { theme().foreground }),
-        )
+    ui::menu_item(glyph, move || s.label(name), destructive).test_id(name).on_press(press)
 }
 
 /// "Add to": the categories, the account's ticked. Nothing changes until "Save".
@@ -195,7 +169,7 @@ pub fn add_to(s: Store, nav: Nav) -> impl IntoElement {
                     let id = c.with_untracked(|c| c.id);
                     let on = move || staged.with(|st| st.contains(&id));
                     ui::toggle(AccessibilityRole::Checkbox, move || c.with(|c| SharedString::from(c.name.clone())), on)
-                        .h(px(48.0))
+                        .min_h(move || px(ui::TOUCH) * font_scale())
                         .px(px(24.0))
                         .flex_row()
                         .items_center()

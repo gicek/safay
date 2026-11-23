@@ -69,7 +69,6 @@ fn welcome(s: Store) -> impl IntoElement {
                         "primary-container-foreground",
                         "Start fresh",
                         "Set a master password to get started.",
-                        true,
                         move || {
                             s.clear();
                             s.stage.set(Stage::Create)
@@ -82,7 +81,6 @@ fn welcome(s: Store) -> impl IntoElement {
                         "foreground",
                         "Restore a backup",
                         "From a cloud service or an exported file.",
-                        true,
                         move || {
                             s.clear();
                             s.stage.set(Stage::Restore)
@@ -101,10 +99,8 @@ fn choice(
     ink: &'static str,
     title: &'static str,
     detail: &'static str,
-    alone: bool,
     press: impl Fn() + 'static,
 ) -> impl IntoElement {
-    let _ = alone;
     button()
         .test_id(title)
         .flex_row()

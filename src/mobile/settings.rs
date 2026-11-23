@@ -209,7 +209,13 @@ pub fn deleted(s: Store, nav: Nav) -> impl IntoElement {
                         move |d, index| {
                             let id = d.with_untracked(|d| d.id);
                             ui::group_corners(
-                                view().flex_row().items_center().bg(move || theme().card).min_h(px(72.0)).pl(px(20.0)).pr(px(4.0)),
+                                view()
+                                    .flex_row()
+                                    .items_center()
+                                    .bg(move || theme().card)
+                                    .min_h(move || px(ui::ROW) * font_scale())
+                                    .pl(px(20.0))
+                                    .pr(px(4.0)),
                                 move || index.get(),
                                 count,
                             )

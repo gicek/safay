@@ -45,14 +45,7 @@ pub fn page(s: Store) -> impl IntoElement {
                     .max_w(px(400.0))
                     .items_center()
                     .child(app_icon(120.0))
-                    .child(
-                        text(move || s.label("Safay is locked"))
-                            .text_size(px(24.0))
-                            .line_height(px(32.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .mt(px(16.0))
-                            .mb(px(56.0)),
-                    )
+                    .child(ui::headline(text(move || s.label("Safay is locked"))).mt(px(16.0)).mb(px(56.0)))
                     .child(
                         ui::field(
                             s,

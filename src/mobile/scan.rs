@@ -122,7 +122,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
                 view()
                     .flex_row()
                     .items_center()
-                    .h(px(56.0))
+                    .h(move || px(ui::BAR) * font_scale())
                     .px(px(4.0))
                     .child(ui::bar_button(move || s.label("Close"), || Icon::Close).text_color(|| WHITE).test_id("scan-close").on_press(
                         move || {

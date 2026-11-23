@@ -6,7 +6,7 @@ use crate::{
     reorder::{CATEGORY_GAP, Kind, Pickup, Reorder},
     store::{CategoryEdit, Store},
 };
-use nsh_base::{button, theme};
+use nsh_base::theme;
 use nsh_core::{AccessibilityActionDef, prelude::*};
 use safay_app::session::CategoryRow;
 
@@ -24,7 +24,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
                 view()
                     .px(px(ui::MARGIN))
                     .pt(px(8.0))
-                    .pb(px(120.0))
+                    .pb(px(ui::FAB_CLEARANCE))
                     .child(
                         view()
                             .gap(px(CATEGORY_GAP))
@@ -50,17 +50,8 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
         )
         .child(
             view().absolute().right(px(ui::MARGIN)).bottom(px(0.0)).pb_safe_area_plus(px(ui::MARGIN)).child(
-                button()
+                ui::fab(move || s.label("New Category"))
                     .test_id("new-category")
-                    .accessibility_label(move || Some(s.label("New Category")))
-                    .size(px(56.0))
-                    .items_center()
-                    .justify_center()
-                    .rounded_full()
-                    .bg(move || theme().primary)
-                    .text_color(move || theme().primary_foreground)
-                    .shadow_xl()
-                    .active(|st| st.scale(0.96))
                     .on_press(move || s.editing.set(Some(CategoryEdit::default())))
                     .child(icon(Icon::Plus).size(px(24.0))),
             ),
@@ -77,7 +68,7 @@ fn category_row(s: Store, r: Reorder, c: ReadSignal<CategoryRow>, index: ReadSig
             .items_center()
             .overflow_hidden()
             .bg(move || theme().card)
-            .min_h(px(72.0))
+            .min_h(move || px(ui::ROW) * font_scale())
             // Its place stays empty while it is dragged.
             .opacity(move || if r.is_dragging(Some(id)) { 0.0_f32 } else { 1.0 }),
         move || index.get(),
@@ -133,7 +124,7 @@ fn standin(s: Store, r: Reorder) -> impl IntoElement {
         let id = r.dragged.get();
         s.projection.with(|p| p.categories.iter().find(|c| Some(c.id) == id).cloned())
     };
-    view()
+    ui::lifted(view())
         .absolute()
         .left(move || px(frame().0))
         .top(move || px(frame().1))
@@ -141,9 +132,6 @@ fn standin(s: Store, r: Reorder) -> impl IntoElement {
         .h(move || px(frame().3))
         .justify_center()
         .pl(px(20.0))
-        .rounded(px(ui::GROUP_INNER * 2.0))
-        .bg(move || theme().card)
-        .shadow_lg()
         .pointer_events(nsh_core::PointerEvents::None)
         .child(names(s, category))
 }

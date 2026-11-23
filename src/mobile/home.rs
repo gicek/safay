@@ -9,18 +9,10 @@ use crate::{
     reorder::{Kind, Pickup, Reorder},
     store::Store,
 };
-use nsh_base::{button, input, theme};
+use nsh_base::{input, theme};
 use nsh_core::prelude::*;
 use safay_app::session::Row;
 
-/// A row: 14 pt above and below the two lines of its names.
-const ROW: f32 = 72.0;
-/// What the list leaves free at its end, so its last row scrolls clear of the search button.
-const CLEARANCE: f32 = 120.0;
-/// The top bar.
-const HEADER: f32 = 56.0;
-/// The search button.
-const FAB: f32 = 56.0;
 /// Scanning with the camera is here (`platform::supports::CAMERA`).
 const CAMERA: bool = crate::platform::supports::CAMERA;
 /// How many accounts the list holds before its letter index shows.
@@ -58,7 +50,7 @@ fn header(s: Store, nav: Nav) -> impl IntoElement {
     view()
         .flex_row()
         .items_center()
-        .h(px(HEADER))
+        .h(move || px(ui::BAR) * font_scale())
         .pl(px(ui::MARGIN + 4.0))
         .pr(px(4.0))
         .child(ui::title_large(text("Safay")).flex_1())
@@ -83,7 +75,7 @@ fn search(s: Store, nav: Nav) -> impl IntoElement {
     let open = move || nav.searching.get();
     let field = element_ref();
     // The field's width when open: the row less its margins, the button and the gap between them.
-    let wide = move || window().width - px(2.0 * ui::MARGIN + FAB + 8.0);
+    let wide = move || window().width - px(2.0 * ui::MARGIN + ui::FAB + 8.0);
     view()
         .absolute()
         .left(px(0.0))
@@ -99,7 +91,7 @@ fn search(s: Store, nav: Nav) -> impl IntoElement {
         .child(
             view()
                 .w(move || if open() { wide() } else { px(0.0) })
-                .h(px(FAB))
+                .h(px(ui::FAB))
                 .opacity(move || if open() { 1.0_f32 } else { 0.0 })
                 .overflow_hidden()
                 .flex_row()
@@ -142,20 +134,11 @@ fn search(s: Store, nav: Nav) -> impl IntoElement {
                 ),
         )
         .child(
-            button()
+            ui::fab(move || s.label(if open() { "Close" } else { "Search" }))
                 .test_id("search-button")
-                .accessibility_label(move || Some(s.label(if open() { "Close" } else { "Search" })))
-                .size(px(FAB))
-                .items_center()
-                .justify_center()
-                .rounded_full()
-                .bg(move || theme().primary)
-                .text_color(move || theme().primary_foreground)
-                .shadow_xl()
                 .transition()
                 .duration(ui::SPATIAL_MS)
                 .ease_out()
-                .active(|st| st.scale(0.96))
                 .on_press(move || {
                     if open() {
                         nav.close_search();
@@ -255,13 +238,13 @@ fn list(s: Store, nav: Nav) -> impl IntoElement {
                 Some(n) => s.projection.with(|p| n.iter().filter_map(|i| p.rows.get(*i)).map(|r| r.id.to_string()).collect::<Vec<_>>()),
                 None => r.ids().iter().map(|id| id.to_string()).collect::<Vec<_>>(),
             })
-            .estimated_item_size(move || px(ROW) * font_scale())
+            .estimated_item_size(move || px(ui::ROW) * font_scale())
             .row_gap(px(ui::GROUP_GAP))
             .content_padding_x(px(ui::MARGIN))
             // The chips keep the room above the first row; the end keeps its own.
             .content_padding_top(px(2.0))
             .content_padding_bottom(px(8.0))
-            .footer(view().h(px(CLEARANCE)))
+            .footer(view().h(px(ui::FAB_CLEARANCE)))
             .on_scroll(move |e: &ScrollEvent| {
                 r.scrolled(e.offset.y.0);
                 s.controller.get().activity()
@@ -295,7 +278,7 @@ fn account_row(
             .accessible(true)
             .role(nsh_core::AccessibilityRole::Button)
             .label(move || s.fmt("Copy code for {}", &[&issuer()]))
-            .min_h(move || px(ROW) * font_scale())
+            .min_h(move || px(ui::ROW) * font_scale())
             .px(px(16.0))
             .py(px(14.0))
             .flex_row()
@@ -358,7 +341,7 @@ fn standin(r: Reorder) -> impl IntoElement {
     let frame = move || r.pointer.get().unwrap_or_default();
     let row = computed(move || r.standin.get());
     face(
-        view()
+        ui::lifted(view())
             .absolute()
             .left(move || px(frame().0))
             .top(move || px(frame().1))
@@ -369,9 +352,6 @@ fn standin(r: Reorder) -> impl IntoElement {
             .flex_row()
             .items_center()
             .gap(px(14.0))
-            .rounded(px(ui::GROUP_INNER * 2.0))
-            .bg(move || theme().card)
-            .shadow_lg()
             .pointer_events(nsh_core::PointerEvents::None),
         row,
     )
@@ -425,7 +405,7 @@ fn index(nav: Nav, r: Reorder, letters: Memo<Vec<char>>) -> impl IntoElement {
                 .absolute()
                 .right(px(0.0))
                 .top(px(0.0))
-                .bottom(px(CLEARANCE / 2.0))
+                .bottom(px(ui::FAB_CLEARANCE / 2.0))
                 .w(px(ui::MARGIN))
                 .justify_center()
                 .pointer_events(nsh_core::PointerEvents::BoxNone)
@@ -623,16 +603,7 @@ fn add_menu(s: Store, nav: Nav) -> impl IntoElement {
 }
 /// A menu under the top bar's buttons.
 fn dropdown() -> View {
-    ui::popover(
-        view()
-            .absolute()
-            .right(px(ui::MARGIN))
-            .top(px(0.0))
-            .mt_safe_area_plus(px(HEADER - 4.0))
-            .min_w(px(220.0))
-            .py(px(8.0))
-            .rounded(px(16.0)),
-    )
+    ui::popover(view().absolute().right(px(ui::MARGIN)).top(px(0.0)).mt_safe_area_plus(px(ui::BAR - 4.0)).min_w(px(220.0)))
 }
 
 /// The menu of the top bar's dots.
@@ -653,15 +624,5 @@ fn overflow(s: Store, nav: Nav) -> impl IntoElement {
     )
 }
 fn menu_item(s: Store, glyph: Icon, label_: &'static str, press: impl Fn() + 'static) -> impl IntoElement {
-    button()
-        .test_id(label_)
-        .h(px(48.0))
-        .px(px(12.0))
-        .flex_row()
-        .items_center()
-        .gap(px(12.0))
-        .active(|st| st.bg(move || tok("pressed")))
-        .on_press(press)
-        .child(view().text_color(move || theme().muted_foreground).child(icon(glyph).size(px(24.0))))
-        .child(ui::label(text(move || s.label(label_))))
+    ui::menu_item(glyph, move || s.label(label_), false).test_id(label_).on_press(press)
 }

@@ -148,7 +148,6 @@ fn options<T: Copy + PartialEq + 'static>(
     pick: impl Fn(T) + Copy + 'static,
 ) -> impl IntoElement {
     use crate::components::tok;
-    use nsh_base::theme;
     let close = move || nav.dialog.set(None);
     ui::dialog(
         move || s.label(title),
@@ -162,7 +161,7 @@ fn options<T: Copy + PartialEq + 'static>(
                 let on = move || current() == value;
                 let said = name.clone();
                 ui::toggle(AccessibilityRole::Radio, move || said.clone(), on)
-                    .h(px(48.0))
+                    .min_h(move || px(ui::TOUCH) * font_scale())
                     .px(px(24.0))
                     .flex_row()
                     .items_center()
@@ -172,17 +171,8 @@ fn options<T: Copy + PartialEq + 'static>(
                         pick(value);
                         close()
                     })
-                    .child(
-                        view()
-                            .size(px(20.0))
-                            .rounded_full()
-                            .items_center()
-                            .justify_center()
-                            .border(px(2.0))
-                            .border_color(move || if on() { theme().primary } else { theme().muted_foreground })
-                            .child(when(on, || view().size(px(10.0)).rounded_full().bg(move || theme().primary))),
-                    )
-                    .child(text(name).text_size(px(18.0)).line_height(px(24.0)))
+                    .child(ui::radio_mark(on))
+                    .child(ui::body_large(text(name)))
             })),
         ui::text_button(move || s.label("Cancel"), false).on_press(close),
         close,
