@@ -585,7 +585,6 @@
   "Save": "保存",
   "Showing the secret or the QR code asks for your master password.": "显示密钥或二维码前需要验证身份。",
   "Sync & Backup": "同步与备份",
-  "Tap a category to rename it. Deleting a category doesn’t delete its accounts.": "轻点分类可重命名。删除分类不会删除其中的账户。",
   "The backup here can’t be opened with this vault’s key. It belongs to another vault, or its master password was changed on another device. To use that backup, restore from it and unlock with its master password. This replaces the vault on this device.": "无法用此保险库的密钥打开这里的备份。它属于另一个保险库，或者主密码已在另一台设备上更改。要使用该备份，请从它恢复并用它的主密码解锁。这会替换此设备上的保险库。",
   "The backup is encrypted with this separate password. You’ll need it to import on another device.": "备份使用这个单独的密码加密，在其他设备上导入时需要它。",
   "The text doesn’t contain an otpauth or migration link.": "文本中没有 otpauth 链接或迁移链接。",
@@ -601,5 +600,6 @@
   "{} digits · {} sec": "{} 位 · {} 秒",
   "{} seconds": "{} 秒",
   "accounts_n.one": "{} 个账户",
-  "accounts_n.other": "{} 个账户"
+  "accounts_n.other": "{} 个账户",
+  "Tap a category to rename it, or touch and hold it to drag it to another place. Deleting a category doesn’t delete its accounts.": "轻点分类可重命名，按住可拖动到其他位置。删除分类不会删除其中的账户。"
 }

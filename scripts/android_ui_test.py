@@ -575,10 +575,13 @@ def categories(r: Run):
     d.key(66, settle=1.0)
     s = d.screen()
     r.check(s.has("Work Team"), "a category is renamed")
-    d.tap("Move Up", settle=1.0)
+    r.check(not s.has("Move Up") and not s.has("Move Down"), "categories have no move buttons")
+    shown = [n for n in s.nodes if n.rid == "category"]
+    d.drag(shown[1], shown[0].center[1])
     s = d.screen()
     names = [n.label for n in s.nodes if n.label in ("Work Team", "Personal")]
-    r.check(names == ["Personal", "Work Team"], f"Move Up reorders the categories ({names})")
+    r.check(names == ["Personal", "Work Team"], f"a long press and a drag reorder the categories ({names})")
+    r.check(not s.has("Rename"), "dragging a category does not rename it")
     d.tap("Delete Category", 0)
     d.tap("Delete Category", 0, settle=1.0)  # the confirmation's button
     s = d.screen()
