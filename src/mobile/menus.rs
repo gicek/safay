@@ -1,9 +1,10 @@
-//! What a long press on an account opens: its menu at the finger, and from there the sheet that puts it in categories.
+//! What a long press on an account opens: its menu at the finger (its QR code, its details, its categories, deleting
+//! it), and from there the sheet that puts it in categories.
 use super::{Nav, ui};
 use crate::{
     components::{badge_with_icon, tok},
     icons::{Icon, icon},
-    store::{CategoryEdit, Sheet, Store},
+    store::{Auth, CategoryEdit, Sheet, Store},
 };
 use nsh_base::{button, theme};
 use nsh_core::prelude::*;
@@ -69,10 +70,10 @@ pub fn account(s: Store, nav: Nav) -> impl IntoElement {
                                         .child(ui::dim(ui::caption(text(row.username.clone()))).number_of_lines(1)),
                                 ),
                         )
-                        .child(item(s, Icon::Copy, "Copy", false, move || {
+                        // A press on the row copies the code: the menu shows the QR code instead.
+                        .child(item(s, Icon::Qr, "Show QR Code", false, move || {
                             close();
-                            haptic(Haptic::Notification(HapticNotification::Success));
-                            s.copy(id)
+                            s.reveal(Auth::Qr(id))
                         }))
                         .child(item(s, Icon::Info, "Details", false, move || {
                             close();

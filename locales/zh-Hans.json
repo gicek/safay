@@ -548,7 +548,6 @@
   "Categories ({})": "分类（{}）",
   "Choose Location": "选择位置",
   "Choose from Photos": "从相册选择",
-  "Clear Search": "清除搜索",
   "Copy": "复制",
   "Data": "数据",
   "Differs in: {}": "不同之处：{}",
@@ -600,5 +599,6 @@
   "accounts_n.other": "{} 个账户",
   "Tap a category to rename it, or touch and hold it to drag it to another place. Deleting a category doesn’t delete its accounts.": "轻点分类可重命名，按住可拖动到其他位置。删除分类不会删除其中的账户。",
   "After you change fingerprints or faces, turn it on again.": "更改指纹或面孔后，需要重新开启。",
-  "Each icon comes straight from the account’s website.": "图标直接从账户的网站获取。"
+  "Each icon comes straight from the account’s website.": "图标直接从账户的网站获取。",
+  "Search": "搜索"
 }

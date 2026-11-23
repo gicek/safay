@@ -15,6 +15,8 @@ mod desktop;
 mod desktop;
 mod i18n;
 mod icons;
+#[cfg(any(debug_assertions, target_os = "android", target_os = "ios"))]
+mod initials;
 #[cfg(target_os = "macos")]
 mod launcher;
 // The phone and tablet interface; debug builds of the desktop can show it too (`SAFAY_MOBILE`).

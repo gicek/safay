@@ -184,6 +184,15 @@ class Device:
         self.adb("shell", "input", "tap", str(x), str(y))
         time.sleep(settle)
 
+    def tap_id(self, rid: str, settle: float = 0.8):
+        """Taps the element whose test ID is `rid`, where its label is on another element too."""
+        found = [n for n in self.wait(rid).nodes if n.rid == rid]
+        if not found:
+            raise StepError(f"no element with the test ID {rid!r} on screen")
+        x, y = found[0].center
+        self.adb("shell", "input", "tap", str(x), str(y))
+        time.sleep(settle)
+
     def long_press(self, label: str, settle: float = 1.0):
         x, y = self.node(label).center
         self.adb("shell", "input", "swipe", str(x), str(y), str(x), str(y), "800")
@@ -358,11 +367,11 @@ def rows(s: Screen) -> list[str]:
 
 
 def recover(d: Device):
-    """Back to the list, whatever is open: system back until the search field shows."""
+    """Back to the list, whatever is open: system back until the list's top bar shows, with no search open."""
     d.hide_keyboard()
     for _ in range(6):
         s = d.screen()
-        if s.has("Search accounts or sites") and not s.has("Back") and not s.has("Close"):
+        if s.has("more") and not s.has("Back") and not s.has("Close"):
             return
         if PACKAGE not in d.focused_window():
             d.launch()
@@ -437,7 +446,7 @@ def manual_entry(r: Run):
         all(s.has(x) for x in ("Choose from Photos", "Enter Setup Key", "Import Backup File")),
         "the add menu shows its three choices",
     )
-    d.tap("Enter Setup Key", 0)
+    d.tap_id("Enter Setup Key")  # the add menu's, not the empty list's button of the same name
     d.wait("Manual Entry")
     s = d.screen()
     for tab in ("Manual Entry", "Paste otpauth"):
@@ -508,12 +517,15 @@ def details(r: Run):
     d = r.d
     d.long_press("Copy code for GitHub")
     s = d.screen()
-    r.check(all(s.has(x) for x in ("Copy", "Details", "Add to", "Delete")), "a long press opens the account menu")
+    # Each item is its button and its text: their labels once each, in order.
+    menu = list(
+        dict.fromkeys(n.label for n in s.nodes if n.label in ("Show QR Code", "Details", "Add to", "Delete", "Copy"))
+    )
+    r.check(menu == ["Show QR Code", "Details", "Add to", "Delete"], f"a long press opens the account menu ({menu})")
     d.tap("Details", settle=1.2)
     s = d.wait("Show Secret")
-    r.check(
-        s.has("Show Secret") and s.has("Export QR Code") and s.has("Delete This Account"), "the details sheet opens"
-    )
+    r.check(s.has("Show Secret") and s.has("Export QR Code"), "the details sheet opens")
+    r.check(not s.has("delete"), "the details sheet has no delete button")
     d.tap("secret", settle=1.2)
     s = d.wait("Verify your identity")
     r.check(s.has("Verify your identity"), "showing the secret asks for the master password")
@@ -591,9 +603,11 @@ def categories(r: Run):
 
 def search(r: Run):
     d = r.d
-    d.tap("Search accounts or sites", 1)
+    d.tap("search-button", settle=1.2)
+    s = d.screen()
+    r.check(s.keyboard_top is not None, "the search button opens the field with the keyboard up")
     d.type("drop")
-    s = d.wait("Clear Search")
+    s = d.wait("Close")
     r.check(rows(s) == ["Dropbox"], f"search finds Dropbox (rows {rows(s)})")
     for _ in range(4):
         d.key(67, settle=0.05)
@@ -601,10 +615,10 @@ def search(r: Run):
     s = d.wait("No matching accounts", timeout=3)
     n = s.find("No matching accounts")
     r.check(bool(n) and s.visible(n[0]), '"No matching accounts" shows above the keyboard')
-    d.tap("Clear Search")
-    d.hide_keyboard()
+    d.tap("search-button", settle=1.2)
     s = d.screen()
-    r.check(len(rows(s)) == 3, "clearing the search brings every account back")
+    r.check(s.keyboard_top is None and not s.has("Close"), "the close button closes the field and the keyboard")
+    r.check(len(rows(s)) == 3, "closing the search brings every account back")
 
 
 def delete_and_recover(r: Run):
@@ -746,7 +760,7 @@ def back_navigation(r: Run):
     open_settings(d)
     d.key(4, settle=1.0)
     s = d.screen()
-    r.check(s.has("Search accounts or sites") and not s.has("Security"), "system back leaves Settings for the list")
+    r.check(s.has("more") and not s.has("Security"), "system back leaves Settings for the list")
     d.tap("Add Account")
     d.key(4, settle=0.8)
     r.check(not d.screen().has("Choose from Photos"), "system back closes the add menu")
@@ -837,6 +851,74 @@ def walk_list(r: Run, d: Device, label: str) -> list[str]:
     return order
 
 
+def letter_filter(r: Run, d: Device):
+    """The letter index lists the names' first letters; a press on one narrows the list to the accounts filed under
+    it, and each way out lets the list go: the letter again, a category, the search, the back key."""
+
+    def letter(name: str) -> Node | None:
+        return next((n for n in d.screen().nodes if n.label == name and n.right > 1000), None)
+
+    def press(name: str):
+        node = letter(name)
+        if node is None:
+            raise StepError(f"the index has no {name}")
+        x, y = node.center
+        d.shell(f"input motionevent DOWN {x} {y}")
+        time.sleep(0.15)
+        d.shell(f"input motionevent UP {x} {y}")
+        time.sleep(1.2)
+
+    def narrowed_to_v() -> bool:
+        names = rows(d.screen())
+        return bool(names) and all(name.startswith("Vercel") for name in names)
+
+    def whole() -> bool:
+        return next((name for name in rows(d.screen()) if name), "") == "GitHub 001"
+
+    d.swipe(540, 700, 540, 2100, 120)
+    s = d.screen()
+    letters = [
+        n.label for n in s.nodes if len(n.label) == 1 and (n.label.isupper() or n.label == "#") and n.right > 1000
+    ]
+    want = list("ACDFGHLMNPRSTV")  # the first letters of export_fixture's services
+    r.check(letters == want, f"the index lists the letters of the names ({''.join(letters)})")
+    press("V")
+    r.check(narrowed_to_v(), f"a press on V narrows the list to the accounts under V ({rows(d.screen())})")
+    press("V")
+    r.check(whole(), "a press on V again lets the list go")
+    press("V")
+    d.tap("All", settle=1.2)
+    r.check(whole(), '"All" lets the list go')
+    press("V")
+    d.key(4, settle=1.2)
+    s = d.screen()
+    r.check(whole() and s.has("more"), "the back key lets the list go, and stays in the app")
+    press("V")
+    d.tap("search-button", settle=1.2)
+    r.check(whole(), "opening the search lets the list go")
+    d.tap("search-button", settle=1.2)
+    press("V")
+    d.tap("Work", settle=1.5)
+    work = [int(m.group(1)) for x in rows(d.screen()) if (m := FIXTURE.match(x))]
+    r.check(bool(work) and all(n % 3 == 1 for n in work), f"a category lets the letter go and shows itself ({work})")
+    d.tap("All", settle=1.2)
+    # Sliding from A to T narrows the list to each letter in turn, ending at T.
+    a, z = letter("A"), letter("T")
+    if a and z:
+        x = a.center[0]
+        d.shell(f"input motionevent DOWN {x} {a.center[1]}")
+        for step in range(1, 11):
+            d.shell(f"input motionevent MOVE {x} {a.center[1] + (z.center[1] - a.center[1]) * step // 10}")
+            time.sleep(0.05)
+        d.shell(f"input motionevent UP {x} {z.center[1]}")
+        time.sleep(1.2)
+        names = rows(d.screen())
+        r.check(
+            bool(names) and all(n.startswith("Twitter") for n in names), f"sliding to T narrows the list to T ({names})"
+        )
+        press("T")
+
+
 def large_import(r: Run):
     d = r.d
     local = d.shots / f"safay-{LARGE}.json"
@@ -891,6 +973,7 @@ def large_import(r: Run):
         fixtures = [int(m.group(1)) for x in order if (m := FIXTURE.match(x))]
         r.check(len(fixtures) == LARGE, f"the list has all {LARGE} imported accounts ({len(fixtures)} seen)")
         r.check(fixtures == sorted(fixtures), "the imported accounts keep their order")
+        letter_filter(r, d)
         d.swipe(540, 700, 540, 2100, 120)
         d.tap("Work", settle=1.5)
         order = walk_list(r, d, "Work")

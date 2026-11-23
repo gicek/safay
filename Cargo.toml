@@ -34,6 +34,8 @@ rustls = { version = "=0.23.46", default-features = false, features = ["ring", "
 rustls-pki-types = "=1.15.1"
 rustls-platform-verifier = "=0.7.1"
 sha2 = "=0.11.0"
+# The phone list's letter index: a Chinese name files under its pinyin's first letter (src/initials.rs).
+pinyin = { version = "=0.11.0", default-features = false, features = ["plain"] }
 qrcode = { version = "=0.14.1", default-features = false, features = ["image"] }
 rqrr = "=0.11.0"
 nsh-updater = { git = "https://github.com/longbridge/nsh", branch = "main" }

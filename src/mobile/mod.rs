@@ -49,6 +49,10 @@ pub struct Nav {
     pub page: Signal<Option<Page>>,
     /// The add menu over the list is open.
     pub adding: Signal<bool>,
+    /// The search field is open at the list's bottom.
+    pub searching: Signal<bool>,
+    /// The letter the list is narrowed to, from its index: only the accounts filed under it show.
+    pub letter: Signal<Option<char>>,
     /// The list's overflow menu is open.
     pub menu: Signal<bool>,
     /// The account whose menu is open, and where it was pressed.
@@ -72,6 +76,11 @@ impl Nav {
         }
         self.page.set(Some(page));
     }
+    /// Closes the search field: its text goes, and the keyboard with it.
+    pub fn close_search(self) {
+        dismiss_keyboard();
+        self.searching.set(false);
+    }
     /// Back to the list, whatever is over it.
     pub fn home(self) {
         dismiss_keyboard();
@@ -86,6 +95,10 @@ impl Nav {
             self.menu.set(false);
         } else if self.adding.get_untracked() {
             self.adding.set(false);
+        } else if self.searching.get_untracked() {
+            self.close_search();
+        } else if self.letter.get_untracked().is_some() {
+            self.letter.set(None);
         } else if self.page.get_untracked().is_some() {
             dismiss_keyboard();
             let mut stack = self.stack.get_untracked();
@@ -106,6 +119,8 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
     let nav = Nav {
         page: signal(None),
         adding: signal(false),
+        searching: signal(false),
+        letter: signal(None),
         menu: signal(false),
         context: signal(None),
         add_to: signal(None),
@@ -119,6 +134,8 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
         if !s.unlocked() {
             nav.page.set(None);
             nav.adding.set(false);
+            nav.searching.set(false);
+            nav.letter.set(None);
             nav.menu.set(false);
             nav.context.set(None);
             nav.add_to.set(None);

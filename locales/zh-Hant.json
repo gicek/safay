@@ -548,7 +548,6 @@
   "Categories ({})": "分類（{}）",
   "Choose Location": "選擇位置",
   "Choose from Photos": "從相簿選擇",
-  "Clear Search": "清除搜尋",
   "Copy": "複製",
   "Data": "資料",
   "Differs in: {}": "不同之處：{}",
@@ -600,5 +599,6 @@
   "accounts_n.other": "{} 個帳號",
   "Tap a category to rename it, or touch and hold it to drag it to another place. Deleting a category doesn’t delete its accounts.": "輕點分類可重新命名，按住可拖曳到其他位置。刪除分類不會刪除其中的帳號。",
   "After you change fingerprints or faces, turn it on again.": "更改指紋或臉孔後，需要重新開啟。",
-  "Each icon comes straight from the account’s website.": "圖示直接從帳號的網站取得。"
+  "Each icon comes straight from the account’s website.": "圖示直接從帳號的網站取得。",
+  "Search": "搜尋"
 }

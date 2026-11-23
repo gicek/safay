@@ -1,9 +1,11 @@
-//! The list: a search bar, the categories as chips, and the accounts as one group of rows. A press on a row copies its
-//! code, a long press opens its menu and picks it up to drag; the button at the bottom adds an account.
+//! The list: a top bar (the app's name, adding and the menu), the categories as chips, and the accounts as one group
+//! of rows with a letter index beside them. A press on a row copies its code, a long press opens its menu and picks it
+//! up to drag; the button at the bottom opens the search.
 use super::{Nav, Page, ui};
 use crate::{
     components::{CODE_FONT, badge_with_icon, tok},
     icons::{Icon, icon},
+    initials,
     reorder::{Kind, Pickup, Reorder},
     store::Store,
 };
@@ -13,82 +15,172 @@ use safay_app::session::Row;
 
 /// A row: 14 pt above and below the two lines of its names.
 const ROW: f32 = 72.0;
-/// What the list leaves free at its end, so its last row scrolls clear of the add button.
+/// What the list leaves free at its end, so its last row scrolls clear of the search button.
 const CLEARANCE: f32 = 120.0;
+/// The top bar.
+const HEADER: f32 = 56.0;
+/// The search button.
+const FAB: f32 = 56.0;
+/// How many accounts the list holds before its letter index shows.
+const INDEXED: usize = 8;
 
 pub fn page(s: Store, nav: Nav) -> impl IntoElement {
     let empty_vault = move || s.projection.with(|p| p.account_count == 0);
+    // A closed search leaves no text behind: the list shows every account again.
+    effect(move || {
+        if !nav.searching.get() && untracked(|| !s.query.with(String::is_empty)) {
+            untracked(|| {
+                s.query.set(String::new());
+                s.refresh();
+            });
+        }
+    });
     view()
         .flex_1()
         .pt_safe_area()
-        .child(search_bar(s, nav))
+        .child(header(s, nav))
         .child(when(move || !empty_vault(), move || chips(s, nav)))
         .child(
             when(empty_vault, move || empty(s, nav)).otherwise(move || {
                 when(move || s.projection.with(|p| p.rows.is_empty()), move || nothing(s)).otherwise(move || list(s, nav))
             }),
         )
+        .child(when(move || !empty_vault(), move || search(s, nav)))
         .child(add_menu(s, nav))
         .child(overflow(s, nav))
         .child(super::menus::account(s, nav))
 }
 
-fn search_bar(s: Store, nav: Nav) -> impl IntoElement {
-    let field = element_ref();
+/// The bar at the top: the app's name, the add button and the menu.
+fn header(s: Store, nav: Nav) -> impl IntoElement {
     view()
         .flex_row()
         .items_center()
-        .mx(px(ui::MARGIN))
-        .my(px(8.0))
-        .h(move || px(ui::CONTROL) * font_scale())
-        .pl(px(16.0))
+        .h(px(HEADER))
+        .pl(px(ui::MARGIN + 4.0))
         .pr(px(4.0))
-        .rounded_full()
-        .bg(move || theme().card)
-        .on_press(move |_: &()| field.focus())
-        .child(view().text_color(move || theme().muted_foreground).child(icon(Icon::Search).size(px(24.0))))
+        .child(ui::title_large(text("Safay")).flex_1())
         .child(
-            input()
-                .element_ref(&field)
-                .test_id("search")
-                .label(move || s.label("Search accounts or sites"))
-                .placeholder(move || s.label("Search accounts or sites").to_string())
-                .value(move || s.query.get())
-                .on_change(move |v: &str| {
-                    s.controller.get().activity();
-                    s.query.set(v.to_owned());
-                    s.refresh();
-                })
-                .return_key_type(ReturnKeyType::Search)
-                .auto_correct(false)
-                .auto_capitalize(nsh_core::AutoCapitalize::None)
-                .auto_fill(nsh_core::AutoFill::Off)
-                .flex_1()
-                .min_w(px(0.0))
-                .mx(px(12.0))
-                .text_size(px(16.0))
-                .text_color(move || theme().foreground),
+            ui::icon_button(move || s.label("Add Account"), || Icon::Plus).test_id("add").text_color(move || theme().foreground).on_press(
+                move || {
+                    dismiss_keyboard();
+                    nav.menu.set(false);
+                    nav.adding.update(|v| *v = !*v)
+                },
+            ),
         )
-        .child(when(
-            move || !s.query.get().is_empty(),
-            move || {
-                ui::icon_button(move || s.label("Clear Search"), || Icon::Close).on_press(move || {
-                    s.query.set(String::new());
-                    s.refresh();
-                })
-            },
-        ))
         // The glyph is the row of dots, upright here.
-        .child(ui::icon_button(move || s.label("More"), || Icon::More).rotate(|| std::f32::consts::FRAC_PI_2).test_id("more").on_press(
-            move || {
-                dismiss_keyboard();
-                nav.menu.set(true)
-            },
-        ))
+        .child(
+            ui::icon_button(move || s.label("More"), || Icon::More)
+                .rotate(|| std::f32::consts::FRAC_PI_2)
+                .text_color(move || theme().foreground)
+                .test_id("more")
+                .on_press(move || {
+                    dismiss_keyboard();
+                    nav.adding.set(false);
+                    nav.menu.set(true)
+                }),
+        )
+}
+
+/// The search button at the bottom: a press opens the field to its left, the keyboard up, and the button closes it
+/// again, text and keyboard with it. Above the keyboard while it is up.
+fn search(s: Store, nav: Nav) -> impl IntoElement {
+    let open = move || nav.searching.get();
+    let field = element_ref();
+    // The field's width when open: the row less its margins, the button and the gap between them.
+    let wide = move || window().width - px(2.0 * ui::MARGIN + FAB + 8.0);
+    view()
+        .absolute()
+        .left(px(0.0))
+        .right(px(0.0))
+        .bottom(px(0.0))
+        .pb(move || keyboard_height().max(safe_area().bottom) + px(ui::MARGIN))
+        .px(px(ui::MARGIN))
+        .flex_row()
+        .justify_end()
+        .items_center()
+        .gap(px(8.0))
+        .pointer_events(nsh_core::PointerEvents::BoxNone)
+        .child(
+            view()
+                .w(move || if open() { wide() } else { px(0.0) })
+                .h(px(FAB))
+                .opacity(move || if open() { 1.0_f32 } else { 0.0 })
+                .overflow_hidden()
+                .flex_row()
+                .items_center()
+                .rounded_full()
+                .bg(move || theme().card)
+                .shadow_md()
+                .pointer_events(move || if open() { nsh_core::PointerEvents::Auto } else { nsh_core::PointerEvents::None })
+                .transition()
+                .duration(ui::SPATIAL_MS)
+                .ease_out()
+                .on_press(move |_: &()| field.focus())
+                .child(view().pl(px(16.0)).text_color(move || theme().muted_foreground).child(icon(Icon::Search).size(px(22.0))))
+                .child(
+                    input()
+                        .element_ref(&field)
+                        .test_id("search")
+                        .label(move || s.label("Search accounts or sites"))
+                        .placeholder(move || s.label("Search accounts or sites").to_string())
+                        .value(move || s.query.get())
+                        .on_change(move |v: &str| {
+                            s.controller.get().activity();
+                            s.query.set(v.to_owned());
+                            s.refresh();
+                        })
+                        .return_key_type(ReturnKeyType::Search)
+                        .on_submit(move |_: &str| dismiss_keyboard())
+                        .auto_correct(false)
+                        .auto_capitalize(nsh_core::AutoCapitalize::None)
+                        .auto_fill(nsh_core::AutoFill::Off)
+                        .flex_1()
+                        .min_w(px(0.0))
+                        .mx(px(12.0))
+                        .text_size(px(16.0))
+                        .text_color(move || theme().foreground),
+                ),
+        )
+        .child(
+            button()
+                .test_id("search-button")
+                .accessibility_label(move || Some(s.label(if open() { "Close" } else { "Search" })))
+                .size(px(FAB))
+                .items_center()
+                .justify_center()
+                .rounded_full()
+                .bg(move || theme().primary)
+                .text_color(move || theme().primary_foreground)
+                .shadow_lg()
+                .transition()
+                .duration(ui::SPATIAL_MS)
+                .ease_out()
+                .active(|st| st.scale(0.96))
+                .on_press(move || {
+                    if open() {
+                        nav.close_search();
+                    } else {
+                        nav.adding.set(false);
+                        nav.menu.set(false);
+                        nav.letter.set(None);
+                        nav.searching.set(true);
+                        // Once the field is laid out: the keyboard comes up with the field opening.
+                        set_timeout(std::time::Duration::from_millis(60), move || field.focus());
+                    }
+                })
+                .child(
+                    view()
+                        .size(px(24.0))
+                        .child(dynamic(move || icon(if open() { Icon::Close } else { Icon::Search }).size(px(24.0)).into_element())),
+                ),
+        )
 }
 
 fn chips(s: Store, nav: Nav) -> impl IntoElement {
     let select = move |id| {
+        nav.letter.set(None);
         s.category.set(id);
         s.refresh();
     };
@@ -122,6 +214,31 @@ fn chips(s: Store, nav: Nav) -> impl IntoElement {
 /// lifted copy of it follows the finger.
 fn list(s: Store, nav: Nav) -> impl IntoElement {
     let r = Reorder::new(s, Kind::Accounts, |_| (ui::GROUP_GAP, 1), Pickup::LongPress);
+    // The index's letters, in its order: those the shown accounts file under.
+    let letters = computed(move || {
+        let mut letters: Vec<char> = s.projection.with(|p| p.rows.iter().map(|row| initials::initial(&row.issuer)).collect());
+        letters.sort_by_key(|l| initials::order(*l));
+        letters.dedup();
+        letters
+    });
+    // Narrowed to a letter: the rows filed under it, in the list's order.
+    let narrowed = computed(move || {
+        let letter = nav.letter.get()?;
+        Some(s.projection.with(|p| {
+            p.rows.iter().enumerate().filter(|(_, row)| initials::initial(&row.issuer) == letter).map(|(i, _)| i).collect::<Vec<_>>()
+        }))
+    });
+    // A letter with nothing left under it (its last account deleted or renamed) lets the list go.
+    effect(move || {
+        if narrowed.with(|n| n.as_ref().is_some_and(Vec::is_empty)) {
+            untracked(|| nav.letter.set(None));
+        }
+    });
+    let count = move || narrowed.with(|n| n.as_ref().map(Vec::len)).unwrap_or_else(|| r.count());
+    let row_at = move |at: usize| match narrowed.with(|n| n.as_ref().map(|n| n.get(at).copied())) {
+        Some(index) => index.and_then(|i| s.projection.with(|p| p.rows.get(i).cloned())),
+        None => r.row(at),
+    };
     effect(move || {
         if r.dragged.get().is_some() {
             untracked(|| nav.context.set(None));
@@ -130,16 +247,16 @@ fn list(s: Store, nav: Nav) -> impl IntoElement {
     view()
         .flex_1()
         .child(
-            virtual_list(
-                move || r.count(),
-                move |at| {
-                    // The position is read in the bindings, not once here: a cell keeps its content as rows come and
-                    // go or the list scrolls, and shows whichever row is now at its place (its data, its corners).
-                    let row = computed(move || r.row(at.index()));
-                    account_row(s, nav, r, row, move || at.index())
-                },
-            )
-            .keys(move || r.ids().iter().map(|id| id.to_string()).collect::<Vec<_>>())
+            virtual_list(count, move |at| {
+                // The position is read in the bindings, not once here: a cell keeps its content as rows come and
+                // go or the list scrolls, and shows whichever row is now at its place (its data, its corners).
+                let row = computed(move || row_at(at.index()));
+                account_row(s, nav, r, row, move || at.index(), count)
+            })
+            .keys(move || match narrowed.get() {
+                Some(n) => s.projection.with(|p| n.iter().filter_map(|i| p.rows.get(*i)).map(|r| r.id.to_string()).collect::<Vec<_>>()),
+                None => r.ids().iter().map(|id| id.to_string()).collect::<Vec<_>>(),
+            })
             .estimated_item_size(move || px(ROW) * font_scale())
             .row_gap(px(ui::GROUP_GAP))
             .content_padding_x(px(ui::MARGIN))
@@ -154,9 +271,20 @@ fn list(s: Store, nav: Nav) -> impl IntoElement {
             .flex_1(),
         )
         .child(when(move || r.pointer.get().is_some() && r.standin.with(|row| row.is_some()), move || standin(r)))
+        .child(when(
+            move || !nav.searching.get() && r.dragged.get().is_none() && r.count() >= INDEXED && letters.with(|l| l.len() > 1),
+            move || index(nav, r, letters),
+        ))
 }
 
-fn account_row(s: Store, nav: Nav, r: Reorder, row: Memo<Option<Row>>, index: impl Fn() -> usize + Copy + 'static) -> impl IntoElement {
+fn account_row(
+    s: Store,
+    nav: Nav,
+    r: Reorder,
+    row: Memo<Option<Row>>,
+    index: impl Fn() -> usize + Copy + 'static,
+    count: impl Fn() -> usize + Copy + 'static,
+) -> impl IntoElement {
     let id = move || row.with(|r| r.as_ref().map(|r| r.id));
     let issuer = move || row.with(|r| r.as_ref().map(|r| r.issuer.clone()).unwrap_or_default());
     let copied = move || s.copied.get().is_some() && s.copied.get() == id();
@@ -191,12 +319,15 @@ fn account_row(s: Store, nav: Nav, r: Reorder, row: Memo<Option<Row>>, index: im
                 if let Some(id) = id() {
                     haptic(Haptic::Impact(HapticImpact::Medium));
                     dismiss_keyboard();
-                    r.arm(id);
+                    // Narrowed to a letter, the list shows only some accounts: its order is changed in the whole list.
+                    if nav.letter.get_untracked().is_none() {
+                        r.arm(id);
+                    }
                     nav.context.set(Some((id, e.page_position)))
                 }
             }),
         index,
-        move || r.count(),
+        count,
     );
     face(r.item(el, me, id), row)
 }
@@ -244,6 +375,127 @@ fn standin(r: Reorder) -> impl IntoElement {
             .pointer_events(nsh_core::PointerEvents::None),
         row,
     )
+}
+
+/// The letters beside the list: a press on one narrows the list to the accounts filed under it (`initials`), in the
+/// list's order; sliding along the letters narrows it to each in turn, the letter showing large beside the finger. The
+/// chosen letter is filled. A press on it again lets the list go, as do a category, the search and the back key.
+fn index(nav: Nav, r: Reorder, letters: Memo<Vec<char>>) -> impl IntoElement {
+    let bar = element_ref();
+    let area = element_ref();
+    let owner = Owner::current();
+    // The letters' column and the list's area, in the window, measured as a touch begins.
+    let frames = stored(None::<((f32, f32), f32)>);
+    // The letter chosen before this touch, and whether the touch chose another.
+    let before = stored(None::<char>);
+    let changed = stored(false);
+    let shown = signal(None::<(char, f32)>);
+    let pick = move |y: f32| {
+        let Some(((top, height), area_top)) = frames.get() else { return };
+        let count = letters.with(Vec::len);
+        if count == 0 || height <= 0.0 {
+            return;
+        }
+        let at = (((y - top) / height * count as f32).floor().max(0.0) as usize).min(count - 1);
+        let Some(letter) = letters.with(|l| l.get(at).copied()) else { return };
+        if nav.letter.get_untracked() != Some(letter) {
+            haptic(Haptic::Selection);
+            nav.letter.set(Some(letter));
+            r.list.scroll_to_offset(px(0.0), false);
+        }
+        if before.get() != Some(letter) {
+            changed.replace(true);
+        }
+        shown.set(Some((letter, y - area_top)));
+    };
+    let lift = move || {
+        // A press on the chosen letter, without choosing another meanwhile, lets the list go.
+        if !changed.get() && before.get().is_some() && shown.get_untracked().map(|(l, _)| l) == before.get() {
+            nav.letter.set(None);
+        }
+        shown.set(None);
+    };
+    view()
+        .element_ref(&area)
+        .absolute()
+        .inset(px(0.0))
+        .pointer_events(nsh_core::PointerEvents::BoxNone)
+        .child(
+            view()
+                .absolute()
+                .right(px(0.0))
+                .top(px(0.0))
+                .bottom(px(CLEARANCE / 2.0))
+                .w(px(ui::MARGIN))
+                .justify_center()
+                .pointer_events(nsh_core::PointerEvents::BoxNone)
+                .child(
+                    view()
+                        .element_ref(&bar)
+                        .items_center()
+                        .py(px(6.0))
+                        .accessibility_elements_hidden(true)
+                        .claim_touches(TouchClaim::on_start())
+                        .keep_touches(true)
+                        .on_responder_grant(move |e: &ResponderEvent| {
+                            let y = e.page.y.0;
+                            before.replace(nav.letter.get_untracked());
+                            changed.replace(false);
+                            owner.run(|| {
+                                spawn(async move {
+                                    if let (Some(b), Some(a)) = (bar.measure().await, area.measure().await) {
+                                        frames.replace(Some(((b.page.y.0, b.frame.size.height.0), a.page.y.0)));
+                                        pick(y);
+                                    }
+                                });
+                            });
+                        })
+                        .on_responder_move(move |e: &ResponderEvent| pick(e.page.y.0))
+                        .on_responder_release(move |_: &ResponderEvent| lift())
+                        .on_responder_terminate(move |_: &ResponderEvent| shown.set(None))
+                        .child(each(
+                            move || letters.get(),
+                            |l| *l,
+                            move |l, _| {
+                                let on = move || nav.letter.get() == Some(l.get());
+                                view()
+                                    .size(px(15.0))
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded_full()
+                                    .bg(move || if on() { theme().primary } else { theme().primary.opacity(0.0) })
+                                    .child(
+                                        text(move || SharedString::from(l.get().to_string()))
+                                            .text_size(px(10.0))
+                                            .line_height(px(15.0))
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(move || if on() { theme().primary_foreground } else { theme().primary }),
+                                    )
+                            },
+                        )),
+                ),
+        )
+        .child(when(
+            move || shown.get().is_some(),
+            move || {
+                view()
+                    .absolute()
+                    .right(px(ui::MARGIN + 16.0))
+                    .top(move || px(shown.get().map_or(0.0, |(_, y)| y) - 28.0))
+                    .size(px(56.0))
+                    .items_center()
+                    .justify_center()
+                    .rounded_full()
+                    .bg(move || theme().primary)
+                    .shadow_md()
+                    .child(
+                        text(move || SharedString::from(shown.get().map(|(l, _)| l.to_string()).unwrap_or_default()))
+                            .text_size(px(26.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(move || theme().primary_foreground),
+                    )
+            },
+        ))
 }
 
 /// The countdown: a track, an arc that shortens clockwise from the top, and the seconds left inside. Orange in the last
@@ -341,114 +593,48 @@ fn nothing(s: Store) -> impl IntoElement {
         )
 }
 
-/// The add button at the bottom, and what it opens over a scrim.
+/// The add button's menu, under it.
 fn add_menu(s: Store, nav: Nav) -> impl IntoElement {
-    let open = move || nav.adding.get();
+    when(
+        move || nav.adding.get(),
+        move || {
+            view().absolute().inset(px(0.0)).on_press(move |_: &()| nav.adding.set(false)).child(
+                dropdown()
+                    .child(menu_item(s, Icon::Photo, "Choose from Photos", move || {
+                        nav.adding.set(false);
+                        s.scanned.set(Default::default());
+                        s.choose_images()
+                    }))
+                    .child(menu_item(s, Icon::Keyboard, "Enter Setup Key", move || nav.push(Page::Manual)))
+                    .child(menu_item(s, Icon::Doc, "Import Backup File", move || {
+                        nav.adding.set(false);
+                        s.choose_backup()
+                    })),
+            )
+        },
+    )
+}
+/// A menu under the top bar's buttons.
+fn dropdown() -> View {
     view()
         .absolute()
-        .inset(px(0.0))
-        .pointer_events(nsh_core::PointerEvents::BoxNone)
-        .child(
-            view()
-                .absolute()
-                .inset(px(0.0))
-                .bg(move || tok("scrim"))
-                .opacity(move || if open() { 1.0_f32 } else { 0.0 })
-                .pointer_events(move || if open() { nsh_core::PointerEvents::Auto } else { nsh_core::PointerEvents::None })
-                .transition()
-                .duration(ui::EFFECTS_MS)
-                .ease_out()
-                .on_press(move |_: &()| nav.adding.set(false)),
-        )
-        .child(
-            view()
-                .absolute()
-                .right(px(ui::MARGIN))
-                .bottom(px(0.0))
-                .pb_safe_area_plus(px(ui::MARGIN))
-                .items_end()
-                .gap(px(8.0))
-                .pointer_events(nsh_core::PointerEvents::BoxNone)
-                .child(when(open, move || {
-                    view()
-                        .items_end()
-                        .gap(px(8.0))
-                        .child(add_item(s, Icon::Photo, "Choose from Photos", move || {
-                            nav.adding.set(false);
-                            s.scanned.set(Default::default());
-                            s.choose_images()
-                        }))
-                        .child(add_item(s, Icon::Keyboard, "Enter Setup Key", move || nav.push(Page::Manual)))
-                        .child(add_item(s, Icon::Doc, "Import Backup File", move || {
-                            nav.adding.set(false);
-                            s.choose_backup()
-                        }))
-                }))
-                .child(
-                    button()
-                        .test_id("add")
-                        .accessibility_label(move || Some(s.label(if open() { "Close" } else { "Add Account" })))
-                        .size(px(56.0))
-                        .items_center()
-                        .justify_center()
-                        .rounded(move || px(if open() { 28.0 } else { 16.0 }))
-                        .bg(move || if open() { theme().primary } else { tok("primary-container") })
-                        .text_color(move || if open() { theme().primary_foreground } else { tok("primary-container-foreground") })
-                        .shadow_lg()
-                        .transition()
-                        .duration(ui::SPATIAL_MS)
-                        .ease_out()
-                        .active(|st| st.scale(0.96))
-                        .on_press(move || {
-                            dismiss_keyboard();
-                            nav.adding.update(|v| *v = !*v)
-                        })
-                        .child(
-                            view()
-                                .rotate(move || if open() { std::f32::consts::FRAC_PI_4 } else { 0.0 })
-                                .transition()
-                                .duration(ui::SPATIAL_MS)
-                                .ease_out()
-                                .child(icon(Icon::Plus).size(px(24.0))),
-                        ),
-                ),
-        )
-}
-fn add_item(s: Store, glyph: Icon, label_: &'static str, press: impl Fn() + 'static) -> impl IntoElement {
-    button()
-        .test_id(label_)
-        .h(px(56.0))
-        .pl(px(20.0))
-        .pr(px(24.0))
-        .flex_row()
-        .items_center()
-        .gap(px(12.0))
-        .rounded_full()
-        .bg(move || tok("primary-container"))
-        .text_color(move || tok("primary-container-foreground"))
-        .shadow_md()
-        .active(|st| st.opacity(0.9))
-        .on_press(press)
-        .child(icon(glyph).size(px(24.0)))
-        .child(ui::title(text(move || s.label(label_))))
+        .right(px(ui::MARGIN))
+        .top(px(0.0))
+        .mt_safe_area_plus(px(HEADER - 4.0))
+        .min_w(px(220.0))
+        .py(px(8.0))
+        .rounded(px(16.0))
+        .bg(move || tok("surface-high"))
+        .shadow_lg()
 }
 
-/// The search bar's menu, under its button.
+/// The menu of the top bar's dots.
 fn overflow(s: Store, nav: Nav) -> impl IntoElement {
     when(
         move || nav.menu.get(),
         move || {
             view().absolute().inset(px(0.0)).on_press(move |_: &()| nav.menu.set(false)).child(
-                view()
-                    .absolute()
-                    .right(px(ui::MARGIN))
-                    .top(px(0.0))
-                    .mt_safe_area_plus(px(8.0 + ui::CONTROL - 4.0))
-                    .min_w(px(200.0))
-                    .py(px(8.0))
-                    .rounded(px(16.0))
-                    .bg(move || tok("surface-high"))
-                    .shadow_lg()
+                dropdown()
                     .child(menu_item(s, Icon::Settings, "Settings", move || nav.push(Page::Settings)))
                     .child(menu_item(s, Icon::Sliders, "Manage Categories", move || nav.push(Page::Categories)))
                     .child(menu_item(s, Icon::Lock, "Lock Now", move || {
