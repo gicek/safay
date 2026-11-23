@@ -2,7 +2,7 @@
 use super::{Dialog, Nav, Page, ui};
 use crate::{
     icons::{Icon, icon},
-    store::{Auth, Sheet, Store},
+    store::{Auth, Store},
 };
 use nsh_base::theme;
 use nsh_core::prelude::*;
@@ -79,11 +79,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
     let data = ui::group(vec![
         ui::row(ui::round_tile(Icon::ExportImport, false), move || s.label("Export Encrypted Backup"), None, chevron())
             .test_id("export")
-            .on_press(move || {
-                // Every account: the export takes the ones selected.
-                s.open_sheet(Sheet::ExportImport);
-                nav.dialog.set(Some(Dialog::Export))
-            })
+            .on_press(move || nav.dialog.set(Some(Dialog::Export)))
             .into_element(),
         ui::row(ui::round_tile(Icon::Download, false), move || s.label("Import Backup File"), None, chevron())
             .test_id("import")

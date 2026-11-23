@@ -22,11 +22,8 @@ pub fn page(s: Store) -> impl IntoElement {
         }
     };
     // The prompt opens by itself once, on the lock screen the app starts with; after that it waits for its button.
-    thread_local! {
-        static PROMPTED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-    }
     effect(move || {
-        if s.touch_id_ready() && !PROMPTED.with(|p| p.replace(true)) {
+        if s.touch_id_ready() && !s.biometric_offered.replace(true) {
             untracked(|| s.unlock_touch_id());
         }
     });

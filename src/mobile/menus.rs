@@ -136,12 +136,9 @@ pub fn add_to(s: Store, nav: Nav) -> impl IntoElement {
     let save = move || {
         if let Some(id) = nav.add_to.get() {
             let (was, now) = (before.get(), staged.get());
-            for category in now.difference(&was) {
-                s.membership(*category, id, true)
-            }
-            for category in was.difference(&now) {
-                s.membership(*category, id, false)
-            }
+            let added = now.difference(&was).map(|c| (*c, true));
+            let removed = was.difference(&now).map(|c| (*c, false));
+            s.set_memberships(id, added.chain(removed).collect());
         }
         nav.add_to.set(None)
     };

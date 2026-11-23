@@ -10,6 +10,7 @@ use nsh_base::{button, theme};
 use nsh_core::prelude::*;
 use safay_app::Uuid;
 use safay_app::Zeroizing;
+use safay_app::core::site_icon;
 
 /// The sheet's side margin.
 const SIDE: f32 = 24.0;
@@ -42,10 +43,16 @@ fn content(s: Store, id: Uuid) -> impl IntoElement {
     let urgent = move || row.with(|r| r.as_ref().is_some_and(|r| r.remaining <= 5));
     let copied = move || s.copied.get() == Some(id);
     let revealed = move || !s.revealed.with(|r| r.is_empty());
+    // The fields stay until the save is through (it closes the sheet): a website that isn't one, or a save that
+    // fails, is said under them.
     let save = move || {
+        let bad = s.form.with(|f| !f.website.trim().is_empty() && site_icon::normalized_website(&f.website).is_none());
+        s.marks.update(|m| m.website_error = bad);
+        if bad || s.busy.get() {
+            return;
+        }
         dismiss_keyboard();
         s.save_detail(id);
-        editing.set(false);
     };
     scroll().max_h(move || ui::sheet_room(0.0)).keyboard_dismiss_mode(KeyboardDismissMode::None).keyboard_taps(KeyboardTaps::Handled).child(
         view()
@@ -69,9 +76,11 @@ fn content(s: Store, id: Uuid) -> impl IntoElement {
                     .child(
                         when(move || editing.get(), move || ui::text_button(move || s.label("Done"), false).test_id("done").on_press(save))
                             .otherwise(move || {
-                                ui::icon_button(move || s.label("Edit"), || Icon::Pencil)
-                                    .test_id("edit")
-                                    .on_press(move || editing.set(true))
+                                ui::icon_button(move || s.label("Edit"), || Icon::Pencil).test_id("edit").on_press(move || {
+                                    s.error.set(None);
+                                    s.marks.update(|m| m.website_error = false);
+                                    editing.set(true)
+                                })
                             }),
                     ),
             )
@@ -166,10 +175,7 @@ fn content(s: Store, id: Uuid) -> impl IntoElement {
                             .flex_1()
                             .py(px(12.0)),
                     )
-                    .child(ui::icon_button(move || s.label("Copy"), || Icon::Copy).on_press(move || {
-                        set_clipboard(s.revealed.get().to_string());
-                        s.show_toast(crate::store::Tone::Success, s.label("Copied"));
-                    }))
+                    .child(ui::icon_button(move || s.label("Copy"), || Icon::Copy).on_press(move || s.copy_secret()))
             }))
             .child(
                 view()
@@ -268,7 +274,15 @@ fn edit_fields(s: Store, save: impl Fn() + Copy + 'static) -> impl IntoElement {
             ReturnKeyType::Done,
             Some(website),
         ))
-        .child(ui::field_note(move || s.marks.with(|m| m.website_error).then(|| s.label("Enter a website like example.com")), || true))
+        .child(ui::field_note(
+            move || {
+                if s.marks.with(|m| m.website_error) {
+                    return Some(s.label("Enter a website like example.com"));
+                }
+                s.error.get().map(|e| s.label(crate::i18n::error_key(e)))
+            },
+            || true,
+        ))
 }
 
 /// The account's categories as chips in a row: a press adds it to one or takes it out, at once.

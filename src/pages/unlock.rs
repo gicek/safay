@@ -658,35 +658,50 @@ pub fn touch_id_toggle(s: Store) -> impl IntoElement {
             move |v| s.set_touch_id(v),
         ))
 }
+// First run, restoring a backup: shared by the desktop's page and the phone's.
+
+/// The backup found is an export file chosen, not a backup in a location.
+pub(crate) fn restore_from_export(s: Store) -> bool {
+    !s.restore_location.with(|l| l.is_some()) && s.has_file()
+}
+/// A backup was found, in a location or as an export file.
+pub(crate) fn restore_found(s: Store) -> bool {
+    s.restore_location.with(|l| l.is_some()) || s.has_file()
+}
+/// Its password is typed and, for an export whose password won't be the master password too, a new one is good enough.
+pub(crate) fn restore_ready(s: Store) -> bool {
+    if !restore_found(s) || s.form.with(|f| f.password.trim().is_empty()) {
+        return false;
+    }
+    !restore_from_export(s) || s.use_export_password.get() || new_password_ok(s)
+}
+pub(crate) fn submit_restore(s: Store) {
+    if restore_ready(s) && !s.busy.get() {
+        if restore_from_export(s) { s.restore_export(false) } else { s.restore_from_location() }
+    }
+}
+/// Back from the backup found to where it is: what was found and typed goes, and its sign-in with it.
+pub(crate) fn choose_restore_again(s: Store) {
+    s.form.set(crate::store::Form::fresh());
+    s.use_export_password.set(true);
+    s.error.set(None);
+    s.status.set(None);
+    s.file.replace(None);
+    s.file_name.set(String::new());
+    s.discard_restore_location();
+}
+
 /// OnboardingRestoreStep: first the location list (two columns, export
 /// files accepted), then, once a backup is found, the found card, its password and the Touch ID toggle. The
 /// action row appears only with a backup: there is nothing to unlock while choosing.
 fn restore(s: Store) -> impl IntoElement {
     let use_as_master = s.use_export_password;
     use_as_master.set(true);
-    let folder = move || s.restore_location.with(|f| f.is_some());
-    let export = move || !folder() && s.has_file();
-    let found = move || folder() || export();
-    let ready = move || {
-        if !found() || s.form.with(|f| f.password.trim().is_empty()) {
-            return false;
-        }
-        !export() || use_as_master.get() || new_password_ok(s)
-    };
-    let submit = move || {
-        if ready() && !s.busy.get() {
-            if folder() { s.restore_from_location() } else { s.restore_export(false) }
-        }
-    };
-    let change_location = move || {
-        s.form.set(crate::store::Form::fresh());
-        use_as_master.set(true);
-        s.error.set(None);
-        s.status.set(None);
-        s.file.replace(None);
-        s.file_name.set(String::new());
-        s.discard_restore_location();
-    };
+    let export = move || restore_from_export(s);
+    let found = move || restore_found(s);
+    let ready = move || restore_ready(s);
+    let submit = move || submit_restore(s);
+    let change_location = move || choose_restore_again(s);
     task_panel(
         s,
         "Restore a backup",

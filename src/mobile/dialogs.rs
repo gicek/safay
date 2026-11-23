@@ -1,6 +1,6 @@
 //! The dialogs every page may raise: the master password asked again, an account's QR code, a category's name.
 use super::ui::{self, Entry};
-use crate::store::{Sheet, Store};
+use crate::store::{Done, Sheet, Store};
 use nsh_core::prelude::*;
 use safay_app::Zeroizing;
 
@@ -220,18 +220,11 @@ fn change_password(s: Store, nav: super::Nav) -> impl IntoElement {
             nav.dialog.set(None)
         }
     };
-    // Changed: the store closes what asked for it.
-    let had = s.sheet.get_untracked();
-    s.sheet.set(Some(Sheet::ChangePassword));
-    effect(move || {
-        if s.sheet.get().is_none() {
-            untracked(|| {
-                nav.dialog.set(None);
-                s.show_toast(crate::store::Tone::Success, s.label("Master password changed"));
-            });
-        }
+    super::shows_errors(s);
+    super::on_done(s, Done::PasswordChanged, move || {
+        nav.dialog.set(None);
+        s.show_toast(crate::store::Tone::Success, s.label("Master password changed"));
     });
-    let _ = had;
     ui::dialog(
         move || s.label("Change Master Password"),
         view()
@@ -260,23 +253,32 @@ fn change_password(s: Store, nav: super::Nav) -> impl IntoElement {
         view()
             .flex_row()
             .gap(px(4.0))
-            .child(ui::text_button(move || s.label("Cancel"), false).on_press(move || {
-                s.sheet.set(None);
-                close()
-            }))
+            .child(ui::text_button(move || s.label("Cancel"), false).disabled(move || s.busy.get()).on_press(close))
             .child(
                 ui::text_button(move || s.label("Change Password"), false).test_id("change").disabled(move || !ready()).on_press(submit),
             ),
-        move || {},
+        close,
     )
 }
 
 /// "Export Encrypted Backup": the password the file is encrypted with, then the master password, then where to save.
 fn export(s: Store, nav: super::Nav) -> impl IntoElement {
     use crate::{pages::unlock::new_password_ok, store::Auth};
-    let ready = move || new_password_ok(s) && !s.busy.get();
+    // Every account: the export takes the ones the store selects as it lists them (which needs its export sheet, let
+    // go with the dialog). Nothing is exported before they are listed.
+    s.selected.set(Default::default());
+    s.open_sheet(Sheet::ExportImport);
+    cleanup(move || {
+        if s.sheet.get_untracked() == Some(Sheet::ExportImport) {
+            s.sheet.set(None);
+        }
+    });
+    let ready = move || new_password_ok(s) && !s.busy.get() && !s.selected.with(|x| x.is_empty());
     let close = move || {
-        s.sheet.set(None);
+        s.form.update(|f| {
+            f.new_password = Zeroizing::new(String::new());
+            f.confirmation = Zeroizing::new(String::new());
+        });
         nav.dialog.set(None)
     };
     let submit = move || {
@@ -318,9 +320,10 @@ fn backup_password(s: Store, nav: super::Nav) -> impl IntoElement {
             s.import_file()
         }
     };
-    // Its one field takes the keyboard at once, once the dialog is laid out.
+    super::shows_errors(s);
+    // Its one field takes the keyboard at once, from the first frame it is up.
     let field = element_ref();
-    set_timeout(std::time::Duration::from_millis(60), move || field.focus());
+    request_animation_frame(move |_| field.focus());
     ui::dialog(
         move || s.label("Backup Password"),
         view()

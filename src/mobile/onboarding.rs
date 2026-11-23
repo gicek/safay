@@ -15,7 +15,20 @@ use safay_app::{Zeroizing, core::password};
 pub fn leave(s: Store) {
     dismiss_keyboard();
     s.clear();
+    s.discard_restore_location();
     s.stage.set(Stage::Welcome);
+}
+
+/// One step back, from the top bar or the back key; nothing while the vault is being made or restored. False on the
+/// welcome page.
+pub fn back(s: Store) -> bool {
+    if s.stage.get_untracked() == Stage::Welcome {
+        return false;
+    }
+    if !s.busy.get_untracked() {
+        if super::backup::restoring(s) { super::backup::restore_back(s) } else { leave(s) }
+    }
+    true
 }
 
 pub fn page(s: Store) -> impl IntoElement {
@@ -132,7 +145,9 @@ fn create(s: Store) -> impl IntoElement {
         }
     };
     scaffold(
-        ui::top_bar(s, None, move || leave(s)),
+        ui::top_bar(s, None, move || {
+            back(s);
+        }),
         view()
             .w_full()
             .gap(px(16.0))

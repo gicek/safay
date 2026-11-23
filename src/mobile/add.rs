@@ -1,21 +1,22 @@
 //! "Enter Setup Key": the service, the account and the key a service shows beside its QR code.
 use super::{
-    Nav,
+    Nav, Page,
     ui::{self, Entry},
 };
-use crate::store::Store;
+use crate::store::{Done, Store};
 use nsh_core::prelude::*;
 use safay_app::{Zeroizing, core::totp};
 
-pub fn manual(s: Store, nav: Nav) -> impl IntoElement {
+/// Opens "Enter Setup Key" with empty fields. (Coming back to it from the review keeps what was typed or pasted.)
+pub fn open(s: Store, nav: Nav) {
     s.clear();
-    let had = s.projection.with_untracked(|p| p.account_count);
+    nav.push(Page::Manual);
+}
+
+pub fn manual(s: Store, nav: Nav) -> impl IntoElement {
+    super::shows_errors(s);
     // Saved: back to the list, where the new account is.
-    effect(move || {
-        if s.projection.with(|p| p.account_count) > had {
-            untracked(|| nav.home());
-        }
-    });
+    super::on_done(s, Done::Added, move || nav.home());
     // Pasted links, or the fields typed one by one.
     let paste = signal(false);
     let advanced = signal(false);
@@ -160,20 +161,29 @@ pub fn review(s: Store, nav: Nav) -> impl IntoElement {
     use nsh_base::theme;
     let source = move || s.scanned.get();
     let items = move || safay_app::core::otpauth::parse_lines(&source(), &safay_app::session::placeholders());
-    let valid = move || items().iter().filter(|p| p.is_valid()).count();
+    // What "Add" adds: the lines whose accounts are all usable. A line that isn't is shown and left out, rather than
+    // failing the rest.
+    let usable = move || {
+        let placeholders = safay_app::session::placeholders();
+        let lines = source()
+            .lines()
+            .filter(|line| {
+                let scan = safay_app::core::otpauth::parse_scan_result(line, &placeholders);
+                !scan.accounts.is_empty() && scan.accounts.iter().all(|a| a.is_valid())
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        Zeroizing::new(lines)
+    };
+    let valid = move || safay_app::core::otpauth::parse_lines(&usable(), &safay_app::session::placeholders()).len();
     let leave = move || {
         s.scanned.set(Default::default());
         nav.back();
     };
     // Added: the scanned list is spent, and the list shows what came in.
-    let had = s.projection.with_untracked(|p| p.account_count);
-    effect(move || {
-        if s.projection.with(|p| p.account_count) > had {
-            untracked(|| {
-                s.scanned.set(Default::default());
-                nav.home()
-            });
-        }
+    super::on_done(s, Done::Imported, move || {
+        s.scanned.set(Default::default());
+        nav.home()
     });
     view()
         .flex_1()
@@ -243,7 +253,7 @@ pub fn review(s: Store, nav: Nav) -> impl IntoElement {
             ui::primary_button(move || s.count("add_n", valid()), move || valid() > 0, move || s.busy.get()).test_id("add-all").on_press(
                 move || {
                     if valid() > 0 && !s.busy.get() {
-                        s.import_text(source())
+                        s.import_text(usable())
                     }
                 },
             ),

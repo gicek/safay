@@ -37,17 +37,18 @@ fn this_device(s: Store) -> SharedString {
     s.label(if look() == Look::Mac { "This Mac" } else { "This device" })
 }
 /// When something happened, by this device's clock: "2026-11-05 10:42".
-fn stamp(ms: i64) -> String {
+pub(crate) fn stamp(ms: i64) -> String {
     crate::platform::local_time::date_time(std::time::UNIX_EPOCH + std::time::Duration::from_millis(ms.max(0) as u64))
 }
-fn size(bytes: Option<u64>) -> String {
+/// A backup's size, as its history shows it.
+pub(crate) fn size(bytes: Option<u64>) -> String {
     match bytes {
         Some(b) if b >= 1024 => format!("{:.1} KB", b as f64 / 1024.0),
         Some(b) => format!("{b} B"),
         None => String::new(),
     }
 }
-fn source_key(source: Source) -> &'static str {
+pub(crate) fn source_key(source: Source) -> &'static str {
     match source {
         Source::Auto => "Auto Sync",
         Source::Manual => "Manual Backup",
@@ -165,7 +166,7 @@ fn footer(s: Store) -> impl IntoElement {
             move || {
                 push_button(move || s.label("Apply"), Kind::Primary, false)
                     .disabled(move || s.syncing.get() || s.review.with(|r| r.is_none()))
-                    .on_press(move || s.resolve_conflict(s.form.with(|f| f.algorithm as u8)))
+                    .on_press(move || s.resolve_conflict(s.resolution.get()))
             },
         ))
         .child(when(
@@ -415,7 +416,6 @@ fn overview(s: Store) -> impl IntoElement {
                     "Resolve Conflict",
                     move || {
                         s.status.set(None);
-                        s.form.update(|f| f.algorithm = 0);
                         s.backup_page.set(BackupPage::Conflict);
                         s.load_review();
                     },
@@ -807,11 +807,7 @@ fn pairing_header(s: Store, provider: Provider) -> impl IntoElement {
 }
 /// The OAuth form: pairing header, where the backup is kept, and the three steps (they become progress).
 fn oauth_setup(s: Store, provider: Provider) -> impl IntoElement {
-    // The app folder as the service's own app shows it: Google Drive's is the folder named in `cloud-keys.toml`.
-    let folder = move || match provider {
-        Provider::GoogleDrive => s.fmt("My Drive › {}", &[option_env!("SAFAY_GOOGLE_FOLDER_NAME").unwrap_or_default()]),
-        _ => s.label("Apps › Safay"),
-    };
+    let folder = move || app_folder(s, provider);
     let steps: Vec<Box<dyn Fn() -> SharedString>> = vec![
         Box::new(move || s.fmt("Sign in to {} and allow Safay", &[provider.name()])),
         Box::new(move || s.fmt("Connect to your {} account", &[provider.name()])),
@@ -1141,8 +1137,17 @@ fn insecure_confirmation(s: Store, provider: Provider) -> impl IntoElement {
 }
 
 /// Colon-separated, upper-case hex: `AB:CD:…`.
-fn formatted_fingerprint(fingerprint: &[u8; 32]) -> String {
-    fingerprint.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(":")
+/// A certificate's SHA-256 fingerprint in hex pairs, `per_line` bytes to a line.
+pub(crate) fn formatted_fingerprint(fingerprint: &[u8; 32], per_line: usize) -> String {
+    fingerprint.chunks(per_line).map(|c| c.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(":")).collect::<Vec<_>>().join("\n")
+}
+/// Where in the service Safay keeps its backup, as the service's own app shows it: Google Drive's is the folder named in
+/// `cloud-keys.toml`.
+pub(crate) fn app_folder(s: Store, provider: Provider) -> SharedString {
+    match provider {
+        Provider::GoogleDrive => s.fmt("My Drive › {}", &[option_env!("SAFAY_GOOGLE_FOLDER_NAME").unwrap_or_default()]),
+        _ => s.label("Apps › Safay"),
+    }
 }
 /// The certificate confirmation (SECURITY.md): the system does not trust the server's certificate, so its
 /// SHA-256 fingerprint is shown for the user to compare with what the server shows; once confirmed, only this certificate
@@ -1187,7 +1192,7 @@ fn certificate_confirmation(s: Store, provider: Provider) -> impl IntoElement {
                 )
                 .child(
                     view().selectable(true).child(
-                        text(move || fingerprint().map(|f| formatted_fingerprint(&f)).unwrap_or_default())
+                        text(move || fingerprint().map(|f| formatted_fingerprint(&f, 32)).unwrap_or_default())
                             .test_id("certificate-fingerprint")
                             .font_family("ui-monospace")
                             .text_size(px(11.5)),
@@ -1340,7 +1345,8 @@ fn group(
         },
     )
 }
-fn change_text(s: Store, changes: &[AccountChange]) -> String {
+/// What changed in an account on both sides, as a list of its fields.
+pub(crate) fn change_text(s: Store, changes: &[AccountChange]) -> String {
     changes
         .iter()
         .map(|c| {
@@ -1413,7 +1419,7 @@ fn changed_group(s: Store) -> impl IntoElement {
     )
 }
 fn choice_row(s: Store, value: u8, title: &'static str, detail: &'static str) -> impl IntoElement {
-    let on = move || s.form.with(|f| f.algorithm as u8 == value);
+    let on = move || s.resolution.get() == value;
     button()
         .selected(on)
         .accessibility_label(move || Some(s.label(title)))
@@ -1426,7 +1432,7 @@ fn choice_row(s: Store, value: u8, title: &'static str, detail: &'static str) ->
         .border_1()
         .border_color(move || if on() { tok("code-accent").opacity(0.5) } else { tok("separator").opacity(0.6) })
         .focus(|st| st.border_color(move || theme().ring))
-        .on_press(move || s.form.update(|f| f.algorithm = u32::from(value)))
+        .on_press(move || s.resolution.set(value))
         .child(
             view()
                 .size(px(16.0))

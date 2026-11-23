@@ -74,6 +74,7 @@ impl Nav {
     pub fn push(self, page: Page) {
         self.adding.set(false);
         self.menu.set(false);
+        self.context.set(None);
         if let Some(under) = self.page.get_untracked() {
             self.stack.update(|st| st.push(under));
         }
@@ -90,9 +91,16 @@ impl Nav {
         self.stack.set(Vec::new());
         self.page.set(None);
     }
-    /// One step back; false when the list itself is showing.
+    /// One step back; false when the list itself is showing. A page over the list goes first: what is open on the list
+    /// (its menus, the search, a letter) stays for when it shows again.
     pub fn back(self) -> bool {
-        if self.context.get_untracked().is_some() {
+        if self.page.get_untracked().is_some() {
+            dismiss_keyboard();
+            let mut stack = self.stack.get_untracked();
+            let under = stack.pop();
+            self.stack.set(stack);
+            self.page.set(under);
+        } else if self.context.get_untracked().is_some() {
             self.context.set(None);
         } else if self.menu.get_untracked() {
             self.menu.set(false);
@@ -102,12 +110,6 @@ impl Nav {
             self.close_search();
         } else if self.letter.get_untracked().is_some() {
             self.letter.set(None);
-        } else if self.page.get_untracked().is_some() {
-            dismiss_keyboard();
-            let mut stack = self.stack.get_untracked();
-            let under = stack.pop();
-            self.stack.set(stack);
-            self.page.set(under);
         } else {
             return false;
         }
@@ -178,6 +180,18 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
             untracked(|| s.scanned.set(Default::default()));
         }
     });
+    // What the store reports in `status` shows in the restore dialog and on the conflict page; anywhere else on the
+    // unlocked phone it has no place of its own: a toast.
+    effect(move || {
+        let Some(status) = s.status.get() else { return };
+        if !s.unlocked() || untracked(|| nav.restoring.get() || nav.page.get() == Some(Page::Conflict)) {
+            return;
+        }
+        untracked(|| {
+            s.status.set(None);
+            s.show_toast(status.tone, status.text);
+        });
+    });
     // Codes read from photos or the camera wait in the scanned list: they are reviewed before they are added.
     effect(move || {
         if s.unlocked() && !s.scanned.with(|t| t.trim().is_empty()) && untracked(|| nav.page.get() != Some(Page::Review)) {
@@ -193,39 +207,15 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
             crate::platform::android::set_secure(unlocked);
         }
     });
+    // Dialogs and sheets are modals of their own: the back key closes them through their `on_cancel` and never comes
+    // here while one is up.
     on_back_press(move || {
-        // What is asked over everything goes first.
-        if s.editing.with_untracked(Option::is_some) {
-            s.editing.set(None);
-            return true;
-        }
-        if s.auth.get_untracked().is_some() {
-            if !s.busy.get_untracked() {
-                s.cancel_auth();
-            }
-            return true;
-        }
-        if s.sheet.get_untracked() == Some(crate::store::Sheet::Backup) {
-            s.close_sheet();
-            return true;
-        }
-        if nav.choosing.get_untracked() || nav.restoring.get_untracked() {
-            nav.choosing.set(false);
-            nav.restoring.set(false);
-            return true;
-        }
         if s.unlocked() {
-            if matches!(s.sheet.get_untracked(), Some(crate::store::Sheet::Qr(_))) {
-                s.close_sheet();
-                return true;
-            }
             return nav.back();
         }
-        // Onboarding: a step back to the welcome page.
-        if !s.projection.with_untracked(|p| p.exists) && s.stage.get_untracked() != crate::store::Stage::Welcome && !s.busy.get_untracked()
-        {
-            onboarding::leave(s);
-            return true;
+        // Onboarding: a step back, as its top bar takes.
+        if !s.projection.with_untracked(|p| p.exists) {
+            return onboarding::back(s);
         }
         false
     });
@@ -262,6 +252,25 @@ fn unlocked(s: Store, nav: Nav) -> impl IntoElement {
         .child(when(move || nav.page.get() == Some(Page::Deleted), move || settings::deleted(s, nav)))
         .child(when(move || nav.page.get() == Some(Page::Review), move || add::review(s, nav)))
         .child(when(move || nav.page.get() == Some(Page::Conflict), move || backup::conflict(s, nav)))
+}
+
+/// Runs `then` each time the store finishes `done` from now on, while the calling page or dialog is built.
+fn on_done(s: Store, done: crate::store::Done, then: impl Fn() + 'static) {
+    let seen = s.done.with_untracked(|d| d.map(|(n, _)| n));
+    effect(move || {
+        if let Some((n, finished)) = s.done.get()
+            && Some(n) != seen
+            && finished == done
+        {
+            untracked(&then);
+        }
+    });
+}
+
+/// The calling page or dialog shows `s.error` itself while it is built: errors go to it alone, not to a toast too.
+fn shows_errors(s: Store) {
+    s.inline_errors.update(|n| *n += 1);
+    cleanup(move || s.inline_errors.update(|n| *n = n.saturating_sub(1)));
 }
 
 /// One line at the bottom about what just happened, above the navigation bar; it takes no input.

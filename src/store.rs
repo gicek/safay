@@ -154,11 +154,22 @@ pub struct Form {
     pub text: Zeroizing<String>,
     pub reveal: bool,
 }
+/// An action that finished, for a page that leaves once it is done ([`Store::done`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Done {
+    /// An account added by hand.
+    Added,
+    /// Accounts added from links, a scan or a file.
+    Imported,
+    PasswordChanged,
+}
 pub enum Payload {
     Silent,
     /// A verified action that shows nothing: the verify dialog closes.
     Verified,
     Saved,
+    /// The master password changed.
+    PasswordChanged,
     /// Accounts added, and entries skipped as unsupported.
     Imported(usize, usize),
     /// One account added by hand: its service name, for the toast.
@@ -172,6 +183,8 @@ pub enum Payload {
     Secret(Zeroizing<String>),
     Qr(Zeroizing<String>, Zeroizing<String>),
     Copied(Uuid),
+    /// The revealed secret went to the clipboard.
+    SecretCopied,
     /// A category was created or renamed; `true` selects a new, empty one.
     Created(bool),
     Restored,
@@ -198,8 +211,16 @@ pub struct Store {
     seen_revision: Signal<u64>,
     serial: Signal<u64>,
     pub error: Signal<Option<Error>>,
+    /// Forms that show `error` themselves are open (the phone's pages and dialogs): an error then goes to them alone,
+    /// not to a toast as well.
+    pub inline_errors: Signal<u32>,
     pub status: Signal<Option<Status>>,
     pub toast: Signal<Option<Status>>,
+    /// How a sync conflict is to be resolved ([`Self::resolve_conflict`]): 0 merge both, 1 keep this device's copy, 2
+    /// use the backup's.
+    pub resolution: Signal<u8>,
+    /// The last action a page may be waiting on that finished, numbered so the same one twice is two events.
+    pub done: Signal<Option<(u64, Done)>>,
     pub query: Signal<String>,
     pub category: Signal<Option<Uuid>>,
     /// Recently Deleted is shown instead of All or a category.
@@ -259,6 +280,8 @@ pub struct Store {
     pub language: Signal<Language>,
     pub cards: Signal<bool>,
     pub copied: Signal<Option<Uuid>>,
+    /// The phone's lock screen has opened the biometric prompt by itself once: later it waits for its button.
+    pub biometric_offered: Stored<bool>,
     pub editing: Signal<Option<CategoryEdit>>,
     pub sidebar: Signal<bool>,
     /// Revealed secret for the details sheet; cleared on lock, close or hide.
@@ -327,8 +350,11 @@ impl Store {
             seen_revision: signal(0),
             serial: signal(0),
             error: signal(None),
+            inline_errors: signal(0),
             status: signal(None),
             toast: signal(None),
+            resolution: signal(0),
+            done: signal(None),
             query: signal(String::new()),
             category: signal(None),
             trash: signal(false),
@@ -370,6 +396,7 @@ impl Store {
             language: signal(language),
             cards: signal(true),
             copied: signal(None),
+            biometric_offered: stored(false),
             editing: signal(None),
             sidebar: signal(true),
             revealed: signal(Zeroizing::new(String::new())),
@@ -635,16 +662,23 @@ impl Store {
         } else {
             self.error.set(Some(e));
             // Errors from the account grid or the panel have no form to show them: use a toast.
-            if self.sheet.get().is_none() && self.unlocked() && self.surface != Surface::Settings {
+            if self.sheet.get().is_none() && self.inline_errors.get() == 0 && self.unlocked() && self.surface != Surface::Settings {
                 self.show_toast(Tone::Error, self.label(crate::i18n::error_key(e)));
             }
         }
+    }
+    fn finished(self, done: Done) {
+        self.done.update(|d| *d = Some((d.map_or(0, |(n, _)| n.wrapping_add(1)), done)));
     }
     fn deliver(self, payload: Payload) {
         match payload {
             Payload::Silent => {}
             Payload::Verified => self.cancel_auth(),
             Payload::Saved => self.close_sheet(),
+            Payload::PasswordChanged => {
+                self.close_sheet();
+                self.finished(Done::PasswordChanged);
+            }
             Payload::Restored => {
                 self.close_sheet();
                 self.stage.set(Stage::Welcome);
@@ -668,6 +702,7 @@ impl Store {
                     self.close_sheet();
                     self.show_toast(Tone::Success, text);
                 }
+                self.finished(Done::Imported);
             }
             Payload::Deleted(issuer, in_sheet) => {
                 if in_sheet {
@@ -679,6 +714,7 @@ impl Store {
             Payload::Added(issuer) => {
                 self.close_sheet();
                 self.show_toast(Tone::Success, self.fmt("Added {}", &[&issuer]));
+                self.finished(Done::Added);
             }
             Payload::Captured(issuer, n) => {
                 // The shortcut and the panel run without a visible main window: the result shows on the desktop.
@@ -694,6 +730,11 @@ impl Store {
                     self.category.set(Some(last));
                     self.refresh();
                 }
+            }
+            Payload::SecretCopied => {
+                #[cfg(any(target_os = "android", target_os = "ios"))]
+                platform::clipboard::flush();
+                self.show_toast(Tone::Success, self.label("Copied"));
             }
             Payload::Copied(id) => {
                 #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -832,6 +873,20 @@ impl Store {
         self.dispatch(true, move |s| {
             s.update_metadata(id, &f.issuer, &f.username, &f.website)?;
             Ok(Payload::Saved)
+        });
+    }
+    /// Copies the revealed secret the way a code is copied: marked sensitive, and cleared after a minute.
+    pub fn copy_secret(self) {
+        let text = self.revealed.get();
+        if text.is_empty() {
+            return;
+        }
+        let clipboard = self.clipboard.get();
+        let controller = self.controller.get();
+        let epoch = controller.epoch();
+        self.dispatch(true, move |_| {
+            clipboard.copy(text, std::time::Duration::from_secs(60), controller, epoch)?;
+            Ok(Payload::SecretCopied)
         });
     }
     pub fn copy(self, id: Uuid) {
@@ -1304,7 +1359,7 @@ impl Store {
         self.confirm_fair(f.new_password.clone(), move |confirmed| {
             self.dispatch(true, move |s| {
                 s.change_password(&current, &f.new_password, confirmed)?;
-                Ok(Payload::Saved)
+                Ok(Payload::PasswordChanged)
             });
         });
     }
@@ -1412,8 +1467,17 @@ impl Store {
         });
     }
     pub fn membership(self, category: Uuid, account: Uuid, add: bool) {
+        self.set_memberships(account, vec![(category, add)]);
+    }
+    /// Puts `account` in or takes it out of several categories at once: one operation, so none is dropped as busy.
+    pub fn set_memberships(self, account: Uuid, changes: Vec<(Uuid, bool)>) {
+        if changes.is_empty() {
+            return;
+        }
         self.dispatch(true, move |s| {
-            s.membership(category, account, add)?;
+            for (category, add) in changes {
+                s.membership(category, account, add)?;
+            }
             Ok(Payload::Silent)
         });
     }
@@ -2418,6 +2482,7 @@ impl Store {
     }
     pub fn load_review(self) {
         self.prefer_remote.set(BTreeSet::new());
+        self.resolution.set(0);
         let controller = self.controller.get();
         let epoch = controller.epoch();
         self.task(async move {

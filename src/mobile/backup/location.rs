@@ -1,0 +1,101 @@
+//! Where the backup is kept: choosing a location, and restoring from a backup this vault cannot open.
+use super::*;
+
+// ---- Choosing a location, restoring from an unreadable backup --------------------------------------------------------
+
+/// The dialogs of the card: where to keep the backup, and the master password of a backup this vault cannot open.
+pub fn dialogs(s: Store, nav: Nav) -> impl IntoElement {
+    view()
+        .child(when(move || nav.choosing.get(), move || choose(s, nav)))
+        .child(when(move || nav.restoring.get(), move || restore_unreadable(s, nav)))
+}
+
+fn choose(s: Store, nav: Nav) -> impl IntoElement {
+    let close = move || nav.choosing.set(false);
+    let current = move || match s.projection.with(|p| p.sync.location.clone()) {
+        Some(Location::Cloud { provider, .. }) => Some(provider),
+        _ => None,
+    };
+    ui::dialog(
+        move || s.label("Choose Location"),
+        view()
+            .mx(px(-24.0))
+            .child(
+                ui::dim(ui::body(text(move || s.label("Choose where to keep the encrypted backup. Only one location is used at a time."))))
+                    .px(px(24.0))
+                    .pb(px(8.0)),
+            )
+            .children(providers().into_iter().map(move |provider| {
+                button()
+                    .test_id(provider.name())
+                    .min_h(px(56.0))
+                    .px(px(24.0))
+                    .flex_row()
+                    .items_center()
+                    .gap(px(16.0))
+                    .active(|st| st.bg(move || tok("pressed")))
+                    .on_press(move || {
+                        close();
+                        open_setup(s, provider, false)
+                    })
+                    .child(plate(LocationIcon::Cloud(provider)))
+                    .child(ui::body_large(text(provider.name())).flex_1())
+                    .child(when(
+                        move || current() == Some(provider),
+                        || view().text_color(move || theme().primary).child(icon(Icon::Check).size(px(24.0))),
+                    ))
+            })),
+        ui::text_button(move || s.label("Cancel"), false).on_press(close),
+        close,
+    )
+}
+
+fn restore_unreadable(s: Store, nav: Nav) -> impl IntoElement {
+    let close = move || {
+        if !s.syncing.get() {
+            s.form.update(|f| f.password = Zeroizing::new(String::new()));
+            nav.restoring.set(false)
+        }
+    };
+    let submit = move || {
+        if s.form.with(|f| !f.password.is_empty()) && !s.syncing.get() {
+            dismiss_keyboard();
+            s.restore_unreadable();
+        }
+    };
+    // Restored: the backup opens with this vault's key now.
+    effect(move || {
+        if status(s) != Status::Unreadable && !s.syncing.get() {
+            untracked(|| nav.restoring.set(false));
+        }
+    });
+    ui::dialog(
+        move || s.label("Restore from Backup"),
+        view()
+            .gap(px(8.0))
+            .child(ui::dim(ui::body(text(move || {
+                s.label("To use that backup, restore from it and unlock with its master password. This replaces the vault on this device.")
+            }))))
+            .child(ui::field(
+                s,
+                "restore-password",
+                Entry::Password,
+                move || s.label("Existing Master Password"),
+                move || s.form.with(|f| f.password.to_string()),
+                move |v| {
+                    s.status.set(None);
+                    s.form.update(|f| f.password = Zeroizing::new(v.to_owned()))
+                },
+                submit,
+                |_| {},
+                move || s.status.get().is_some(),
+                ReturnKeyType::Done,
+                None,
+            ))
+            .child(ui::field_note(move || s.status.get().map(|st| st.text), || true)),
+        view().flex_row().gap(px(4.0)).child(ui::text_button(move || s.label("Cancel"), false).on_press(close)).child(
+            ui::text_button(move || s.label("Restore"), false).test_id("restore-go").disabled(move || s.syncing.get()).on_press(submit),
+        ),
+        close,
+    )
+}

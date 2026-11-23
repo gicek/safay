@@ -147,8 +147,12 @@ fn search(s: Store, nav: Nav) -> impl IntoElement {
                         nav.menu.set(false);
                         nav.letter.set(None);
                         nav.searching.set(true);
-                        // Once the field is laid out: the keyboard comes up with the field opening.
-                        set_timeout(std::time::Duration::from_millis(60), move || field.focus());
+                        // From the next frame, as the field opens: the keyboard comes up with it.
+                        request_animation_frame(move |_| {
+                            if nav.searching.get_untracked() {
+                                field.focus()
+                            }
+                        });
                     }
                 })
                 .child(
@@ -369,6 +373,8 @@ fn index(nav: Nav, r: Reorder, letters: Memo<Vec<char>>) -> impl IntoElement {
     // The letter chosen before this touch, and whether the touch chose another.
     let before = stored(None::<char>);
     let changed = stored(false);
+    // A finger is on the bar.
+    let touching = stored(false);
     let shown = signal(None::<(char, f32)>);
     let pick = move |y: f32| {
         let Some(((top, height), area_top)) = frames.get() else { return };
@@ -421,18 +427,29 @@ fn index(nav: Nav, r: Reorder, letters: Memo<Vec<char>>) -> impl IntoElement {
                             let y = e.page.y.0;
                             before.replace(nav.letter.get_untracked());
                             changed.replace(false);
+                            touching.replace(true);
                             owner.run(|| {
                                 spawn(async move {
                                     if let (Some(b), Some(a)) = (bar.measure().await, area.measure().await) {
                                         frames.replace(Some(((b.page.y.0, b.frame.size.height.0), a.page.y.0)));
                                         pick(y);
+                                        // A quick tap was let go before the bar was measured: it ends here.
+                                        if !touching.get() {
+                                            lift();
+                                        }
                                     }
                                 });
                             });
                         })
                         .on_responder_move(move |e: &ResponderEvent| pick(e.page.y.0))
-                        .on_responder_release(move |_: &ResponderEvent| lift())
-                        .on_responder_terminate(move |_: &ResponderEvent| shown.set(None))
+                        .on_responder_release(move |_: &ResponderEvent| {
+                            touching.replace(false);
+                            lift()
+                        })
+                        .on_responder_terminate(move |_: &ResponderEvent| {
+                            touching.replace(false);
+                            shown.set(None)
+                        })
                         .child(each(
                             move || letters.get(),
                             |l| *l,
@@ -546,7 +563,7 @@ fn empty(s: Store, nav: Nav) -> impl IntoElement {
         } else {
             ui::filled_button(Some(Icon::Keyboard), move || s.label("Enter Setup Key"))
                 .test_id("enter-key")
-                .on_press(move || nav.push(Page::Manual))
+                .on_press(move || super::add::open(s, nav))
         }))
 }
 
@@ -592,7 +609,7 @@ fn add_menu(s: Store, nav: Nav) -> impl IntoElement {
                         s.scanned.set(Default::default());
                         s.choose_images()
                     }))
-                    .child(menu_item(s, Icon::Keyboard, "Enter Setup Key", move || nav.push(Page::Manual)))
+                    .child(menu_item(s, Icon::Keyboard, "Enter Setup Key", move || super::add::open(s, nav)))
                     .child(menu_item(s, Icon::Doc, "Import Backup File", move || {
                         nav.adding.set(false);
                         s.choose_backup()
