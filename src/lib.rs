@@ -22,6 +22,7 @@ mod launcher;
 mod mobile;
 mod pages;
 pub mod platform;
+mod reorder;
 #[cfg(target_os = "macos")]
 mod scan;
 mod shell;

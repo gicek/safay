@@ -1,6 +1,6 @@
 //! Sidebar, card grid and list. Account actions live in the native context menu;
 //! keyboard users reach the same menu with the context-menu key or Shift+F10 on a focused card.
-use super::reorder::{self, Reorder};
+use crate::reorder::{self, Reorder};
 use crate::{
     chrome::{self, Look, look},
     components::*,
@@ -90,7 +90,7 @@ fn sidebar_row(
 
 pub fn sidebar(s: Store) -> impl IntoElement {
     let all_active = move || s.category.get().is_none() && !s.trash.get();
-    let r = Reorder::new(s, reorder::Kind::Categories);
+    let r = Reorder::new(s, reorder::Kind::Categories, |_| (reorder::CATEGORY_GAP, 1), reorder::Pickup::Move);
     view()
         .child(escape_cancels(r))
         .flex_1()
@@ -341,7 +341,12 @@ pub fn page(s: Store) -> impl IntoElement {
     when(move || s.trash.get(), move || super::trash::page(s)).otherwise(move || accounts_page(s))
 }
 fn accounts_page(s: Store) -> impl IntoElement {
-    let r = Reorder::new(s, reorder::Kind::Accounts);
+    let r = Reorder::new(
+        s,
+        reorder::Kind::Accounts,
+        |s| if s.cards.get_untracked() { (GAP, columns(s) as usize) } else { (0.0, 1) },
+        reorder::Pickup::Move,
+    );
     view().flex_1().child(escape_cancels(r)).child(
         when(move || s.projection.with(|p| p.rows.is_empty()), move || empty_state(s)).otherwise(move || {
             view()

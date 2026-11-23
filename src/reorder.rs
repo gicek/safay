@@ -1,7 +1,10 @@
-//! Drag-to-reorder for the account cards and rows and for the sidebar's categories, one session per container.
+//! Drag-to-reorder for the accounts and the categories, one session per container: the desktop's cards, rows and
+//! sidebar, and the phone's list and "Manage Categories".
 //!
-//! A card or row claims the touches once the pointer has moved 4pt from where it went down (a click still copies) and
-//! keeps them against the list's scrolling. At the grant the list and the dragged item are measured once; from those
+//! How an item is picked up is the session's `Pickup`. With a pointer (`Pickup::Move`), an item claims the touches once
+//! the pointer has moved 4pt from where it went down (a click still copies). On a touch screen a move scrolls, so an
+//! item is picked up by a long press first (`Pickup::LongPress`): the press arms it, and it claims the touches once the
+//! finger then moves 4pt. Either way it keeps them against the list's scrolling. At the grant the list and the dragged item are measured once; from those
 //! the grid (slot pitch, columns, where slot 0 sits) is known, and every move is hit-tested against it in the list's
 //! content coordinates, so nothing is measured again while dragging.
 //!
@@ -31,6 +34,18 @@ pub const SWAP_MS: f32 = 180.0;
 pub const CATEGORY_SWAP_MS: f32 = 160.0;
 /// The gap between category rows.
 pub const CATEGORY_GAP: f32 = 2.0;
+
+/// How an item is picked up for dragging.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Pickup {
+    /// Moving the pointer (a mouse, a trackpad) past the slop.
+    Move,
+    /// A long press, then moving past the slop: a touch screen, where a move alone scrolls.
+    LongPress,
+}
+
+/// How the container lays its items out, read at the grant: the gap between items and the columns.
+pub type Layout = fn(Store) -> (f32, usize);
 
 /// What a session orders.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -140,6 +155,10 @@ pub fn applying(order: &[Uuid], ids: &[Uuid]) -> Vec<Uuid> {
 pub struct Reorder {
     s: Store,
     kind: Kind,
+    layout: Layout,
+    pickup: Pickup,
+    /// The item a long press picked up, until the finger lifts or the drag starts (`Pickup::LongPress`).
+    armed: Stored<Option<Uuid>>,
     pub dragged: Signal<Option<Uuid>>,
     pub target: Signal<Option<Uuid>>,
     /// The preview order while dragging (and until the saved order arrives).
@@ -166,10 +185,13 @@ pub struct Reorder {
 }
 
 impl Reorder {
-    pub fn new(s: Store, kind: Kind) -> Self {
+    pub fn new(s: Store, kind: Kind, layout: Layout, pickup: Pickup) -> Self {
         let r = Self {
             s,
             kind,
+            layout,
+            pickup,
+            armed: stored(None),
             dragged: signal(None),
             target: signal(None),
             order: signal(None),
@@ -240,12 +262,25 @@ impl Reorder {
         self.scroll.replace(offset);
     }
 
+    /// Picks up `id` for a drag that starts once the finger moves (`Pickup::LongPress`): the item's long press calls it.
+    pub fn arm(self, id: Uuid) {
+        self.armed.replace(Some(id));
+    }
+
     /// Wires an item (a card or a row) to the session.
     pub fn item<E: Styled + Interactive>(self, el: E, me: ElementRef, id: impl Fn() -> Option<Uuid> + Copy + 'static) -> E {
         el.element_ref(&me)
+            // A new press lifts whatever an earlier long press picked up.
+            .on_press_down(move |_: &PressEvent| {
+                self.armed.replace(None);
+            })
             .claim_touches(TouchClaim::on_move().ask(move |request: &ClaimRequest| {
                 let d = request.event.gesture.delta;
-                if !self.suppressed.get() && self.count() > 1 && d.x.0.hypot(d.y.0) >= SLOP {
+                let picked = match self.pickup {
+                    Pickup::Move => true,
+                    Pickup::LongPress => id().is_some() && self.armed.get() == id(),
+                };
+                if picked && !self.suppressed.get() && self.count() > 1 && d.x.0.hypot(d.y.0) >= SLOP {
                     request.claim();
                 }
             }))
@@ -281,11 +316,8 @@ impl Reorder {
         self.dragged.set(Some(id));
         self.target.set(None);
         self.s.controller.get().activity();
-        let (gap, columns) = match self.kind {
-            Kind::Accounts if self.s.cards.get_untracked() => (super::accounts::GAP, super::accounts::columns(self.s)),
-            Kind::Accounts => (0.0, 1),
-            Kind::Categories => (CATEGORY_GAP, 1),
-        };
+        self.armed.replace(None);
+        let (gap, columns) = (self.layout)(self.s);
         let list = self.list;
         self.owner.get().run(|| {
             spawn(async move {
@@ -296,7 +328,6 @@ impl Reorder {
                 if self.dragged.get_untracked() != Some(id) {
                     return;
                 }
-                let columns = columns as usize;
                 let (w, h) = (m.frame.size.width.0, m.frame.size.height.0);
                 let pitch = (w + gap, h + gap);
                 let scroll = self.scroll.get();

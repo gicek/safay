@@ -2,9 +2,9 @@
 """Walks every page of the phone interface on a connected Android device or emulator and checks what it shows.
 
 It drives the app through the accessibility tree (`android layout`) and `adb input`, the way a person would: onboarding,
-adding accounts by setup key and by otpauth links, the details sheet, categories, search, settings and their dialogs,
-export, locking, an import of many accounts (whose list it scrolls end to end), and erasing the vault. Each check that
-fails is reported with a screenshot, and the run goes on.
+adding accounts by setup key and by otpauth links, reordering by dragging, the details sheet, categories, search,
+settings and their dialogs, export, locking, an import of many accounts (whose list it scrolls end to end), and erasing
+the vault. Each check that fails is reported with a screenshot, and the run goes on.
 
 It installs and runs the demo package (`python3 scripts/android.py --demo`, ID `com.gicek.safay.demo`), and it erases
 that package's data at the start and the end. Never point it at a package that holds a vault you want to keep.
@@ -188,6 +188,19 @@ class Device:
         x, y = self.node(label).center
         self.adb("shell", "input", "swipe", str(x), str(y), str(x), str(y), "800")
         time.sleep(settle)
+
+    def drag(self, node: Node, to_y: int, hold: float = 0.9):
+        """Touches and holds `node`, moves the finger to `to_y` in small steps, and lifts it: a long press, then a drag.
+        (`input swipe` moves at once, so it never makes a long press.)"""
+        x, y = node.center
+        self.shell(f"input motionevent DOWN {x} {y}")
+        time.sleep(hold)
+        for step in range(1, 11):
+            self.shell(f"input motionevent MOVE {x} {y + (to_y - y) * step // 10}")
+            time.sleep(0.06)
+        time.sleep(0.4)
+        self.shell(f"input motionevent UP {x} {to_y}")
+        time.sleep(2.0)
 
     def swipe(self, x1: int, y1: int, x2: int, y2: int, ms: int = 300):
         self.adb("shell", "input", "swipe", str(x1), str(y1), str(x2), str(y2), str(ms))
@@ -474,6 +487,21 @@ def paste_links(r: Run):
     rings = {n.label for n in s.nodes if re.fullmatch(r"\d{1,2}", n.label)}
     at = d.epoch()
     r.check(any(abs(int(x) - (60 - at % 60)) <= 2 for x in rings), "the 60-second account counts down from 60")
+
+
+def reorder_accounts(r: Run):
+    d = r.d
+    s = d.screen()
+    before = rows(s)
+    shown = [n for n in s.nodes if is_row(n)]
+    d.drag(shown[-1], shown[0].center[1])
+    s = d.screen()
+    want = [before[-1], *before[:-1]]
+    r.check(rows(s) == want, f"a long press and a drag move an account to the top (rows {rows(s)}, want {want})")
+    r.check(not s.has("Details"), "the account's menu closes once the drag starts")
+    d.drag([n for n in s.nodes if is_row(n)][0], shown[-1].center[1])
+    s = d.screen()
+    r.check(rows(s) == before, f"and back to the end (rows {rows(s)})")
 
 
 def details(r: Run):
@@ -893,6 +921,7 @@ STEPS = [
     ("biometrics-off", settings_biometrics_off),
     ("manual-entry", manual_entry),
     ("paste-links", paste_links),
+    ("reorder", reorder_accounts),
     ("details", details),
     ("categories", categories),
     ("search", search),

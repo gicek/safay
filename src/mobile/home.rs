@@ -1,9 +1,10 @@
 //! The list: a search bar, the categories as chips, and the accounts as one group of rows. A press on a row copies its
-//! code; the button at the bottom adds an account.
+//! code, a long press opens its menu and picks it up to drag; the button at the bottom adds an account.
 use super::{Nav, Page, ui};
 use crate::{
     components::{CODE_FONT, badge_with_icon, tok},
     icons::{Icon, icon},
+    reorder::{Kind, Pickup, Reorder},
     store::Store,
 };
 use nsh_base::{button, input, theme};
@@ -116,37 +117,51 @@ fn chips(s: Store, nav: Nav) -> impl IntoElement {
     )
 }
 
+/// The rows, as one group. A long press on a row opens its menu and picks it up: moving the finger then drags it to
+/// another place (the menu closes), and the order is saved on release. A dragged row's place stays empty while a
+/// lifted copy of it follows the finger.
 fn list(s: Store, nav: Nav) -> impl IntoElement {
-    let count = move || s.projection.with(|p| p.rows.len());
-    virtual_list(count, move |at| {
-        // The position is read in the bindings, not once here: a cell keeps its content as rows come and go or the
-        // list scrolls, and shows whichever row is now at its place (its data, its corners).
-        let row = computed(move || s.projection.with(|p| p.rows.get(at.index()).cloned()));
-        account_row(s, nav, row, move || at.index(), count)
-    })
-    .keys(move || s.projection.with(|p| p.rows.iter().map(|r| r.id.to_string()).collect::<Vec<_>>()))
-    .estimated_item_size(move || px(ROW) * font_scale())
-    .row_gap(px(ui::GROUP_GAP))
-    .content_padding_x(px(ui::MARGIN))
-    .content_padding_y(px(8.0))
-    .footer(view().h(px(CLEARANCE)))
-    .on_scroll(move |_: &ScrollEvent| s.controller.get().activity())
-    .keyboard_dismiss_mode(KeyboardDismissMode::OnDrag)
-    .flex_1()
+    let r = Reorder::new(s, Kind::Accounts, |_| (ui::GROUP_GAP, 1), Pickup::LongPress);
+    effect(move || {
+        if r.dragged.get().is_some() {
+            untracked(|| nav.context.set(None));
+        }
+    });
+    view()
+        .flex_1()
+        .child(
+            virtual_list(
+                move || r.count(),
+                move |at| {
+                    // The position is read in the bindings, not once here: a cell keeps its content as rows come and
+                    // go or the list scrolls, and shows whichever row is now at its place (its data, its corners).
+                    let row = computed(move || r.row(at.index()));
+                    account_row(s, nav, r, row, move || at.index())
+                },
+            )
+            .keys(move || r.ids().iter().map(|id| id.to_string()).collect::<Vec<_>>())
+            .estimated_item_size(move || px(ROW) * font_scale())
+            .row_gap(px(ui::GROUP_GAP))
+            .content_padding_x(px(ui::MARGIN))
+            .content_padding_y(px(8.0))
+            .footer(view().h(px(CLEARANCE)))
+            .on_scroll(move |e: &ScrollEvent| {
+                r.scrolled(e.offset.y.0);
+                s.controller.get().activity()
+            })
+            .keyboard_dismiss_mode(KeyboardDismissMode::OnDrag)
+            .element_ref(&r.list)
+            .flex_1(),
+        )
+        .child(when(move || r.pointer.get().is_some() && r.standin.with(|row| row.is_some()), move || standin(r)))
 }
 
-fn account_row(
-    s: Store,
-    nav: Nav,
-    row: Memo<Option<Row>>,
-    index: impl Fn() -> usize + Copy + 'static,
-    count: impl Fn() -> usize + Copy + 'static,
-) -> impl IntoElement {
+fn account_row(s: Store, nav: Nav, r: Reorder, row: Memo<Option<Row>>, index: impl Fn() -> usize + Copy + 'static) -> impl IntoElement {
     let id = move || row.with(|r| r.as_ref().map(|r| r.id));
     let issuer = move || row.with(|r| r.as_ref().map(|r| r.issuer.clone()).unwrap_or_default());
-    let urgent = move || row.with(|r| r.as_ref().is_some_and(|r| r.remaining <= 5));
     let copied = move || s.copied.get().is_some() && s.copied.get() == id();
-    ui::group_corners(
+    let me = element_ref();
+    let el = ui::group_corners(
         // A view, not a button: a row takes a press and a long press.
         view()
             .accessible(true)
@@ -164,6 +179,8 @@ fn account_row(
             .duration(move || if copied() { 0.0 } else { ui::EFFECTS_MS })
             .ease_out()
             .active(|st| st.bg(move || tok("surface-high")))
+            // Its place stays empty while it is dragged.
+            .opacity(move || if r.is_dragging(id()) { 0.0_f32 } else { 1.0 })
             .on_press(move |_: &()| {
                 if let Some(id) = id() {
                     haptic(Haptic::Notification(HapticNotification::Success));
@@ -174,27 +191,59 @@ fn account_row(
                 if let Some(id) = id() {
                     haptic(Haptic::Impact(HapticImpact::Medium));
                     dismiss_keyboard();
+                    r.arm(id);
                     nav.context.set(Some((id, e.page_position)))
                 }
             }),
         index,
-        count,
+        move || r.count(),
+    );
+    face(r.item(el, me, id), row)
+}
+
+/// What a row shows: the account's mark, its names, its code and the countdown.
+fn face(el: View, row: Memo<Option<Row>>) -> View {
+    let issuer = move || row.with(|r| r.as_ref().map(|r| r.issuer.clone()).unwrap_or_default());
+    let urgent = move || row.with(|r| r.as_ref().is_some_and(|r| r.remaining <= 5));
+    el.child(badge_with_icon(issuer, || false, move || row.with(|r| r.as_ref().and_then(|r| r.icon.clone())), 42.0))
+        .child(view().flex_1().min_w(px(0.0)).child(ui::title(text(issuer)).number_of_lines(1)).child(
+            ui::dim(ui::body(text(move || row.with(|r| r.as_ref().map(|r| r.username.clone()).unwrap_or_default())))).number_of_lines(1),
+        ))
+        .child(
+            text(move || row.with(|r| r.as_ref().map(|r| r.code.clone()).unwrap_or_default()))
+                .font_family(CODE_FONT.family)
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_size(px(24.0))
+                .letter_spacing(px(0.5))
+                .number_of_lines(1)
+                .flex_shrink(0.0)
+                .text_color(move || if urgent() { tok("urgent") } else { theme().foreground }),
+        )
+        .child(ring(move || row.with(|r| r.as_ref().map(|r| (r.remaining, r.period))), 26.0))
+}
+
+/// The dragged row following the finger: the row's look, lifted by a shadow, its corners all the inner ones'.
+fn standin(r: Reorder) -> impl IntoElement {
+    let frame = move || r.pointer.get().unwrap_or_default();
+    let row = computed(move || r.standin.get());
+    face(
+        view()
+            .absolute()
+            .left(move || px(frame().0))
+            .top(move || px(frame().1))
+            .w(move || px(frame().2))
+            .h(move || px(frame().3))
+            .px(px(16.0))
+            .py(px(14.0))
+            .flex_row()
+            .items_center()
+            .gap(px(14.0))
+            .rounded(px(ui::GROUP_INNER * 2.0))
+            .bg(move || theme().card)
+            .shadow_lg()
+            .pointer_events(nsh_core::PointerEvents::None),
+        row,
     )
-    .child(badge_with_icon(issuer, || false, move || row.with(|r| r.as_ref().and_then(|r| r.icon.clone())), 42.0))
-    .child(view().flex_1().min_w(px(0.0)).child(ui::title(text(issuer)).number_of_lines(1)).child(
-        ui::dim(ui::body(text(move || row.with(|r| r.as_ref().map(|r| r.username.clone()).unwrap_or_default())))).number_of_lines(1),
-    ))
-    .child(
-        text(move || row.with(|r| r.as_ref().map(|r| r.code.clone()).unwrap_or_default()))
-            .font_family(CODE_FONT.family)
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_size(px(24.0))
-            .letter_spacing(px(0.5))
-            .number_of_lines(1)
-            .flex_shrink(0.0)
-            .text_color(move || if urgent() { tok("urgent") } else { theme().foreground }),
-    )
-    .child(ring(move || row.with(|r| r.as_ref().map(|r| (r.remaining, r.period))), 26.0))
 }
 
 /// The countdown: a track, an arc that shortens clockwise from the top, and the seconds left inside. Orange in the last
