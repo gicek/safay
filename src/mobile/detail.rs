@@ -1,5 +1,5 @@
 //! An account's details, in a sheet over the list: its code, large; its names and website; its categories; how it was
-//! added; its secret and QR code, behind the master password; and its removal.
+//! added; and its secret and QR code, behind the master password. It is deleted from its menu in the list.
 use super::ui::{self, Entry};
 use crate::{
     components::{CODE_FONT, badge_with_icon, tok},
@@ -196,14 +196,9 @@ fn content(s: Store, id: Uuid) -> impl IntoElement {
                             .on_press(move || s.reveal(Auth::Qr(id))),
                     ),
             )
-            .child(ui::dim(ui::caption(text(move || s.label("Showing the secret or the QR code asks for your master password.")))))
-            .child(rule())
-            .child(
-                ui::tonal_button(|| Icon::Trash, move || s.label("Delete This Account"), true)
-                    .test_id("delete")
-                    .rounded_full()
-                    .on_press(move || s.delete_account(id)),
-            ),
+            // No delete button here, where a press meant for the secret could land on it: an account is deleted from
+            // its menu in the list.
+            .child(ui::dim(ui::caption(text(move || s.label("Showing the secret or the QR code asks for your master password."))))),
     )
 }
 
