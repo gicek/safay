@@ -91,7 +91,8 @@ fn chips(s: Store, nav: Nav) -> impl IntoElement {
         s.category.set(id);
         s.refresh();
     };
-    scroll().horizontal().flex_shrink(0.0).child(
+    // Chips scroll sideways with the finger; no indicator under them.
+    scroll().horizontal().scrollbar(false).flex_shrink(0.0).child(
         view()
             .flex_row()
             .gap(px(8.0))

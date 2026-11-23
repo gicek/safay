@@ -69,6 +69,7 @@ pub enum Icon {
     External,
     DocFill,
     SealFill,
+    Pencil,
 }
 fn shape(name: Icon) -> &'static str {
     match name {
@@ -172,6 +173,7 @@ fn shape(name: Icon) -> &'static str {
         Icon::Sidebar => "<rect x='3.5' y='4.5' width='17' height='15' rx='2.5'/><path d='M9.5 4.5v15M5.8 8h1.6M5.8 11h1.6'/>",
         Icon::Close => "<path d='m6.5 6.5 11 11m0-11-11 11'/>",
         Icon::Keyboard => "<rect x='3' y='6' width='18' height='12' rx='2'/><path d='M7 10h.1M10.3 10h.1M13.6 10h.1M17 10h.1M7 14h10'/>",
+        Icon::Pencil => "<path d='M4.5 19.5l1-4.2L15.8 5a2.1 2.1 0 0 1 3 3L8.6 18.4z'/><path d='M14 6.8l3.2 3.2'/>",
         Icon::Sliders => "<path d='M4 7h9M17 7h3M4 17h3M11 17h9'/><circle cx='15' cy='7' r='2'/><circle cx='9' cy='17' r='2'/>",
         Icon::Power => "<path d='M12 3.5v8'/><path d='M7.3 6.5a7.5 7.5 0 1 0 9.4 0'/>",
         Icon::Window => "<rect x='3.5' y='4.5' width='17' height='15' rx='2'/><path d='M3.5 8.5h17'/>",
@@ -243,6 +245,7 @@ fn sf_name(name: Icon) -> Option<&'static str> {
         Icon::External => "arrow.up.forward.square",
         Icon::Keyboard => "keyboard",
         Icon::Sliders => "slider.horizontal.3",
+        Icon::Pencil => "pencil",
         Icon::ChevronUpDown => "chevron.up.chevron.down",
         Icon::MoreCircle => "ellipsis.circle",
         Icon::Check => "checkmark",

@@ -11,6 +11,9 @@ use nsh_core::prelude::*;
 use safay_app::Uuid;
 use safay_app::Zeroizing;
 
+/// The sheet's side margin.
+const SIDE: f32 = 24.0;
+
 /// The account whose details show, the QR code over them included.
 fn shown(s: Store) -> Option<Uuid> {
     match s.sheet.get() {
@@ -46,7 +49,7 @@ fn content(s: Store, id: Uuid) -> impl IntoElement {
     };
     scroll().max_h(move || ui::sheet_room(0.0)).keyboard_dismiss_mode(KeyboardDismissMode::None).keyboard_taps(KeyboardTaps::Handled).child(
         view()
-            .px(px(24.0))
+            .px(px(SIDE))
             .pb(move || ui::sheet_bottom(16.0))
             .gap(px(16.0))
             // Names, and the control that edits them.
@@ -66,7 +69,7 @@ fn content(s: Store, id: Uuid) -> impl IntoElement {
                     .child(
                         when(move || editing.get(), move || ui::text_button(move || s.label("Done"), false).test_id("done").on_press(save))
                             .otherwise(move || {
-                                ui::icon_button(move || s.label("Edit"), || Icon::Sliders)
+                                ui::icon_button(move || s.label("Edit"), || Icon::Pencil)
                                     .test_id("edit")
                                     .on_press(move || editing.set(true))
                             }),
@@ -267,27 +270,30 @@ fn edit_fields(s: Store, save: impl Fn() + Copy + 'static) -> impl IntoElement {
         .child(ui::field_note(move || s.marks.with(|m| m.website_error).then(|| s.label("Enter a website like example.com")), || true))
 }
 
-/// The account's categories as chips: a press adds it to one or takes it out, at once.
+/// The account's categories as chips in a row: a press adds it to one or takes it out, at once.
 fn categories(s: Store, id: Uuid, row: Memo<Option<safay_app::session::Row>>) -> impl IntoElement {
     view().gap(px(8.0)).child(ui::label(text(move || s.label("Categories")))).child(
-        view()
-            .flex_row()
-            .flex_wrap()
-            .gap(px(8.0))
-            .child(each(
-                move || s.projection.with(|p| p.categories.clone()),
-                |c| c.id,
-                move |c, _| {
-                    let category = c.with_untracked(|c| c.id);
-                    let member = move || row.with(|r| r.as_ref().is_some_and(|r| r.categories.contains(&category)));
-                    ui::chip(move || c.with(|c| SharedString::from(c.name.clone())), member, None)
-                        .on_press(move || s.membership(category, id, !member()))
-                },
-            ))
-            .child(
-                ui::chip(move || s.label("New Category"), || false, Some(Icon::FolderPlus))
-                    .test_id("new-category")
-                    .on_press(move || s.editing.set(Some(CategoryEdit { account: Some(id), ..Default::default() }))),
-            ),
+        // One row that scrolls sideways, without an indicator, out to the sheet's edges.
+        scroll().horizontal().scrollbar(false).mx(px(-SIDE)).child(
+            view()
+                .flex_row()
+                .gap(px(8.0))
+                .px(px(SIDE))
+                .child(each(
+                    move || s.projection.with(|p| p.categories.clone()),
+                    |c| c.id,
+                    move |c, _| {
+                        let category = c.with_untracked(|c| c.id);
+                        let member = move || row.with(|r| r.as_ref().is_some_and(|r| r.categories.contains(&category)));
+                        ui::chip(move || c.with(|c| SharedString::from(c.name.clone())), member, None)
+                            .on_press(move || s.membership(category, id, !member()))
+                    },
+                ))
+                .child(
+                    ui::chip(move || s.label("New Category"), || false, Some(Icon::FolderPlus))
+                        .test_id("new-category")
+                        .on_press(move || s.editing.set(Some(CategoryEdit { account: Some(id), ..Default::default() }))),
+                ),
+        ),
     )
 }
