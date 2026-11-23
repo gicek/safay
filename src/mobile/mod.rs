@@ -9,6 +9,7 @@ mod home;
 mod lock;
 mod menus;
 mod onboarding;
+mod scan;
 mod settings;
 pub mod ui;
 
@@ -21,6 +22,8 @@ use std::sync::Arc;
 /// A page over the list.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Page {
+    /// "Scan QR Code": the camera.
+    Scan,
     /// "Enter Setup Key".
     Manual,
     /// "Manage Categories".
@@ -253,6 +256,7 @@ fn unlocked(s: Store, nav: Nav) -> impl IntoElement {
         .flex_1()
         .child(when(move || nav.page.get().is_none(), move || home::page(s, nav)))
         .child(when(move || nav.page.get() == Some(Page::Manual), move || add::manual(s, nav)))
+        .child(when(move || nav.page.get() == Some(Page::Scan), move || scan::page(s, nav)))
         .child(when(move || nav.page.get() == Some(Page::Categories), move || categories::page(s, nav)))
         .child(when(move || nav.page.get() == Some(Page::Settings), move || settings::page(s, nav)))
         .child(when(move || nav.page.get() == Some(Page::Deleted), move || settings::deleted(s, nav)))

@@ -127,7 +127,8 @@ one is tested on devices, the iOS one only builds so far.
 
 The Android package carries Java classes of its own (`android/java`, compiled by `make android` into the dex that
 `nsh.json` lists): Android's APIs that take a class of the app, such as the clipboard entry marked sensitive and the
-lock when the screen goes off. Rust reaches them through JNI (`src/platform/android.rs`).
+lock when the screen goes off, and the camera, whose preview is a native component of the app's crate
+(`safay.camera`). Rust reaches them through JNI (`src/platform/android.rs`, `src/platform/camera_android.rs`).
 
 `make android` runs `scripts/android.py`, which packages from `build/android/app/nsh.json`: the project's `nsh.json`
 with the sign-in callback schemes of the local `cloud-keys.toml` added, since Android hands a callback link only to an

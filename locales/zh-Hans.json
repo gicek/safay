@@ -600,5 +600,7 @@
   "Tap a category to rename it, or touch and hold it to drag it to another place. Deleting a category doesn’t delete its accounts.": "轻点分类可重命名，按住可拖动到其他位置。删除分类不会删除其中的账户。",
   "After you change fingerprints or faces, turn it on again.": "更改指纹或面孔后，需要重新开启。",
   "Each icon comes straight from the account’s website.": "图标直接从账户的网站获取。",
-  "Search": "搜索"
+  "Search": "搜索",
+  "This isn’t a 2FA QR code": "这不是 2FA 二维码",
+  "Scan the QR code a service shows to add its account. Codes are encrypted on this device.": "扫描服务提供的二维码即可添加账户。验证码会在此设备上加密保存。"
 }

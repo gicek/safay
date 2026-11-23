@@ -74,6 +74,10 @@ pub mod camera;
 #[cfg(target_os = "linux")]
 #[path = "camera_linux.rs"]
 pub mod camera;
+// And on Android, through Camera2 (android/java) and JNI.
+#[cfg(target_os = "android")]
+#[path = "camera_android.rs"]
+pub mod camera;
 /// "Select on Screen" on macOS: Safay's own selection over a picture of each display.
 #[cfg(target_os = "macos")]
 #[path = "screen_capture_macos.rs"]
@@ -169,8 +173,8 @@ pub mod supports {
     /// permission; Linux: the desktop portal's interactive screenshot).
     pub const SCREEN_CAPTURE: bool = cfg!(any(target_os = "macos", target_os = "linux"));
     /// Scanning with the camera (macOS: AVFoundation, needs the packaged app's camera usage description; Linux: the
-    /// desktop portal's Camera and PipeWire).
-    pub const CAMERA: bool = cfg!(any(target_os = "macos", target_os = "linux"));
+    /// desktop portal's Camera and PipeWire; Android: Camera2, with the camera permission).
+    pub const CAMERA: bool = cfg!(any(target_os = "macos", target_os = "linux", target_os = "android"));
     /// iCloud backup is listed among the locations: macOS has it (in a signed package); Windows lists it as unavailable;
     /// Linux, which never has it, does not list it.
     pub const ICLOUD: bool = cfg!(any(target_os = "macos", target_os = "windows"));

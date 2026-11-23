@@ -68,6 +68,9 @@ libc = "0.2"
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"
+# Asking for the camera permission (src/platform/camera_android.rs). Named as its library is (`nsh`, the libnsh.so the
+# package loads), which is how `nsh package` finds it among the app's dependencies.
+nsh = { package = "nsh-platform-android", git = "https://github.com/longbridge/nsh", branch = "main", default-features = false }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # The device's offset from UTC (src/platform/local_time.rs).

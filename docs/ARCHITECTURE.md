@@ -134,9 +134,9 @@ list to find the main window: `shell::main_ref` is its handle, and `platform::ma
 (the Dock icon setting follows that). Its close button hides it while the menu bar or tray icon keeps the app running.
 The panel, and the main window when it comes back from hiding, open on the display the pointer is on.
 
-A file's name in `src/platform/` says where it is built: without a suffix on every system, with `_macos`, `_linux` or
-`_windows` on that system only. The implementations of one feature share its name, and the module is named without
-the suffix: `camera_macos.rs` and `camera_linux.rs` are both `platform::camera`.
+A file's name in `src/platform/` says where it is built: without a suffix on every system, with `_macos`, `_linux`,
+`_windows` or `_android` on that system only. The implementations of one feature share its name, and the module is
+named without the suffix: `camera_macos.rs`, `camera_linux.rs` and `camera_android.rs` are all `platform::camera`.
 
 ### Working around NSH issues
 
@@ -163,7 +163,7 @@ the suffix: `camera_macos.rs` and `camera_linux.rs` are both `platform::camera`.
 | Credential storage | `platform::credentials` (`keyring`; the Secret Service on Linux; on Android, files sealed with a hardware-backed key) | macOS, Windows, Linux, Android |
 | Secret clipboard (concealed, expiring) | `platform::clipboard` | all |
 | iCloud backup; silent pushes | `platform::icloud`; `platform::macos::enable_remote_push` (adds the push callback to NSH's app delegate class at runtime — recheck on every NSH upgrade) | macOS |
-| Camera and on-screen QR selection | macOS: `platform::camera`, `platform::screen_capture`, `scan` (the overlay). Linux: `platform::camera` (the Camera portal, PipeWire and GStreamer) and `platform::screenshot` (`screen_capture_linux.rs`: the Screenshot portal, the desktop's own selection) | macOS, Linux |
+| Camera and on-screen QR selection | macOS: `platform::camera`, `platform::screen_capture`, `scan` (the overlay). Linux: `platform::camera` (the Camera portal, PipeWire and GStreamer) and `platform::screenshot` (`screen_capture_linux.rs`: the Screenshot portal, the desktop's own selection). Android: `platform::camera` (`camera_android.rs` and `android/java`'s `Camera`: Camera2, the preview drawn into the `TextureView` of the native component `safay.camera`, the luma read with `rqrr`) | macOS, Linux, Android |
 | QR decoding and generation | `platform::files` (`rqrr`, `qrcode`) | all |
 | SF Symbols | `platform::symbols` (rendered to template PNGs; SVG icons elsewhere) | macOS |
 | Lock on sleep, screen lock and user switch | `platform::macos::observe`, `platform::windows`, `platform::linux` | all |

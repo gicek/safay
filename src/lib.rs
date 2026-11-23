@@ -30,6 +30,12 @@ mod scan;
 mod shell;
 mod store;
 use store::{Store, Surface};
+
+/// The native components of the phone interface on Android: the camera's preview (`platform::camera::PREVIEW`).
+#[nsh_core::prelude::native_components(android)]
+fn components(components: &nsh::Components) {
+    platform::camera::register(components);
+}
 /// The development build number, from nsh.json.
 pub const BUILD: &str = "13";
 static CONTROLLER: OnceLock<(Arc<Controller>, bool)> = OnceLock::new();

@@ -31,7 +31,8 @@
       "build/android/java/classes.dex"
     ],
     "permissions": [
-      "USE_BIOMETRIC"
+      "USE_BIOMETRIC",
+      "CAMERA"
     ]
   },
   "schemes": [

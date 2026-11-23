@@ -21,6 +21,8 @@ const CLEARANCE: f32 = 120.0;
 const HEADER: f32 = 56.0;
 /// The search button.
 const FAB: f32 = 56.0;
+/// Scanning with the camera is here (`platform::supports::CAMERA`).
+const CAMERA: bool = crate::platform::supports::CAMERA;
 /// How many accounts the list holds before its letter index shows.
 const INDEXED: usize = 8;
 
@@ -546,17 +548,23 @@ fn empty(s: Store, nav: Nav) -> impl IntoElement {
         .child(view().text_color(move || theme().primary).child(icon(Icon::QrScan).size(px(56.0))))
         .child(ui::title_large(text(move || s.label("No 2FA accounts yet"))).text_center().mt(px(16.0)))
         .child(
-            ui::dim(ui::body(text(move || s.label("Enter the setup key from a service. Codes are encrypted on this device."))))
-                .text_center()
-                .mt(px(8.0)),
+            ui::dim(ui::body(text(move || {
+                s.label(if CAMERA {
+                    "Scan the QR code a service shows to add its account. Codes are encrypted on this device."
+                } else {
+                    "Enter the setup key from a service. Codes are encrypted on this device."
+                })
+            })))
+            .text_center()
+            .mt(px(8.0)),
         )
-        .child(
-            view().mt(px(24.0)).child(
-                ui::filled_button(Some(Icon::Keyboard), move || s.label("Enter Setup Key"))
-                    .test_id("enter-key")
-                    .on_press(move || nav.push(Page::Manual)),
-            ),
-        )
+        .child(view().mt(px(24.0)).child(if CAMERA {
+            ui::filled_button(Some(Icon::QrScan), move || s.label("Scan QR Code")).test_id("scan").on_press(move || nav.push(Page::Scan))
+        } else {
+            ui::filled_button(Some(Icon::Keyboard), move || s.label("Enter Setup Key"))
+                .test_id("enter-key")
+                .on_press(move || nav.push(Page::Manual))
+        }))
 }
 
 /// Accounts there are, none to show: nothing matches, or the category is empty.
@@ -595,6 +603,7 @@ fn add_menu(s: Store, nav: Nav) -> impl IntoElement {
         move || {
             view().absolute().inset(px(0.0)).on_press(move |_: &()| nav.adding.set(false)).child(
                 dropdown()
+                    .child(when(|| CAMERA, move || menu_item(s, Icon::QrScan, "Scan QR Code", move || nav.push(Page::Scan))))
                     .child(menu_item(s, Icon::Photo, "Choose from Photos", move || {
                         nav.adding.set(false);
                         s.scanned.set(Default::default());

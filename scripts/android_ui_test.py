@@ -129,10 +129,10 @@ class Device:
         return self.adb("shell", command).stdout.decode(errors="replace").strip()
 
     def screen(self) -> Screen:
-        for _ in range(3):
-            out = subprocess.run(
-                ["android", "layout", f"--device={self.serial}", "--flat"], capture_output=True, text=True
-            ).stdout
+        # A page that never settles (the camera's picture) is read without waiting for the layout to be idle.
+        for idle in (True, True, False, False):
+            command = ["android", "layout", f"--device={self.serial}", "--flat"] + ([] if idle else ["--no-idle"])
+            out = subprocess.run(command, capture_output=True, text=True).stdout
             if "[" in out:
                 break
             time.sleep(0.5)
@@ -436,6 +436,20 @@ def settings_biometrics_off(r: Run):
     if d.screen().has("biometrics"):  # a device with no biometrics enrolled has no such row
         d.tap("biometrics", settle=1.5)
     d.tap("Back")
+
+
+def scan(r: Run):
+    """The camera page opens from the add menu (the permission granted at the start) and closes back to the list."""
+    d = r.d
+    d.tap("Add Account", settle=1.0)
+    s = d.screen()
+    menu = list(dict.fromkeys(n.label for n in s.nodes if n.label in ("Scan QR Code", "Choose from Photos")))
+    r.check(menu[:1] == ["Scan QR Code"], f"scanning is the add menu's first choice ({menu})")
+    d.tap_id("Scan QR Code")
+    s = d.wait("Point the camera at the QR code", timeout=8)
+    r.check(s.has("Point the camera at the QR code"), "the camera page opens, aiming")
+    d.tap("scan-close", settle=1.2)
+    r.check(d.screen().has("more"), "closing the camera page goes back to the list")
 
 
 def manual_entry(r: Run):
@@ -1005,6 +1019,7 @@ def erase(r: Run):
 STEPS = [
     ("onboarding", onboarding),
     ("biometrics-off", settings_biometrics_off),
+    ("scan", scan),
     ("manual-entry", manual_entry),
     ("paste-links", paste_links),
     ("reorder", reorder_accounts),
@@ -1057,6 +1072,8 @@ def main() -> int:
         print(f"installing {args.apk.name}")
         d.adb("install", "-r", str(args.apk), check=True)
     d.shell(f"pm clear {PACKAGE}")
+    # The camera page asks for the camera: granted here, as the system's prompt is no part of the app.
+    d.shell(f"pm grant {PACKAGE} android.permission.CAMERA")
     # The screen stays on through the run; the device's own timeout comes back at the end.
     timeout = d.shell("settings get system screen_off_timeout")
     d.shell("settings put system screen_off_timeout 1800000")
