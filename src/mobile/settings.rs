@@ -238,7 +238,18 @@ pub fn deleted(s: Store, nav: Nav) -> impl IntoElement {
                             })
                         })))
                         .p(px(16.0)),
-                    ),
+                    )
+                    // Empties it, after asking.
+                    .child(when(
+                        move || count() > 1,
+                        move || {
+                            view().items_center().child(
+                                ui::text_button(move || s.label("Delete All"), true)
+                                    .test_id("delete-all")
+                                    .on_press(move || s.remove_deleted(None)),
+                            )
+                        },
+                    )),
             ),
         )
 }
