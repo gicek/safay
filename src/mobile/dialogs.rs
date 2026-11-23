@@ -328,6 +328,9 @@ fn backup_password(s: Store, nav: super::Nav) -> impl IntoElement {
             s.import_file()
         }
     };
+    // Its one field takes the keyboard at once, once the dialog is laid out.
+    let field = element_ref();
+    set_timeout(std::time::Duration::from_millis(60), move || field.focus());
     ui::dialog(
         move || s.label("Backup Password"),
         view()
@@ -347,7 +350,7 @@ fn backup_password(s: Store, nav: super::Nav) -> impl IntoElement {
                 |_| {},
                 move || s.error.get().is_some(),
                 ReturnKeyType::Done,
-                None,
+                Some(field),
             ))
             .child(ui::field_note(move || s.error.get().map(|e| s.label(crate::i18n::error_key(e))), || true)),
         view()
