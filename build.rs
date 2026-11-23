@@ -83,9 +83,90 @@ fn nsh_revision() {
         }
     }
 }
+/// Windows (MSVC): the app's icon as the executable's first icon group (`RT_GROUP_ICON` 1), which NSH's window class
+/// loads (`LoadIconW(hinstance, 1)`) and Explorer, the taskbar and shortcuts show. NSH's own packager writes the same
+/// resource into its runner; Safay builds its executable with cargo, so the icon is linked in as a compiled resource
+/// file (`.res`), which the MSVC linker takes directly. Images as NSH makes them: 32-bit DIBs from 16 to 64 pixels and a
+/// 256-pixel PNG.
+fn windows_icon() {
+    let icon = "assets/icon.png";
+    println!("cargo:rerun-if-changed={icon}");
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") || env::var("CARGO_CFG_TARGET_ENV").as_deref() != Ok("msvc") {
+        return;
+    }
+    use image::imageops::FilterType;
+    const RT_ICON: u16 = 3;
+    const RT_GROUP_ICON: u16 = 14;
+    let source = image::open(icon).expect("app icon");
+    let mut images: Vec<(u32, Vec<u8>)> = Vec::new();
+    for size in [16, 20, 24, 32, 40, 48, 64] {
+        let rgba = source.resize_exact(size, size, FilterType::Lanczos3).into_rgba8();
+        // BITMAPINFOHEADER of twice the height (image and mask), BGRA rows bottom up, then an all-zero 1-bit mask.
+        let mask_row = size.div_ceil(32) * 4;
+        let mut dib = Vec::new();
+        dib.extend_from_slice(&40u32.to_le_bytes());
+        dib.extend_from_slice(&(size as i32).to_le_bytes());
+        dib.extend_from_slice(&(size as i32 * 2).to_le_bytes());
+        dib.extend_from_slice(&1u16.to_le_bytes());
+        dib.extend_from_slice(&32u16.to_le_bytes());
+        dib.extend_from_slice(&[0; 24]);
+        for y in (0..size).rev() {
+            for x in 0..size {
+                let [r, g, b, a] = rgba.get_pixel(x, y).0;
+                dib.extend_from_slice(&[b, g, r, a]);
+            }
+        }
+        dib.resize(dib.len() + (mask_row * size) as usize, 0);
+        images.push((size, dib));
+    }
+    let mut png = Vec::new();
+    source
+        .resize_exact(256, 256, FilterType::Lanczos3)
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .expect("encode the icon");
+    images.push((256, png));
+    // GRPICONDIR and one GRPICONDIRENTRY per image; the images are RT_ICON 1, 2, ...
+    let mut group = Vec::new();
+    group.extend_from_slice(&[0, 0, 1, 0]);
+    group.extend_from_slice(&(images.len() as u16).to_le_bytes());
+    for (index, (size, data)) in images.iter().enumerate() {
+        let side = if *size >= 256 { 0 } else { *size as u8 };
+        group.extend_from_slice(&[side, side, 0, 0]);
+        group.extend_from_slice(&1u16.to_le_bytes());
+        group.extend_from_slice(&32u16.to_le_bytes());
+        group.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        group.extend_from_slice(&(index as u16 + 1).to_le_bytes());
+    }
+    // A .res file: an empty entry, then each resource's header (numeric type and name: 32 bytes) and its data, each
+    // padded to four bytes. Language neutral; moveable, pure and discardable as rc.exe marks icons.
+    fn entry(res: &mut Vec<u8>, kind: u16, id: u16, flags: u16, data: &[u8]) {
+        res.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        res.extend_from_slice(&32u32.to_le_bytes());
+        res.extend_from_slice(&[0xff, 0xff]);
+        res.extend_from_slice(&kind.to_le_bytes());
+        res.extend_from_slice(&[0xff, 0xff]);
+        res.extend_from_slice(&id.to_le_bytes());
+        res.extend_from_slice(&0u32.to_le_bytes());
+        res.extend_from_slice(&flags.to_le_bytes());
+        res.extend_from_slice(&0u16.to_le_bytes());
+        res.extend_from_slice(&[0; 8]);
+        res.extend_from_slice(data);
+        res.resize(res.len().next_multiple_of(4), 0);
+    }
+    let mut res = vec![0, 0, 0, 0, 0x20, 0, 0, 0, 0xff, 0xff, 0, 0, 0xff, 0xff, 0, 0];
+    res.resize(32, 0);
+    for (index, (_, data)) in images.iter().enumerate() {
+        entry(&mut res, RT_ICON, index as u16 + 1, 0x1010, data);
+    }
+    entry(&mut res, RT_GROUP_ICON, 1, 0x1030, &group);
+    let path = Path::new(&env::var_os("OUT_DIR").expect("Cargo output")).join("icon.res");
+    fs::write(&path, res).expect("write the icon resource");
+    println!("cargo:rustc-link-arg-bins={}", path.display());
+}
 fn main() {
     nsh_revision();
     cloud_keys();
+    windows_icon();
     println!("cargo:rerun-if-changed=assets");
     let staged = std::path::PathBuf::from(env::var_os("OUT_DIR").expect("Cargo output")).join("assets/@safay");
     copy_tree(Path::new("assets"), &staged);
