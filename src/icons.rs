@@ -146,7 +146,8 @@ fn shape(name: Icon) -> &'static str {
         Icon::CameraViewfinder => {
             "<path d='M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2'/><rect x='8' y='9' width='8' height='6.5' rx='1.2'/><circle cx='12' cy='12.2' r='1.6'/>"
         }
-        Icon::Refresh => "<path d='M19 12a7 7 0 1 1-2.1-5'/><path d='M19 5v4h-4'/>",
+        // The arc runs clockwise into the arrowhead's corner, along its tangent.
+        Icon::Refresh => "<path d='M19 12a7 7 0 1 1-2.05-4.95L19 9'/><path d='M19 5v4h-4'/>",
         Icon::FolderFill => {
             "<path fill='currentColor' d='M3.5 7V6a1.5 1.5 0 0 1 1.5-1.5h4.4l2 2.5h7.6A1.5 1.5 0 0 1 20.5 8.5v9.5a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 18Z'/>"
         }
@@ -187,8 +188,9 @@ fn shape(name: Icon) -> &'static str {
             "<circle cx='12' cy='12' r='10' fill='currentColor' stroke='none'/><path d='M12 7.5v9M7.5 12h9' stroke='#fff' stroke-width='2.2'/>"
         }
         Icon::DocFill => "<path fill='currentColor' d='M6.5 3.5h7l4 4v12a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z'/>",
+        // Twelve even points around the check, their tips rounded by the stroke.
         Icon::SealFill => {
-            "<path fill='currentColor' stroke='none' d='M12 2.5l2.2 1.6 2.7-.1.8 2.6 2.2 1.6-.9 2.6.9 2.6-2.2 1.6-.8 2.6-2.7-.1L12 21.5l-2.2-1.6-2.7.1-.8-2.6-2.2-1.6.9-2.6-.9-2.6 2.2-1.6.8-2.6 2.7.1Z'/><path d='m8.6 12.2 2.3 2.3 4.5-4.6' stroke='#fff' stroke-width='2'/>"
+            "<path fill='currentColor' stroke='currentColor' stroke-width='1.2' d='M12 2.6L14.04 4.37L16.7 3.86L17.59 6.41L20.14 7.3L19.63 9.96L21.4 12L19.63 14.04L20.14 16.7L17.59 17.59L16.7 20.14L14.04 19.63L12 21.4L9.96 19.63L7.3 20.14L6.41 17.59L3.86 16.7L4.37 14.04L2.6 12L4.37 9.96L3.86 7.3L6.41 6.41L7.3 3.86L9.96 4.37Z'/><path d='m8.6 12.2 2.3 2.3 4.5-4.6' stroke='#fff' stroke-width='2'/>"
         }
         Icon::CloudDownFill => {
             "<path d='M6.8 19h11a4.2 4.2 0 0 0 .5-8.4 6.5 6.5 0 0 0-12.5 1.6A3.4 3.4 0 0 0 6.8 19Z' fill='currentColor' stroke='none'/><path d='M12 10.5v6m-2.6-2.6L12 16.5l2.6-2.6' stroke='#fff' stroke-width='2'/>"
