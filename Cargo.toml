@@ -74,6 +74,10 @@ keyring = { version = "=3.6.3", default-features = false, features = ["sync-secr
 gstreamer = "=0.25.4"
 gstreamer-app = "=0.25.2"
 
+[build-dependencies]
+# The Windows executable's icon resource, made from nsh.json's PNG (build.rs).
+image = { version = "=0.25.10", default-features = false, features = ["png"] }
+
 [dev-dependencies]
 ed25519-dalek = "=2.2.0"
 nsh-engine = { git = "https://github.com/longbridge/nsh", branch = "main", default-features = false }
