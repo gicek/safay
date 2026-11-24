@@ -142,7 +142,7 @@ update-keygen: nsh-ready ## Create the update-signing key: make update-keygen KE
 # Like the desktop's development package, these carry the development app ID, so they never share data with a release.
 # The Java classes Android's APIs need of the app (android/java), as the dex nsh.json lists. javac and d8 come from the
 # JDK and the Android SDK.
-ANDROID_JAR := $(ANDROID_HOME)/platforms/android-35/android.jar
+ANDROID_JAR := $(ANDROID_HOME)/platforms/android-36/android.jar
 D8 := $(lastword $(sort $(wildcard $(ANDROID_HOME)/build-tools/*/d8)))
 ANDROID_JAVA := $(shell find android/java -name '*.java' 2>/dev/null)
 build/android/java/classes.dex: $(ANDROID_JAVA)

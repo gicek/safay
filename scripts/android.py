@@ -40,6 +40,12 @@ def callback_schemes() -> list[str]:
     return schemes
 
 
+# Release packages are optimized for size: NSH builds them in a workspace of its own, which has no release profile, and
+# Cargo's default has no LTO. The cryptography keeps opt-level 3 through .cargo/config.toml (Argon2 runs on every
+# unlock); desktop builds keep the release profile of Cargo.toml.
+RELEASE_PROFILE = {"CARGO_PROFILE_RELEASE_OPT_LEVEL": "s", "CARGO_PROFILE_RELEASE_LTO": "fat", "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "1"}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--release", action="store_true", help="the app's own ID, in build/android/release")
@@ -83,6 +89,7 @@ def main() -> None:
     env = dict(os.environ)
     if args.release:
         env.pop("SAFAY_ALLOW_SCREENSHOTS", None)
+        env.update(RELEASE_PROFILE)
     else:
         env["SAFAY_ALLOW_SCREENSHOTS"] = "1"
     raise SystemExit(subprocess.call(command, cwd=root, env=env))

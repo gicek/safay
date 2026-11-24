@@ -1,0 +1,23 @@
+# The cryptography stays optimized for speed in every release build, including Android's, which is otherwise
+# optimized for size (scripts/android.py): Argon2 derives the vault key on every unlock. Desktop release builds use
+# opt-level 3 throughout (Cargo.toml), so this changes nothing there.
+[profile.release.package.argon2]
+opt-level = 3
+[profile.release.package.blake2]
+opt-level = 3
+[profile.release.package.aes]
+opt-level = 3
+[profile.release.package.aes-gcm]
+opt-level = 3
+[profile.release.package.ghash]
+opt-level = 3
+[profile.release.package.polyval]
+opt-level = 3
+[profile.release.package.sha1]
+opt-level = 3
+[profile.release.package.sha2]
+opt-level = 3
+[profile.release.package.hmac]
+opt-level = 3
+[profile.release.package.ring]
+opt-level = 3

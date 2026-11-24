@@ -23,6 +23,7 @@
   "theme": "theme.json",
   "icon": "assets/icon.png",
   "android": {
+    "targetSdk": 36,
     "libraries": [
       "build/android/java/classes.dex"
     ],
