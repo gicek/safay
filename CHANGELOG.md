@@ -5,21 +5,24 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-24
+
+Safay comes to Android, and installs its Raycast and Tinycast extension from Settings.
+
 ### Added
 
-- **Android**: Safay for Android 12 and later, with biometric unlock and the same backups; install the APK from this release.
-- **Raycast and Tinycast**: install Safay's extension from the Raycast Store with "Install to Raycast" or
-  "Install to Tinycast" in Settings → Advanced.
+- **Android**: Safay for Android 12 and later, with biometric unlock; install the APK from this release.
+- **Raycast and Tinycast**: install Safay's extension with "Install to Raycast" or "Install to Tinycast" in
+  Settings → Advanced.
 
 ### Changed
 
-- **Your display**: the menu bar panel and the main window, opened with a shortcut, appear on the display you are using.
+- **Your display**: the menu bar panel and main window open on the display you are using.
 
 ### Fixed
 
-- Dragging an account or a category again before the previous order is saved no longer puts it back where it was.
-- Dragging the Settings window by its top edge moves only the Settings window, never the main window.
-- On Windows, Safay's icon now shows on its windows, the taskbar, Explorer and shortcuts.
+- Dragging an account or category again before its order is saved no longer moves it back.
+- Dragging the Settings window's top edge no longer moves the main window.
 
 ## [1.4.0] - 2026-11-20
 

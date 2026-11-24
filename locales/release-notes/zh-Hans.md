@@ -3,6 +3,24 @@
 Each version's section translates the one in CHANGELOG.md, item for item. The update window shows it to people who use
 Safay in Simplified Chinese.
 
+## [1.5.0] - 2026-11-24
+
+Safay 推出 Android 版，还能在设置中安装 Raycast 和 Tinycast 扩展。
+
+### 新增
+
+- **Android**：适用于 Android 12 及以上的 Safay，支持生物识别解锁；从本版本的发布页安装 APK。
+- **Raycast 和 Tinycast**：在“设置”→“高级”中点“安装到 Raycast”或“安装到 Tinycast”，安装 Safay 扩展。
+
+### 变更
+
+- **你正在用的显示器**：菜单栏面板和主窗口会在你正在使用的显示器上打开。
+
+### 修复
+
+- 排序还没保存完就再次拖动账户或分类时，不会再跳回原位。
+- 拖动设置窗口顶部时，不会再带动主窗口。
+
 ## [1.4.0] - 2026-11-20
 
 可以用 Google Drive 和 OneDrive 备份和同步了。

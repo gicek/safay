@@ -1,6 +1,6 @@
 [package]
 name = "safay"
-version = "1.4.0"
+version = "1.5.0"
 edition = "2024"
 license = "MIT"
 rust-version = "1.97"
@@ -14,7 +14,7 @@ members = [".", "crates/safay-core", "crates/safay-app"]
 cloudset = "=0.3.0"
 
 [workspace.package]
-version = "1.4.0"
+version = "1.5.0"
 edition = "2024"
 license = "MIT"
 publish = false
