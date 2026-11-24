@@ -262,7 +262,9 @@ class Device:
         return path
 
     def launch(self):
-        self.shell(f"monkey -p {PACKAGE} -c android.intent.category.LAUNCHER 1")
+        # The launcher activity, started by name: `monkey` exits at once on some system images (Android 12's emulator).
+        activity = self.shell(f"cmd package resolve-activity --brief -c android.intent.category.LAUNCHER {PACKAGE}").splitlines()[-1].strip()
+        self.shell(f"am start -W -n {activity}")
         time.sleep(2.5)
 
 
@@ -393,6 +395,19 @@ def scroll_up(d: Device):
     d.swipe(540, 700, 540, 1900)
 
 
+def reveal(d: Device, *labels: str, tries: int = 4) -> Screen:
+    """Scrolls down until every one of `labels` is on screen (a shorter screen shows less of a page), at most `tries`
+    times; the last screen either way."""
+    s = d.screen()
+    for _ in range(tries):
+        if all(s.has(label) for label in labels):
+            break
+        scroll_down(d)
+        time.sleep(0.6)
+        s = d.screen()
+    return s
+
+
 # ---- Steps -----------------------------------------------------------------------------------------------------------
 
 
@@ -480,7 +495,10 @@ def manual_entry(r: Run):
     d.hide_keyboard()
     d.tap("advanced")
     s = d.wait("Algorithm")
-    r.check(all(s.has(x) for x in ("SHA1", "SHA256", "SHA512", "30 seconds", "60 seconds")), "advanced options open")
+    r.check(all(s.has(x) for x in ("SHA1", "SHA256", "SHA512")), "advanced options open")
+    s = reveal(d, "30 seconds", "60 seconds")
+    r.check(s.has("30 seconds") and s.has("60 seconds"), "advanced options list the refresh intervals")
+    reveal(d, "save")
     d.tap("save", settle=2.0)
     s = d.wait("Copy code for GitHub")
     r.check(rows(s) == ["GitHub"], f"the list has the new account (rows {rows(s)})")
