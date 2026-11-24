@@ -240,8 +240,9 @@ for loopback only.
 
 `python3 scripts/integrations.py` regenerates the Raycast extension's text and bridge script from `locales/` and
 `integrations/shared/`; `make lint` fails when they are stale. `make raycast` builds and lints the extension;
-`cd integrations/raycast && npm run dev` loads it into Raycast. The Alfred workflow is built into every package. See
-[integrations/README.md](../integrations/README.md).
+`cd integrations/raycast && npm run dev` loads your copy into Raycast in place of the store version. The Alfred
+workflow is built into every package. Updating the store extension is described in
+[integrations/README.md](../integrations/README.md#updating-the-raycast-store-extension).
 
 ## Website
 

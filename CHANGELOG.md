@@ -5,6 +5,11 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+### Added
+
+- **Raycast and Tinycast**: install Safay's extension from the Raycast Store with "Install to Raycast" or
+  "Install to Tinycast" in Settings → Advanced.
+
 ### Changed
 
 - **Menu bar panel**: opened with its shortcut, it appears on the display you are working on, under the menu bar icon.

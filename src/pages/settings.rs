@@ -717,6 +717,25 @@ fn open_main_sheet(s: Store, sheet: Sheet) {
     }
     s.open_sheet(sheet);
 }
+/// A launcher's install row. Every launcher needs launcher access to do anything, so the button waits for it.
+fn launcher_install(
+    s: Store,
+    title: &'static str,
+    description: &'static str,
+    button: &'static str,
+    available: bool,
+    install: impl Fn() + 'static,
+) -> AnyElement {
+    row(
+        s,
+        title,
+        Some(Box::new(move || s.label(if s.preferences.with(|p| p.launcher) { description } else { "Needs launcher access" }))),
+        push_button(move || s.label(button), Kind::Standard, false)
+            .disabled(move || !s.preferences.with(|p| p.launcher) || !available || s.fixture)
+            .on_press(install),
+    )
+    .into_element()
+}
 fn advanced(s: Store) -> impl IntoElement {
     let location = crate::platform::data_location();
     let shown = location.clone().unwrap_or_default();
@@ -746,8 +765,8 @@ fn advanced(s: Store) -> impl IntoElement {
         .child(when(
             move || crate::platform::supports::AUTOMATION && s.unlocked(),
             move || {
-                section(vec![
-                    row(
+                section(
+                    [row(
                         s,
                         "Launcher Access",
                         help(s, "Alfred, Raycast and Tinycast can search your accounts. Every code they copy needs Touch ID or your master password."),
@@ -759,29 +778,29 @@ fn advanced(s: Store) -> impl IntoElement {
                         ),
                     )
                     .into_element(),
-                    row(
-                        s,
-                        "Install Alfred Workflow",
-                        Some(Box::new(move || {
-                            s.label(if s.preferences.with(|p| p.launcher) {
-                                "Import the Alfred workflow to search accounts and copy codes with a keyword"
-                            } else {
-                                "Needs launcher access"
-                            })
-                        })),
-                        // The workflow needs launcher access to do anything.
-                        push_button(move || s.label("Install to Alfred"), Kind::Standard, false)
-                            .disabled(move || {
-                                !s.preferences.with(|p| p.launcher) || crate::platform::alfred_workflow().is_none() || s.fixture
-                            })
-                            .on_press(move || {
-                                if let Some(path) = crate::platform::alfred_workflow() {
-                                    drop(open_path(path));
-                                }
-                            }),
-                    )
-                    .into_element(),
-                ])
+                    launcher_install(s, "Install Alfred Workflow", "Import the Alfred workflow to search accounts and copy codes with a keyword", "Install to Alfred", crate::platform::alfred_workflow().is_some(), || {
+                        if let Some(path) = crate::platform::alfred_workflow() {
+                            drop(open_path(path));
+                        }
+                    }),
+                ]
+                .into_iter()
+                // The store extensions: offered only where the launcher is installed, since its link opens nothing otherwise.
+                .chain(
+                    [
+                        ("raycast", "Install Raycast Extension", "Install to Raycast"),
+                        ("tinycast", "Install Tinycast Extension", "Install to Tinycast"),
+                    ]
+                    .into_iter()
+                    .filter(|(scheme, ..)| crate::platform::opens_scheme(scheme))
+                    .map(move |(scheme, title, button)| {
+                        launcher_install(s, title, "Install the Safay extension from the Raycast Store to search accounts and copy codes", button, true, move || {
+                            drop(open_url(format!("{scheme}://extensions/kakegu/safay?source=webstore")))
+                        })
+                    }),
+                )
+                .collect(),
+                )
             },
         ))
         .child(when(

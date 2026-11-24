@@ -346,6 +346,24 @@ pub fn alfred_workflow() -> Option<std::path::PathBuf> {
     path.is_file().then_some(path)
 }
 
+/// Whether an installed app opens `scheme://` links. Settings offers a launcher's store link only when it would open.
+pub fn opens_scheme(scheme: &str) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        use nsh_platform_macos::{
+            objc2_app_kit::NSWorkspace,
+            objc2_foundation::{NSString, NSURL},
+        };
+        NSURL::URLWithString(&NSString::from_str(&format!("{scheme}://")))
+            .is_some_and(|url| NSWorkspace::sharedWorkspace().URLForApplicationToOpenURL(&url).is_some())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = scheme;
+        false
+    }
+}
+
 /// NSH expects asset:/@package/path under an explicitly supplied asset directory.
 /// Installed hosts resolve beside their executable; cargo runs use build-staged public assets.
 pub fn assets_directory() -> std::path::PathBuf {

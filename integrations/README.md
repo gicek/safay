@@ -20,19 +20,29 @@ Every launcher needs Safay → Settings → Advanced → **Launcher Access**, an
 Safay, which macOS asks for on first use (System Settings → Privacy & Security → Automation).
 
 - **Alfred** (Powerpack): Safay → Settings → Advanced → **Install to Alfred**. Keyword `sf`.
-- **Raycast**: the "Search Accounts" command. Until the extension is in the Raycast Store, run `make raycast`, then
-  `npm run dev` in `raycast/` to load it.
-- **Tinycast**: Settings → Extensions → Install → **Import from Raycast**, or **Add from folder** with `raycast/dist`
-  (built by `make raycast`).
+- **Raycast**: Safay → Settings → Advanced → **Install to Raycast**, or install
+  [Safay from the Raycast Store](https://raycast.com/kakegu/safay). Command "Search Accounts".
+- **Tinycast**: Safay → Settings → Advanced → **Install to Tinycast**, which installs the same extension from the
+  Raycast Store.
+
+Safay shows the Raycast and Tinycast buttons only when that launcher is installed. To try local changes, run
+`make raycast`, then `npm run dev` in `raycast/` to load the extension into Raycast, or add `raycast/dist` to Tinycast
+with Settings → Extensions → Install → **Add from folder**.
 
 Raycast and Tinycast leave aliases to the user. The command's keywords include `sf`; to make `sf` always pick it first,
 set the alias in the launcher's extension settings.
 
-## Publishing to the Raycast Store
+## Updating the Raycast Store extension
 
-`npm run publish` in `raycast/` opens the pull request to `raycast/extensions`. Before that, add 3–6 screenshots
-(2000 × 1250 PNG) to `raycast/metadata/` with Raycast's **Capture Window** → **Save to Metadata**, using synthetic
-accounts (`make preview`) and one appearance.
+The extension is published as `kakegu/safay`. Change it only in `raycast/`, then:
 
-Once published, Safay's settings can install it directly with `raycast://extensions/kakegu/safay?source=webstore` and
+1. Add a section to `raycast/CHANGELOG.md` dated `{PR_MERGE_DATE}`; the store fills in the date when it merges.
+2. Run `make raycast`, then `npm run publish` in `raycast/`. It opens a pull request to `raycast/extensions`.
+3. After the merge, copy the store's changes back into `raycast/` with `npx ray pull-contributions`. The store dates
+   the changelog and compresses the images, and the next publish compares against its copy.
+
+Screenshots are 2000 × 1250 PNGs in `raycast/metadata/` (3–6), taken with Raycast's **Capture Window** →
+**Save to Metadata**, using synthetic accounts (`make preview`) and one appearance.
+
+Settings installs the extension with `raycast://extensions/kakegu/safay?source=webstore` and
 `tinycast://extensions/kakegu/safay?source=webstore`.

@@ -35,7 +35,8 @@ updater and for scripts; you don't need them to install. Each release's notes ar
   (browser extension), and Bitwarden; CSV exports from Apple Passwords and other password managers; and text files with
   one `otpauth://` link per line.
 - **Desktop integration (macOS)**: menu bar panel, global shortcuts, launch at login, a settings window, and launchers —
-  Alfred, Raycast and Tinycast — that search accounts and ask Safay to copy a code.
+  Alfred, Raycast and Tinycast — that search accounts and ask Safay to copy a code. The Raycast and Tinycast extension
+  is in the [Raycast Store](https://raycast.com/kakegu/safay).
 - English, Simplified Chinese and Traditional Chinese; light and dark appearance.
 
 Every sensitive action — showing a secret or QR code, exporting, copying from a launcher — asks for Touch ID or the
