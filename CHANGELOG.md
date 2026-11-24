@@ -7,13 +7,13 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ### Added
 
+- **Android**: Safay for Android 12 and later, with biometric unlock and the same backups; install the APK from this release.
 - **Raycast and Tinycast**: install Safay's extension from the Raycast Store with "Install to Raycast" or
   "Install to Tinycast" in Settings → Advanced.
 
 ### Changed
 
-- **Menu bar panel**: opened with its shortcut, it appears on the display you are working on, under the menu bar icon.
-- **Main window**: brought back with its shortcut or from the menu bar, it opens on the display you are working on.
+- **Your display**: the menu bar panel and the main window, opened with a shortcut, appear on the display you are using.
 
 ### Fixed
 

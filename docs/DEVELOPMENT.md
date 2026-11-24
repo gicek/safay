@@ -57,6 +57,7 @@ NSH's agent skills (`nsh`, `nsh-design-guides`) are not vendored. Coding agents 
 | `make test` / `test-ui` / `test-native` | Rust tests; NSH headless UI tests; NSH tests on this host's native backend |
 | `make screenshots` | Capture every page into `docs/screenshots` (macOS; takes the foreground, the screen must be unlocked) |
 | `make package` | Development app bundle (macOS) |
+| `make android` | Development APK (Android) |
 | `make raycast` | Build and lint the Raycast/Tinycast extension |
 | `make audit` | `cargo deny` advisories and licenses for this host's platform (CI checks all three platforms) |
 
@@ -102,7 +103,7 @@ process, without its title bar buttons.
 `python3 scripts/readme_images.py` (needs Pillow) copies the pictures the README shows into `docs/img`, with the
 window's rounded corners at all four corners and transparency outside them.
 
-## Packaging (macOS)
+## Packaging
 
 Packages go to `build/` at the repository root (untracked), each system in a folder of its own (`macos`, `linux`,
 `windows`, `android`, `ios-simulator`); `build/dist/` holds what a release publishes, for every system:
@@ -113,12 +114,12 @@ Packages go to `build/` at the repository root (untracked), each system in a fol
 | `make package-release` | `build/macos/release/Safay.app`, `Safay-<version>-macos-<arch>.zip` | Developer ID release package, not notarized: for testing on this Mac |
 | `make release` | `build/dist/` | Notarized app, zip and DMG, update archive and manifest: what is published |
 
-Development packages for phones and tablets go there too. Both start in the phone interface (`src/mobile`); the Android
-one is tested on devices, the iOS one only builds so far.
+Development packages for phones and tablets go there too. Both start in the phone interface (`src/mobile`); Android is
+supported from Android 12, and the iOS one only builds so far.
 
 | Command | Output | Needs |
 |---|---|---|
-| `make android` | `build/android/debug/Safay.apk` (debug key, `arm64-v8a` and `armeabi-v7a`) | The Android SDK with `platforms;android-35`, build tools and an NDK; a JDK; `rustup target add aarch64-linux-android armv7-linux-androideabi` |
+| `make android` | `build/android/debug/Safay.apk` (debug key, `arm64-v8a` and `armeabi-v7a`) | The Android SDK with `platforms;android-36`, build tools and an NDK; a JDK; `rustup target add aarch64-linux-android armv7-linux-androideabi` |
 | `make android-run` | Installs it on the running emulator or the connected device, and starts it | `adb` |
 | `python3 scripts/android.py --demo` | `build/android/demo/Safay Demo.apk` (`com.gicek.safay.demo`, "Safay Demo"): a package of its own, for trying a build on a device without touching the development package's vault | Same as `make android` |
 | `python3 scripts/android_ui_test.py` | Installs the demo package and walks every page of the phone interface on a device or emulator, through its accessibility tree: onboarding, adding accounts, reordering by dragging, details, categories, search, settings and their dialogs, export, locking, an import of 150 accounts (made by `cargo run -p safay-core --example export_fixture`) whose list it scrolls and narrows by letter and erasing. It reports each failed check with a screenshot in `build/android/ui-test/`, and erases the demo package's data before and after | `adb` and the `android` command-line tool (cmdline-tools); one device online, or `--serial` |
@@ -134,7 +135,10 @@ lock when the screen goes off, and the camera, whose preview is a native compone
 with the sign-in callback schemes of the local `cloud-keys.toml` added, since Android hands a callback link only to an
 app whose manifest claims its scheme, and the adaptive launcher icon in `assets/android/` in place of the app icon.
 Development and demo packages allow screenshots of the unlocked app (`SAFAY_ALLOW_SCREENSHOTS`); release packages keep
-it out of screenshots and the recent apps' pictures.
+it out of screenshots and the recent apps' pictures. Release packages (`--release`) are built for size: NSH builds them
+in a workspace of its own without a release profile, so `scripts/android.py` sets one through `CARGO_PROFILE_RELEASE_*`
+(`opt-level = "s"`, fat LTO, one codegen unit), while `.cargo/config.toml` keeps the cryptography at `opt-level = 3`,
+since Argon2 runs on every unlock.
 
 On Android, Safay keeps everything in the directory the system's backup and device transfer skip
 (`getNoBackupFilesDir()`, `platform::android::storage_directory`), and moves files an earlier build left in NSH's data
@@ -163,6 +167,9 @@ meaning override it.
 | `[release] update_key` | `SAFAY_UPDATE_KEY` | Path to the update-signing secret key (kept outside the repository) |
 | `[release] update_url` | `SAFAY_UPDATE_URL` | Release packages' update manifest (`latest.json`, HTTPS); empty: no self-update |
 | `[release] download_url_prefix` | `SAFAY_DOWNLOAD_URL_PREFIX` | Where update archives are hosted; empty: next to the manifest |
+| `[android] keystore`, `key_alias` | `SAFAY_ANDROID_KEYSTORE`, `SAFAY_ANDROID_KEY_ALIAS` | The Android app-signing key (kept outside the repository): signs the APKs; Play App Signing holds the same key |
+| `[android] upload_keystore`, `upload_key_alias` | `SAFAY_ANDROID_UPLOAD_KEYSTORE`, `SAFAY_ANDROID_UPLOAD_KEY_ALIAS` | The Google Play upload key: signs the App Bundle |
+| `[android] keychain`, `upload_keychain` | `SAFAY_ANDROID_KEYCHAIN`, `SAFAY_ANDROID_UPLOAD_KEYCHAIN` | Service names of the login keychain's generic passwords that hold the two keystores' passwords |
 
 Dropbox, OneDrive and Google Drive need public OAuth clients registered for Safay. Everything about them lives in
 an untracked `cloud-keys.toml`, copied from `cloud-keys.example.toml`: each service's client ID, the redirect URI
@@ -214,6 +221,15 @@ stops when one of them is missing. The manifest carries the English section, the
 English where a translation is missing. `python3 scripts/release.py --notes` prints them as the manifest will carry
 them.
 
+`make release-android` (`release.py --android`, on the Mac) runs the tests and writes the Android packages into
+`build/dist/`: `Safay-<version>-android-arm64-v8a.apk` and `-armeabi-v7a.apk`, signed with the app-signing key, for
+GitHub Releases; `Safay-<version>-android.aab`, signed with the upload key, for Google Play; and
+`Safay-<version>-android.env`. It checks each package's certificate against its key, and that the APKs carry the
+release app ID, the version, target API 36 and one ABI each, and are not debuggable. Android packages update through
+Google Play or a newer APK, not through the update manifest; `versionCode` is `nsh.json`'s `build`, which every release
+raises. Losing the app-signing key means the APKs can no longer update installed copies; keep a backup of it and of its
+password.
+
 `python3 scripts/release.py --manifest-only` writes the manifest again for the update archives already in `build/dist`,
 without building or notarizing: after the version's notes changed, or another system's archive was added.
 
@@ -223,7 +239,7 @@ To see a version's notes in the update window before releasing, start a developm
 "Install Update" simulates a download, so the progress and "Install and Relaunch" can be seen too.
 
 Nothing is uploaded. Releases are published on GitHub Releases: upload the DMG, the zip, every platform's update
-archive, `latest.json` and `latest.json.sig` to the release. Release packages read their update manifest from
+archive, the Android APKs, `latest.json` and `latest.json.sig` to the release; the App Bundle goes to Google Play. Release packages read their update manifest from
 `https://github.com/gicek/safay/releases/latest/download/latest.json`, so the newest release is always the update.
 
 Self-update is signed with Safay's Ed25519 update key. Its public key is `UPDATE_PUBLIC_KEY` in `scripts/package.py`;

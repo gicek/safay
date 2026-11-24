@@ -1,29 +1,30 @@
 # Platforms
 
-macOS is the primary platform. Windows and Linux share every page and the whole core, but CI does not build them yet.
+macOS is the primary platform. Android has a phone interface of its own (`src/mobile`) over the same core and is
+supported from Android 12. Windows and Linux share every page and the whole core, but CI does not build them yet.
 Windows has not been run end to end; Linux has, on one system (see [Linux details](#linux-details)). The parts below
 marked *coded* are written and untested on a real system. The interface shows a capability only where
 `platform::supports` (in `src/platform/mod.rs`) says the platform has it.
 
 ## Capabilities
 
-| Capability | macOS | Windows | Linux |
-|---|---|---|---|
-| Vault, accounts, categories, codes, import and export | Yes | Coded | Coded |
-| Folder backup | Yes | Coded | Coded |
-| WebDAV and Nextcloud backup | Yes | Coded (Credential Manager) | Yes (the Secret Service: GNOME Keyring, KWallet) |
-| Dropbox, OneDrive, Google Drive | Yes | Coded (sign-in in the browser) | Coded (sign-in in the browser) |
-| iCloud | Yes | — | — |
-| Touch ID / hardware-protected unlock | Touch ID | Planned: Windows Hello key release | Not planned (no common hardware key API) |
-| Lock on sleep, screen lock, user switch | Yes | Coded (`WM_WTSSESSION_CHANGE`, power broadcasts) | Coded (logind, screensaver) |
-| Auto-lock on app input | Yes | Partial (input inside the page only) | Partial |
-| Secret clipboard | Yes | Coded (excluded from history and cloud clipboard) | Coded (password-manager hint, no PRIMARY) |
-| Menu bar / tray panel | Yes | Not yet wired (NSH supports it) | Yes (StatusNotifierItem) |
-| Global shortcuts | Yes | Not yet wired (NSH supports them) | Yes (the GlobalShortcuts portal) |
-| Launch at login, background launch | Yes | Not yet | Yes (XDG autostart; "Start in Tray") |
-| Select a QR code on screen; camera | Yes | Not yet | Yes (the Screenshot and Camera portals) |
-| Launchers (Alfred, Raycast, Tinycast) | Yes | — | — |
-| App updates | Yes (signed packages with an update source) | Coded (the app's folder) | Yes (the app's folder) |
+| Capability | macOS | Windows | Linux | Android |
+|---|---|---|---|---|
+| Vault, accounts, categories, codes, import and export | Yes | Coded | Coded | Yes (exports go to the share sheet) |
+| Folder backup | Yes | Coded | Coded | — |
+| WebDAV and Nextcloud backup | Yes | Coded (Credential Manager) | Yes (the Secret Service: GNOME Keyring, KWallet) | Yes |
+| Dropbox, OneDrive, Google Drive | Yes | Coded (sign-in in the browser) | Coded (sign-in in the browser) | Yes (sign-in in a Custom Tab) |
+| iCloud | Yes | — | — | — |
+| Touch ID / hardware-protected unlock | Touch ID | Planned: Windows Hello key release | Not planned (no common hardware key API) | Strong biometrics (a Keystore key) |
+| Lock on sleep, screen lock, user switch | Yes | Coded (`WM_WTSSESSION_CHANGE`, power broadcasts) | Coded (logind, screensaver) | Yes (screen off) |
+| Auto-lock on app input | Yes | Partial (input inside the page only) | Partial | Yes (also in the background) |
+| Secret clipboard | Yes | Coded (excluded from history and cloud clipboard) | Coded (password-manager hint, no PRIMARY) | Yes (marked sensitive, expires) |
+| Menu bar / tray panel | Yes | Not yet wired (NSH supports it) | Yes (StatusNotifierItem) | — |
+| Global shortcuts | Yes | Not yet wired (NSH supports them) | Yes (the GlobalShortcuts portal) | — |
+| Launch at login, background launch | Yes | Not yet | Yes (XDG autostart; "Start in Tray") | — |
+| Select a QR code on screen; camera | Yes | Not yet | Yes (the Screenshot and Camera portals) | Camera, and a photo from the gallery |
+| Launchers (Alfred, Raycast, Tinycast) | Yes | — | — | — |
+| App updates | Yes (signed packages with an update source) | Coded (the app's folder) | Yes (the app's folder) | Google Play, or a newer APK |
 
 On Windows and Linux, Settings opens as a dialog over the main window; macOS uses its own window.
 
@@ -38,6 +39,20 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
 - Dropbox, OneDrive and Google Drive keep the backup in Safay's app folder: "Apps › Safay", or the folder named for
   it in My Drive.
 - Selecting a QR code on screen needs Screen Recording permission; the camera needs a packaged app.
+
+## Android details
+
+- Requires Android 12 (API 31) or later; targets API 36. Packages: one APK for each ABI (`arm64-v8a` for nearly all
+  phones, `armeabi-v7a` for 32-bit ones) and an App Bundle for Google Play. The APKs and Google Play share one signing
+  key, so an install from either updates from the other.
+- The vault, settings and sign-ins stay out of Android's backup and device transfer: back up and move the vault with
+  Safay's own backup.
+- Unlocking with biometrics needs a strong biometric (Class 3) enrolled; after fingerprints or faces change, turn it on
+  again in Settings.
+- Safay locks when the screen goes off, and after the auto-lock time in the background. The unlocked app is kept out of
+  screenshots and the recent apps' pictures.
+- Exports open the share sheet, where you choose Files, a drive or another app. Dropbox, OneDrive and Google Drive sign
+  in in a Custom Tab.
 
 ## Linux details
 
@@ -76,6 +91,7 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
 
 ## Known issues
 
+- Android 16 and later: Back while the keyboard shows closes the page along with the keyboard.
 - Opening the menu bar panel with its shortcut before the menu bar icon has ever been clicked places it at the top right
   of the display the pointer is on, not under the icon: NSH reports the icon's position only on clicks.
 - The menu bar panel and the desktop notice use flat colours rather than a blur material: NSH's window material has no

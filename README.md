@@ -1,10 +1,10 @@
 # Safay
 
-Safay is a two-factor authenticator for the desktop. It keeps your TOTP accounts in a local, end-to-end encrypted vault,
+Safay is a two-factor authenticator for the desktop and Android. It keeps your TOTP accounts in a local, end-to-end encrypted vault,
 shows the current codes, and backs the vault up to a location you choose — without a Safay account or server.
 
 The interface is written in Rust with [NSH](https://github.com/longbridge/nsh), a native UI framework, so one code base
-renders native windows on macOS, Windows and Linux.
+renders native windows on macOS, Windows and Linux, and a phone interface of its own on Android.
 
 ![Accounts](docs/img/accounts-light.png)
 
@@ -13,6 +13,7 @@ renders native windows on macOS, Windows and Linux.
 | Platform | Get it |
 |---|---|
 | **macOS** 14 or later, Apple silicon | `Safay-<version>.dmg` from the [latest release](https://github.com/gicek/safay/releases/latest): open it and drag Safay to Applications. Signed and notarized. |
+| **Android** 12 or later | `Safay-<version>-android-arm64-v8a.apk` from the [latest release](https://github.com/gicek/safay/releases/latest) (`armeabi-v7a` for older 32-bit phones); Google Play is coming. Both are signed with the same key, so either one updates the other. |
 | **Windows**, **Linux** | Not published yet. They build from the same code; Linux has been run end to end on one system, Windows not yet. See [Platforms](docs/PLATFORMS.md) and [Getting started](#getting-started). |
 
 On its second launch Safay asks whether to check for updates once a day; each new version then opens in its update
@@ -78,7 +79,7 @@ All screenshots use synthetic accounts.
 |---|---|
 | [Architecture](docs/ARCHITECTURE.md) | Crates, the session model, data on disk, backup and sync, networking, launchers |
 | [Security](SECURITY.md) | Threat model, cryptography, every network request, reporting a vulnerability |
-| [Platforms](docs/PLATFORMS.md) | What works on macOS, Windows and Linux, and known issues |
+| [Platforms](docs/PLATFORMS.md) | What works on macOS, Windows, Linux and Android, and known issues |
 | [Development](docs/DEVELOPMENT.md) | Building, testing, packaging, signing and releasing |
 | [Design](docs/DESIGN.md) | Interface conventions and platform styles |
 | [Launcher integrations](integrations/README.md) | Alfred, Raycast and Tinycast |
