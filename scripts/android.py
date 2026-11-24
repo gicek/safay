@@ -68,7 +68,7 @@ def main() -> None:
         }
     }
     android = dict(project.get("android", {}))
-    android["dex"] = [str(back / dex) for dex in android.get("dex", [])]
+    android["libraries"] = [str(back / library) for library in android.get("libraries", [])]
     manifest["android"] = android
     manifest["schemes"] = list(dict.fromkeys([*project.get("schemes", []), *callback_schemes()]))
     if args.demo:

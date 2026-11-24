@@ -5,7 +5,7 @@ use nsh_core::{
     time::Clock,
 };
 use nsh_engine::{EngineConfig, Root};
-use nsh_testing::{Headless, MemoryStorage};
+use nsh_testing::{DragOptions, Headless, MemoryStorage};
 use std::{
     sync::Arc,
     time::{Duration, SystemTime},
@@ -524,20 +524,20 @@ fn cards_and_rows_reorder_by_dragging() {
     app.wait_for("Charlie").unwrap();
     assert_eq!(order(&app), ["Alpha", "Bravo", "Charlie"]);
     // Cards: onto the next card to the right; a drag does not copy.
-    app.drag("role:button[Copy code for Alpha]", point(px(250.0), px(0.0))).unwrap();
+    app.drag("role:button[Copy code for Alpha]", point(px(250.0), px(0.0)), DragOptions::default()).unwrap();
     assert_eq!(order(&app), ["Bravo", "Alpha", "Charlie"]);
     assert!(!app.screen().texts().contains(&"Copied"));
     // Released outside the list (over the toolbar): the order comes back.
-    app.drag("role:button[Copy code for Charlie]", point(px(0.0), px(-400.0))).unwrap();
+    app.drag("role:button[Copy code for Charlie]", point(px(0.0), px(-400.0)), DragOptions::default()).unwrap();
     assert_eq!(order(&app), ["Bravo", "Alpha", "Charlie"]);
     // Rows: dragged down two rows.
     app.press("role:button[List]").unwrap();
-    app.drag("role:button[Copy code for Bravo]", point(px(0.0), px(120.0))).unwrap();
+    app.drag("role:button[Copy code for Bravo]", point(px(0.0), px(120.0)), DragOptions::default()).unwrap();
     assert_eq!(order(&app), ["Alpha", "Charlie", "Bravo"]);
     // While searching only the shown rows move; the hidden one keeps its place.
     app.type_text("id:search", "r").unwrap();
     app.wait_for_gone("Alpha", Duration::from_secs(5)).unwrap();
-    app.drag("role:button[Copy code for Bravo]", point(px(0.0), px(-60.0))).unwrap();
+    app.drag("role:button[Copy code for Bravo]", point(px(0.0), px(-60.0)), DragOptions::default()).unwrap();
     assert_eq!(order(&app), ["Bravo", "Charlie"]);
     app.clear("id:search").unwrap();
     app.wait_for("Alpha").unwrap();
@@ -567,14 +567,14 @@ fn categories_reorder_by_dragging() {
     app.wait_for("Fixture").unwrap();
     assert_eq!(categories(&app), ["Work", "Home", "Misc"]);
     // Down past two rows; the drag does not open the category.
-    app.drag("role:button[Work]", point(px(0.0), px(64.0))).unwrap();
+    app.drag("role:button[Work]", point(px(0.0), px(64.0)), DragOptions::default()).unwrap();
     assert_eq!(categories(&app), ["Home", "Misc", "Work"]);
     assert!(app.screen().texts().contains(&"Fixture"));
     // Dropped on "All" (outside the categories' block): the order comes back.
-    app.drag("role:button[Misc]", point(px(0.0), px(-120.0))).unwrap();
+    app.drag("role:button[Misc]", point(px(0.0), px(-120.0)), DragOptions::default()).unwrap();
     assert_eq!(categories(&app), ["Home", "Misc", "Work"]);
     // Up one row.
-    app.drag("role:button[Misc]", point(px(0.0), px(-32.0))).unwrap();
+    app.drag("role:button[Misc]", point(px(0.0), px(-32.0)), DragOptions::default()).unwrap();
     assert_eq!(categories(&app), ["Misc", "Home", "Work"]);
 }
 #[test]

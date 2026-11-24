@@ -28,7 +28,7 @@ zeroize = "=1.9.0"
 base64 = "=0.22.1"
 serde_json = "=1.0.151"
 image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg", "ico", "gif", "webp"] }
-ureq = { version = "=3.5.1", default-features = false, features = ["rustls", "platform-verifier"] }
+ureq = { version = "=3.5.2", default-features = false, features = ["rustls", "platform-verifier"] }
 # The pinned-certificate TLS step (src/platform/tls.rs), on the same rustls, provider and verifier as ureq.
 rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-pki-types = "=1.15.1"

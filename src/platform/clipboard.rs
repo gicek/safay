@@ -190,7 +190,7 @@ pub fn copy(
 #[cfg(target_os = "ios")]
 pub fn flush() {
     if let Some(text) = PENDING.lock().ok().and_then(|mut pending| pending.take()) {
-        nsh_core::element::set_clipboard(text.as_str());
+        drop(nsh_core::element::set_clipboard(text.as_str()));
     }
 }
 
