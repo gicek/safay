@@ -47,7 +47,7 @@ def settings() -> dict:
         data = tomllib.loads((root / "local.toml").read_text(encoding="utf-8"))
     except FileNotFoundError:
         data = {}
-    signing, release = data.get("signing", {}), data.get("release", {})
+    signing, release, android = data.get("signing", {}), data.get("release", {}), data.get("android", {})
     pick = lambda env, value: os.environ.get(env, value or "")
     return {
         "identity": pick("SAFAY_SIGN_IDENTITY", signing.get("identity")),
@@ -57,6 +57,14 @@ def settings() -> dict:
         "update_url": pick("SAFAY_UPDATE_URL", release.get("update_url")),
         "update_key": pick("SAFAY_UPDATE_KEY", release.get("update_key")),
         "download_url_prefix": pick("SAFAY_DOWNLOAD_URL_PREFIX", release.get("download_url_prefix")),
+        # Android: the app-signing key (the APK; Play App Signing holds the same key) and the upload key (the bundle for
+        # Google Play). Each password comes from the login keychain's generic password of that service name.
+        "android_keystore": pick("SAFAY_ANDROID_KEYSTORE", android.get("keystore")),
+        "android_key_alias": pick("SAFAY_ANDROID_KEY_ALIAS", android.get("key_alias")),
+        "android_keychain": pick("SAFAY_ANDROID_KEYCHAIN", android.get("keychain")),
+        "android_upload_keystore": pick("SAFAY_ANDROID_UPLOAD_KEYSTORE", android.get("upload_keystore")),
+        "android_upload_key_alias": pick("SAFAY_ANDROID_UPLOAD_KEY_ALIAS", android.get("upload_key_alias")),
+        "android_upload_keychain": pick("SAFAY_ANDROID_UPLOAD_KEYCHAIN", android.get("upload_keychain")),
     }
 
 

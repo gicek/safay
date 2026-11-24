@@ -31,7 +31,7 @@ else
 endif
 
 .PHONY: help all ci build build-release run preview fmt fmt-check lint nsh-features raycast check test test-ui test-native screenshots \
-	package package-adhoc package-release open icloud-check release update-keygen nsh-ready nsh-install nsh-update audit clean clean-all \
+	package package-adhoc package-release open icloud-check release release-android update-keygen nsh-ready nsh-install nsh-update audit clean clean-all \
 	android android-run ios-simulator ios-simulator-run site site-shots site-serve site-deploy
 
 help: ## List the targets
@@ -130,6 +130,9 @@ icloud-check: ## The development package's CloudKit access (read-only; prints th
 
 release: ## Tests, then a notarized app, zip, DMG, update archive and manifest in build/dist (uploads nothing)
 	$(PYTHON) scripts/release.py
+
+release-android: nsh-ready ## Tests, then the Android APKs, one per ABI (app-signing key), and App Bundle (upload key) in build/dist
+	$(PYTHON) scripts/release.py --android
 
 update-keygen: nsh-ready ## Create the update-signing key: make update-keygen KEY=~/Documents/Developer/safay-update
 	@test -n "$(KEY)" || { echo "Set KEY to the path without extension, outside the repository"; exit 1; }

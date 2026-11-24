@@ -17,6 +17,12 @@ Linux `Safay-<version>-linux-<arch>.tar.gz`, on Windows `Safay-<version>-windows
 `download_url_prefix`), and `Safay-<version>-<os>.env` (version, build, hashes, what was done). A release removes only
 its own system's earlier outputs and the manifest, so the files copied from the others stay.
 
+Android (`--android`, on macOS): tests, then one APK for each ABI, `Safay-<version>-android-<abi>.apk`, signed with
+the app-signing key, for direct installs, and `Safay-<version>-android.aab`, signed with the upload key, for Google Play
+(which delivers each device its ABI). Play App Signing holds the same
+app-signing key, so either channel's install updates the other's. Each package's certificate, app ID, target API level
+and release build are checked against what local.toml [android] names.
+
 The manifest's notes are the version's section of CHANGELOG.md followed by its translations in locales/release-notes/;
 a release stops when one of them is missing. `--manifest-only` writes the manifest again for the update archive already
 in build/dist (after the version's notes changed), without building, signing or notarizing anything.
@@ -157,6 +163,104 @@ def release_package(metadata: dict, version: str, build: str, system: str, dist:
     print(env.read_text(encoding="utf-8"))
 
 
+# The Android packages' target API level: Google Play's current requirement (nsh.json `android.targetSdk`).
+ANDROID_TARGET_SDK = 36
+# One APK for each ABI phones use; the App Bundle carries both.
+ANDROID_ABIS = ["arm64-v8a", "armeabi-v7a"]
+
+
+def keychain_password(service: str) -> str:
+    """A generic password of the login keychain, by service name; never printed."""
+    found = subprocess.run(["security", "find-generic-password", "-a", os.environ.get("USER", ""), "-s", service, "-w"], capture_output=True, text=True)
+    if found.returncode != 0 or not found.stdout.strip():
+        raise SystemExit(f"error: no keychain password '{service}' (security add-generic-password -a \"$USER\" -s {service} -w)")
+    return found.stdout.rstrip("\n")
+
+
+def certificate_sha256(keystore: Path, alias: str, password: str) -> str:
+    """The SHA-256 fingerprint of `alias`'s certificate in `keystore`, as lowercase hex."""
+    listed = subprocess.run(
+        ["keytool", "-list", "-v", "-keystore", str(keystore), "-alias", alias, "-storepass:env", "SAFAY_KEYSTORE_PASSWORD"],
+        capture_output=True, text=True, env={**os.environ, "SAFAY_KEYSTORE_PASSWORD": password},
+    )
+    for line in listed.stdout.splitlines():
+        if line.strip().startswith("SHA256:"):
+            return line.split(":", 1)[1].replace(":", "").strip().lower()
+    raise SystemExit(f"error: cannot read the certificate of '{alias}' in {keystore} (wrong alias or password?)")
+
+
+def build_tool(name: str) -> Path:
+    """The newest Android build tools' `name` (apksigner, aapt2)."""
+    sdk = Path(os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT") or Path.home() / "Library/Android/sdk")
+    found = sorted((sdk / "build-tools").glob(f"*/{name}"))
+    if not found:
+        raise SystemExit(f"error: no {name} in {sdk / 'build-tools'}")
+    return found[-1]
+
+
+def release_android(metadata: dict, version: str, build: str, dist: Path, config: dict) -> None:
+    """The signed APK and App Bundle in `dist`, each checked against the key it should carry."""
+    keys = {}
+    for kind, prefix in (("app", "android_"), ("upload", "android_upload_")):
+        keystore, alias, service = config[f"{prefix}keystore"], config[f"{prefix}key_alias"], config[f"{prefix}keychain"]
+        if not (keystore and alias and service):
+            raise SystemExit(f"error: set local.toml [android] {prefix.removeprefix('android_')}keystore, key_alias and keychain")
+        path = Path(os.path.expanduser(keystore))
+        if not path.is_file():
+            raise SystemExit(f"error: {path} is missing")
+        password = keychain_password(service)
+        keys[kind] = (path, alias, password, certificate_sha256(path, alias, password))
+    if keys["app"][3] == keys["upload"][3]:
+        raise SystemExit("error: the upload key must not be the app-signing key")
+
+    run("cargo", "test", "--workspace", "--locked", cwd=root)
+    clean(dist, "android")
+    dist.mkdir(parents=True, exist_ok=True)
+    run("make", "build/android/java/classes.dex", cwd=root)
+    out = root / "build/android/release"
+    stem = f"Safay-{version}-android"
+    packages = [("app", ["--abi", abi], "apk", f"{stem}-{abi}.apk") for abi in ANDROID_ABIS]
+    packages.append(("upload", ["--format", "aab"], "aab", f"{stem}.aab"))
+    for kind, extra, suffix, name in packages:
+        path, alias, password, _ = keys[kind]
+        for old in out.glob(f"*.{suffix}"):
+            old.unlink()
+        run(sys.executable, str(root / "scripts/android.py"), "--release", *extra, "--keystore", str(path), "--key-alias", alias,
+            cwd=root, env={**os.environ, "NSH_KEYSTORE_PASSWORD": password})
+        built = sorted(out.glob(f"*.{suffix}"))
+        if len(built) != 1:
+            raise SystemExit(f"error: expected one .{suffix} in {out.relative_to(root)}, found {len(built)}")
+        shutil.copy2(built[0], dist / name)
+    apks, aab = [dist / f"{stem}-{abi}.apk" for abi in ANDROID_ABIS], dist / f"{stem}.aab"
+
+    # Each APK: the app-signing key's certificate, the app's own ID, the target level, its one ABI, no debuggable flag.
+    for abi, apk in zip(ANDROID_ABIS, apks):
+        printed = subprocess.run([str(build_tool("apksigner")), "verify", "--print-certs", str(apk)], capture_output=True, text=True, check=True).stdout
+        signer = next((line.rsplit(":", 1)[1].strip().lower() for line in printed.splitlines() if "certificate SHA-256 digest" in line), "")
+        if signer != keys["app"][3]:
+            raise SystemExit(f"error: {apk.name} is not signed with the app-signing key")
+        badging = subprocess.run([str(build_tool("aapt2")), "dump", "badging", str(apk)], capture_output=True, text=True, check=True).stdout
+        expected = [f"package: name='{metadata['id']}'", f"versionCode='{build}'", f"versionName='{version}'",
+                    f"targetSdkVersion:'{ANDROID_TARGET_SDK}'", f"native-code: '{abi}'"]
+        if missing := [e for e in expected if e not in badging]:
+            raise SystemExit(f"error: {apk.name} lacks {missing}")
+        if "application-debuggable" in badging:
+            raise SystemExit(f"error: {apk.name} is debuggable")
+    # The bundle: the upload key's certificate.
+    printed = subprocess.run(["keytool", "-printcert", "-jarfile", str(aab)], capture_output=True, text=True).stdout
+    fingerprint = next((line.split(":", 1)[1].replace(":", "").strip().lower() for line in printed.splitlines() if line.strip().startswith("SHA256:")), "")
+    if fingerprint != keys["upload"][3]:
+        raise SystemExit("error: the App Bundle is not signed with the upload key")
+
+    listed = "".join(f"APK_{abi.upper().replace('-', '_')}={apk.name}\nAPK_{abi.upper().replace('-', '_')}_SHA256={digest(apk)}\n" for abi, apk in zip(ANDROID_ABIS, apks))
+    (dist / f"{stem}.env").write_text(
+        f"VERSION={version}\nBUILD={build}\n{listed}AAB={aab.name}\nAAB_SHA256={digest(aab)}\n"
+        f"APP_SIGNING_CERT_SHA256={keys['app'][3]}\nUPLOAD_CERT_SHA256={keys['upload'][3]}\n",
+        encoding="utf-8",
+    )
+    print((dist / f"{stem}.env").read_text(encoding="utf-8"))
+
+
 def notarize(path: Path, profile: str) -> None:
     run("xcrun", "notarytool", "submit", str(path), "--keychain-profile", profile, "--wait")
 
@@ -165,6 +269,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--manifest-only", action="store_true", help="write the manifest again for build/dist's update archive")
     parser.add_argument("--notes", action="store_true", help="print this version's update notes, as the manifest carries them")
+    parser.add_argument("--android", action="store_true", help="the signed Android APK and App Bundle (on macOS)")
     args = parser.parse_args()
     metadata = json.loads((root / "nsh.json").read_text(encoding="utf-8"))
     version, build = metadata["version"], str(metadata["build"])
@@ -174,6 +279,11 @@ def main() -> None:
         print(update_notes(version), end="")
         return
     config = package.settings()
+    if args.android:
+        if metadata.get("android", {}).get("targetSdk") != ANDROID_TARGET_SDK:
+            raise SystemExit(f"error: nsh.json android.targetSdk must be {ANDROID_TARGET_SDK}")
+        release_android(metadata, version, build, root / "build/dist", config)
+        return
     system = SYSTEMS.get(platform.system())
     if system is None:
         raise SystemExit(f"error: no release for {platform.system()}")
