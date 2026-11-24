@@ -84,6 +84,43 @@ fn application<'a>(env: &mut JNIEnv<'a>) -> jni::errors::Result<JObject<'a>> {
     env.call_static_method(thread, "currentApplication", "()Landroid/app/Application;", &[])?.l()
 }
 
+/// Where Safay keeps its data: `Context.getNoBackupFilesDir()`, which neither the system's backup nor a transfer to a
+/// new device copies. The vault leaves the device only through the backup the user chooses in Safay, and the sign-ins
+/// and the biometric key, sealed by keys that never leave this device's keystore, are never restored where they can't
+/// be opened. Files an earlier build kept in `files` (NSH's data directory) are moved here once.
+pub fn storage_directory(files: &std::path::Path) -> Option<std::path::PathBuf> {
+    let directory = with_env(|env| {
+        let application = application(env)?;
+        let dir = env.call_method(&application, "getNoBackupFilesDir", "()Ljava/io/File;", &[])?.l()?;
+        let path = env.call_method(&dir, "getAbsolutePath", "()Ljava/lang/String;", &[])?.l()?;
+        let path: String = env.get_string(&jni::objects::JString::from(path))?.into();
+        Ok(std::path::PathBuf::from(path))
+    })?;
+    std::fs::create_dir_all(&directory).ok()?;
+    move_from(files, &directory);
+    Some(directory)
+}
+/// Moves Safay's files from `old` into `new`, unless `new` already holds a vault. A file that fails to move stays where
+/// it was; an export waiting in `old` is deleted.
+fn move_from(old: &std::path::Path, new: &std::path::Path) {
+    if old == new {
+        return;
+    }
+    let _ = std::fs::remove_dir_all(old.join("exports"));
+    if new.join("vault.safayvault").exists() {
+        return;
+    }
+    // The vault last: an interrupted move leaves it in `old`, where the next start finds it again.
+    for name in
+        ["biometric-key.json", "last-good.safayvault", "attempts.json", "preferences.json", "sync.json", "cloud", "vault.safayvault"]
+    {
+        let from = old.join(name);
+        if from.exists() {
+            let _ = std::fs::rename(&from, new.join(name));
+        }
+    }
+}
+
 /// Starts the bridge: it follows the activity in front and tells when the screen goes off, which locks `controller`'s
 /// vault at once.
 pub fn start(controller: Arc<Controller>, directory: std::path::PathBuf) {

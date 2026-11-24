@@ -9,11 +9,6 @@
   "capabilities": {
     "application": true,
     "clipboard": true,
-    "fs": {
-      "read": [
-        "${dataDir}/exports"
-      ]
-    },
     "openUrl": {
       "schemes": [
         "https",

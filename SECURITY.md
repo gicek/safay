@@ -176,6 +176,10 @@ per app, who may send them. There is no local socket, port or other channel.
   socket only to read the monitors' layout and binds, place the tray panel, bind the global shortcuts' keys, and, while
   the panel shows, close it on a click outside (the click still reaches what is under it). A captured code's
   notification names its issuer, never a secret.
+- **Android**: permissions for the camera and biometrics only. The vault, settings, sign-ins and exports waiting for
+  the share sheet live in the app's no-backup directory: Android's backup and device-to-device transfer never copy
+  them, so the vault leaves the device only through the backup chosen in Safay. Sign-ins are sealed by a key in the
+  hardware key store; the unlocked app is kept out of screenshots and the recent apps' pictures.
 - **Windows / Linux**: see [Platforms](docs/PLATFORMS.md) for what is implemented; file permissions on Windows follow the
   user profile's ACLs.
 

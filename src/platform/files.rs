@@ -91,14 +91,14 @@ fn export_file_name_of((y, m, d, hour, minute): (i64, i64, i64, i64, i64)) -> St
     format!("Safay-export-{y:04}{m:02}{d:02}-{hour:02}{minute:02}.json")
 }
 /// Android has no save dialog in NSH: the file goes to the share sheet, where the user picks Files, a drive or an app.
-/// It waits in `exports/` of the app's directory (the one folder `capabilities.fs.read` grants) until the next export.
+/// It waits in `exports/` of Safay's directory, which the system's backup leaves out, until the next export.
 #[cfg(target_os = "android")]
 pub async fn save_export(data: Vec<u8>, _title: String) -> Result<bool, Error> {
     use nsh_core::{
         prelude::*,
         share::{ShareAction, ShareRequest},
     };
-    let directory = nsh_core::element::data_dir().ok_or(Error::Storage)?.join("exports");
+    let directory = super::android::private_directory().ok_or(Error::Storage)?.join("exports");
     let path = directory.join(export_file_name(std::time::SystemTime::now()));
     let written = path.clone();
     blocking(move || {

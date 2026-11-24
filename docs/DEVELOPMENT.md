@@ -136,8 +136,10 @@ app whose manifest claims its scheme, and the adaptive launcher icon in `assets/
 Development and demo packages allow screenshots of the unlocked app (`SAFAY_ALLOW_SCREENSHOTS`); release packages keep
 it out of screenshots and the recent apps' pictures.
 
-On Android, cloud credentials are files in the app's data directory, sealed with an AES-GCM key kept in the hardware
-key store (`android/java/.../Secrets.java`). HTTPS certificates are checked by rustls against the system's CA store
+On Android, Safay keeps everything in the directory the system's backup and device transfer skip
+(`getNoBackupFilesDir()`, `platform::android::storage_directory`), and moves files an earlier build left in NSH's data
+directory there on start. Cloud credentials are files in it, sealed with an AES-GCM key kept in the hardware key store
+(`android/java/.../Secrets.java`). HTTPS certificates are checked by rustls against the system's CA store
 (`platform::tls::system_verifier`): the platform verifier there reports a certificate without an OCSP responder as
 revoked.
 
