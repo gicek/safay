@@ -101,12 +101,15 @@ def archives(dist: Path, version: str) -> list[Path]:
 
 
 def clean(dist: Path, system: str) -> None:
-    """Removes this system's earlier outputs from `dist`, and the manifest, whose hashes would no longer match; the other
-    systems' files (copied in for the manifest) stay."""
+    """Removes this system's earlier outputs from `dist`, and, for a desktop system, the manifest, whose hashes would no
+    longer match; the other systems' files (copied in for the manifest) stay."""
     if not dist.exists():
         return
     def ours(name: str) -> bool:
-        if name in ("latest.json", "latest.json.sig") or (name.startswith("Safay-") and f"-{system}" in name):
+        # The manifest lists the desktop archives only: Android's outputs leave it in place.
+        if name in ("latest.json", "latest.json.sig"):
+            return system != "android"
+        if name.startswith("Safay-") and f"-{system}" in name:
             return True
         # macOS's app and DMG, and the `.env` of releases before each system had its own.
         return system == "macos" and (name == "Safay.app" or (name.startswith("Safay-") and name.endswith((".dmg", ".env")) and name.count("-") == 1))
