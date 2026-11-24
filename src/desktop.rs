@@ -104,9 +104,6 @@ pub fn install(controller: Arc<Controller>, preview: bool) {
         set_timeout(Duration::from_millis(800), move || open_update(version.clone(), notes.clone()));
     }
 
-    // Dragging a window onto a display above or below its own (NSH stops it at its display's menu bar).
-    platform::macos::drag_windows_across_displays();
-
     // A click on the Dock icon while the main window is hidden brings it back.
     on_reopen(open_main);
 

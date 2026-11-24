@@ -13,6 +13,7 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 ### Fixed
 
 - Dragging an account or a category again before the previous order is saved no longer puts it back where it was.
+- Dragging the Settings window by its top edge moves only the Settings window, never the main window.
 - On Windows, Safay's icon now shows on its windows, the taskbar, Explorer and shortcuts.
 
 ## [1.4.0] - 2026-11-20
