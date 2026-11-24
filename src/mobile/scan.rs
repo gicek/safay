@@ -1,8 +1,10 @@
 //! "Scan QR Code": the camera's picture over the whole screen, a frame to aim with, and what was read. A 2FA QR code
 //! read goes to "Add Account" for review; a Google Authenticator export in several QR codes is read to its last one
-//! first. Without the camera (refused, or none), the page says so and offers the photo library instead.
+//! first. Without the camera (refused, or none), the page says so and offers the photo library instead; refused, it also
+//! offers the app's page in the system's settings, where the camera is allowed again.
 use super::{Nav, ui};
 use crate::{icons::Icon, store::Store};
+use nsh_base::button;
 use nsh_core::prelude::*;
 use safay_app::{Zeroizing, core::otpauth, session::placeholders};
 
@@ -20,6 +22,8 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
     let layers = [signal(None::<String>), signal(None::<String>)];
     let shown = signal(0_usize);
     let failed = signal(None::<&'static str>);
+    // The camera was refused and the system can show the app's settings page.
+    let settings = signal(false);
     // What was read, until a Google Authenticator export has all its parts.
     let collected = signal(Zeroizing::new(String::new()));
     let note = signal(None::<SharedString>);
@@ -54,10 +58,11 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
         set_interval(std::time::Duration::from_millis(100), move || {
             let poll = crate::platform::camera::poll();
             if let Some(error) = poll.error {
-                failed.set(Some(match error {
-                    crate::platform::camera::CameraError::Denied => "Camera access not allowed",
-                    crate::platform::camera::CameraError::Unavailable => "Can’t open the camera",
-                }));
+                let denied = error == crate::platform::camera::CameraError::Denied;
+                if denied && failed.get_untracked().is_none() {
+                    s.task(async move { settings.set(app_settings_available().await) });
+                }
+                failed.set(Some(if denied { "Camera access not allowed" } else { "Can’t open the camera" }));
                 return;
             }
             if poll.frame.is_some() {
@@ -169,6 +174,28 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
                             s.scanned.set(Default::default());
                             s.choose_images()
                         })
+                    },
+                ))
+                // Off this page first: back from the settings, "Scan QR Code" asks the camera again.
+                .child(when(
+                    move || settings.get(),
+                    move || {
+                        button()
+                            .accessibility_label(move || Some(s.label("Open System Settings")))
+                            .test_id("scan-settings")
+                            .h(move || px(48.0) * font_scale())
+                            .px(px(24.0))
+                            .items_center()
+                            .justify_center()
+                            .rounded_full()
+                            .border_1()
+                            .border_color(|| WHITE.opacity(0.6))
+                            .active(|st| st.bg(|| WHITE.opacity(0.12)))
+                            .child(ui::label(text(move || s.label("Open System Settings"))).text_color(|| WHITE))
+                            .on_press(move || {
+                                nav.back();
+                                drop(open_app_settings());
+                            })
                     },
                 )),
         )
