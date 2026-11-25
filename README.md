@@ -29,9 +29,9 @@ updater and for scripts; you don't need them to install. Each release's notes ar
   own website (optional).
 - **Vault**: Argon2id + AES-256-GCM, master password with strength rules, auto-lock, lock on sleep and screen lock,
   delays after failed attempts, Touch ID backed by the Secure Enclave, a last-good copy to roll back to.
-- **Backup and sync**: a folder, iCloud, WebDAV, Nextcloud, Dropbox, OneDrive or Google Drive. Only the encrypted vault
-  and its backup metadata leave the device. Automatic cloud uploads require a protected write. For Google Drive and other
-  providers that cannot protect a particular write, choose **Replace Backup** to upload the current vault explicitly.
+- **Backup and sync**: a folder, iCloud, WebDAV, Nextcloud, a Synology NAS (QuickConnect included), Dropbox, OneDrive or
+  Google Drive. Only the encrypted vault and its backup metadata leave the device. Changes sync automatically; a backup
+  another device changed in the meantime is never overwritten but shown as a conflict to review.
 - **Import and export**: encrypted Safay exports; backups from Aegis, 2FAS, Ente Auth, Proton Authenticator, Authenticator
   (browser extension), and Bitwarden; CSV exports from Apple Passwords and other password managers; and text files with
   one `otpauth://` link per line.

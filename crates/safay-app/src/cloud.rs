@@ -2,7 +2,7 @@
 //! with an injected HTTP executor and keeps the serialized connection in an injected credential store (the system
 //! keychain in the app, memory in tests). Remote files are the folder backend's, `vault.safayvault` and
 //! `vault.metadata.json`, only ciphertext and non-secret metadata: at the root of Safay's app folder, or in a `Safay`
-//! folder on WebDAV and Nextcloud ([`backup_folder`]).
+//! folder on WebDAV and Nextcloud, or in the folder the user picked on a Synology NAS ([`backup_folder`]).
 use crate::sync::{Backend, Expect, Remote, SyncError};
 use cloudset::{
     BoxOperation, Client, ClientConfig, CloudError, Connection, HttpRequest, HttpResponse, Precondition, ProviderKind, RemotePath,
@@ -26,6 +26,7 @@ pub enum Provider {
     Dropbox,
     Onedrive,
     GoogleDrive,
+    Synology,
 }
 impl Provider {
     pub fn name(self) -> &'static str {
@@ -35,7 +36,15 @@ impl Provider {
             Provider::Dropbox => "Dropbox",
             Provider::Onedrive => "OneDrive",
             Provider::GoogleDrive => "Google Drive",
+            Provider::Synology => "Synology",
         }
+    }
+    /// The services in the order the location lists show them.
+    pub const LISTED: [Provider; 6] =
+        [Provider::Dropbox, Provider::Onedrive, Provider::GoogleDrive, Provider::Nextcloud, Provider::Synology, Provider::Webdav];
+    /// A server of the user's own, set up with its address: WebDAV, Nextcloud and Synology.
+    pub fn has_server(self) -> bool {
+        matches!(self, Provider::Webdav | Provider::Nextcloud | Provider::Synology)
     }
     /// The location kind for a connection's provider; `None` for a provider this app does not offer.
     pub fn of(kind: ProviderKind) -> Option<Self> {
@@ -45,6 +54,7 @@ impl Provider {
             ProviderKind::Dropbox => Provider::Dropbox,
             ProviderKind::OneDrive => Provider::Onedrive,
             ProviderKind::GoogleDrive => Provider::GoogleDrive,
+            ProviderKind::Synology => Provider::Synology,
             _ => return None,
         })
     }
@@ -139,6 +149,7 @@ fn drive<T>(
 pub fn map_error(e: CloudError) -> SyncError {
     match e {
         CloudError::ReauthRequired | CloudError::AuthorizationDenied | CloudError::InvalidConnection => SyncError::SignIn,
+        CloudError::OtpRequired => SyncError::OtpRequired,
         CloudError::Forbidden => SyncError::Forbidden,
         CloudError::NotFound => SyncError::NoRemote,
         CloudError::PreconditionFailed => SyncError::RemoteChanged,
@@ -149,6 +160,16 @@ pub fn map_error(e: CloudError) -> SyncError {
         CloudError::Server { status } => SyncError::Server(status),
         CloudError::TooLarge => SyncError::TooLarge,
         _ => SyncError::Protocol,
+    }
+}
+
+/// The version a sync compares: the provider's revision, or for Synology, which has none, the modification time (a write
+/// there can't be checked against it, so a later upload waits for the user, as for any unchecked write).
+fn version(entry: &cloudset::Entry) -> Option<RemoteVersion> {
+    match (&entry.revision, entry.modified_at) {
+        (Some(r), _) => Some(RemoteVersion::Revision { value: r.as_str().to_owned() }),
+        (None, Some(at)) => Some(RemoteVersion::ModifiedAt { at }),
+        (None, None) => None,
     }
 }
 
@@ -172,13 +193,30 @@ impl CloudBackend {
         let folder = backup_folder(client.connection());
         run(services, Some(&self.credential), make(&client, &folder), client.connection().certificate_pin())
     }
+    /// Moves a QuickConnect connection to the address that answers now and stores it. `false` when the connection has no
+    /// QuickConnect ID or already uses that address.
+    fn relocate(&self, services: &Services) -> Result<bool, SyncError> {
+        let client = self.client(services)?;
+        let Some((id, region)) = client.connection().quickconnect() else { return Ok(false) };
+        let endpoint = synology_find(id, region)?.1;
+        if client.connection().endpoint() == Some(&endpoint) {
+            return Ok(false);
+        }
+        let moved = client.connection().clone().with_endpoint(endpoint).map_err(map_error)?;
+        services.credentials.save(&self.credential, &moved.to_bytes())?;
+        Ok(true)
+    }
+}
+/// A failure that a QuickConnect lookup may get past: no answer, or a gateway (a relay) with nothing behind it.
+fn unreachable(e: SyncError) -> bool {
+    matches!(e, SyncError::Network | SyncError::Server(502..=504))
 }
 /// The folder that holds the backup. On Dropbox, OneDrive and Google Drive the sign-in is to Safay's app folder
 /// ("Apps › Safay", or the folder named for it in My Drive), so the backup lives at its root; a WebDAV or Nextcloud
-/// account keeps it in a `Safay` folder at the root.
+/// account keeps it in a `Safay` folder at the root. A Synology connection's root is the folder the user picked for it.
 fn backup_folder(connection: &Connection) -> RemotePath {
-    match connection.access_scope() {
-        Some(cloudset::AccessScope::AppFolder) => RemotePath::root(),
+    match (connection.provider(), connection.access_scope()) {
+        (ProviderKind::Synology, _) | (_, Some(cloudset::AccessScope::AppFolder)) => RemotePath::root(),
         _ => RemotePath::parse(DEFAULT_FOLDER).expect("static path"),
     }
 }
@@ -188,7 +226,15 @@ fn path(folder: &RemotePath, name: &str) -> RemotePath {
 impl Backend for CloudBackend {
     fn read(&self) -> Result<Option<Remote>, SyncError> {
         let services = services()?;
-        let Some(file) = self.file_operation(&services, |client, folder| client.read(path(folder, VAULT_FILE_NAME)))? else {
+        let read = || self.file_operation(&services, |client, folder| client.read(path(folder, VAULT_FILE_NAME)));
+        // Every sync starts here: a NAS found through QuickConnect that stopped answering (the device left the network it
+        // signed in on) is looked up again, and the sync goes on at the address that answers now.
+        let file = match read() {
+            // A lookup that fails too leaves the first error: "no backup there" would be wrong.
+            Err(e) if unreachable(e) && self.relocate(&services).unwrap_or(false) => read(),
+            result => result,
+        };
+        let Some(file) = file? else {
             return Ok(None);
         };
         if !vault::is_valid_envelope(&file.data) {
@@ -199,7 +245,7 @@ impl Backend for CloudBackend {
             .ok()
             .flatten()
             .and_then(|m| BackupMetadata::device_name(&m.data));
-        let version = file.entry.revision.map(|r| RemoteVersion::Revision { value: r.as_str().to_owned() });
+        let version = version(&file.entry);
         Ok(Some(Remote { data: file.data, version, device }))
     }
     fn write(&self, data: &[u8], metadata: &BackupMetadata, expect: &Expect) -> Result<Option<RemoteVersion>, SyncError> {
@@ -207,12 +253,33 @@ impl Backend for CloudBackend {
             return Err(SyncError::TooLarge);
         }
         let services = services()?;
-        let precondition = match expect {
-            Expect::Any => Precondition::None,
-            Expect::Absent => Precondition::Absent,
-            Expect::Unchanged(RemoteVersion::Revision { value }) => Precondition::Matches(Revision::new(value.clone())),
-            Expect::Unchanged(RemoteVersion::ModifiedAt { .. }) => return Err(SyncError::ManualWriteRequired),
+        let wanted = match expect {
+            Expect::Any => Some(Precondition::None),
+            Expect::Absent => Some(Precondition::Absent),
+            Expect::Unchanged(RemoteVersion::Revision { value }) => Some(Precondition::Matches(Revision::new(value.clone()))),
+            Expect::Unchanged(RemoteVersion::ModifiedAt { .. }) => None,
         };
+        // Where the provider can't hold the write to the condition (Google Drive, Synology, WebDAV with weak ETags,
+        // OneDrive upload sessions), the condition is checked just before the upload and the result read back after it:
+        // a change from another device found either way is reported as one, and the sync compares again.
+        let client = self.client(&services)?;
+        let checked = match &wanted {
+            Some(p) => !client.supports_write_precondition(data.len(), p),
+            None => true,
+        };
+        let precondition = if checked { Precondition::None } else { wanted.unwrap_or(Precondition::None) };
+        if checked {
+            let current = self.file_operation(&services, |client, folder| client.stat(path(folder, VAULT_FILE_NAME)));
+            let unchanged = match (expect, current) {
+                (Expect::Absent, Ok(None) | Err(SyncError::NoRemote)) => true,
+                (Expect::Unchanged(expected), Ok(Some(entry))) => version(&entry).as_ref() == Some(expected),
+                (_, Err(e)) => return Err(e),
+                _ => false,
+            };
+            if !unchanged {
+                return Err(SyncError::RemoteChanged);
+            }
+        }
         let upload = || {
             self.file_operation(&services, |client, folder| {
                 client.write(path(folder, VAULT_FILE_NAME), data.to_vec(), precondition.clone())
@@ -220,27 +287,29 @@ impl Backend for CloudBackend {
         };
         let result = match upload() {
             Err(SyncError::NoRemote) => {
-                let client = self.client(&services)?;
                 let folder = backup_folder(client.connection());
                 if folder.is_root() {
                     return Err(SyncError::NoRemote);
                 }
+                let client = self.client(&services)?;
                 run(&services, Some(&self.credential), client.create_dir(folder), client.connection().certificate_pin())?;
                 upload()
             }
             result => result,
         };
+        let read_back = || self.file_operation(&services, |client, folder| client.read(path(folder, VAULT_FILE_NAME)));
         let version = match result {
-            Ok(entry) => entry.revision.map(|r| RemoteVersion::Revision { value: r.as_str().to_owned() }),
-            Err(SyncError::CommitUnconfirmed | SyncError::Network) => {
-                let observed = self.file_operation(&services, |client, folder| client.read(path(folder, VAULT_FILE_NAME)));
-                match observed {
-                    Ok(Some(file)) if file.data == data => {
-                        file.entry.revision.map(|r| RemoteVersion::Revision { value: r.as_str().to_owned() })
-                    }
-                    _ => return Err(SyncError::CommitUnconfirmed),
-                }
-            }
+            Ok(entry) if !checked => version(&entry),
+            // Another device's upload right after this one would show here: compare again rather than record it.
+            Ok(_) => match read_back() {
+                Ok(Some(file)) if file.data == data => version(&file.entry),
+                Ok(_) => return Err(SyncError::RemoteChanged),
+                Err(_) => return Err(SyncError::CommitUnconfirmed),
+            },
+            Err(SyncError::CommitUnconfirmed | SyncError::Network) => match read_back() {
+                Ok(Some(file)) if file.data == data => version(&file.entry),
+                _ => return Err(SyncError::CommitUnconfirmed),
+            },
             Err(e) => return Err(e),
         };
         let _ = self.file_operation(&services, |client, folder| {
@@ -375,6 +444,12 @@ pub fn connect(mut connection: Connection) -> Result<crate::sync::Location, Sync
     services.credentials.save(&credential, &connection.to_bytes())?;
     let account = match connection.provider() {
         ProviderKind::WebDav | ProviderKind::Nextcloud => format!("{} · {}", connection.account(), connection.host()),
+        // The QuickConnect ID stays the same when the address changes (another network, the relay).
+        ProviderKind::Synology => match (connection.quickconnect(), connection.root_folder()) {
+            (Some((id, _)), Some(root)) => format!("{} · {} › {}", connection.account(), id, root),
+            (None, Some(root)) => format!("{} · {} › {}", connection.account(), connection.host(), root),
+            _ => format!("{} · {}", connection.account(), connection.host()),
+        },
         _ => connection.account().to_owned(),
     };
     let pinned = connection.certificate_pin().is_some();
@@ -423,6 +498,185 @@ pub fn nextcloud_poll(
         }
         (connection, _) => Ok(connection),
     }
+}
+
+/// What the user typed for a Synology NAS: a QuickConnect ID (bare, or a `quickconnect.to` / `quickconnect.cn` address,
+/// whose region it names), or the address of the NAS itself.
+#[derive(Clone, Debug)]
+pub enum SynologyAddress {
+    QuickConnect(cloudset::synology::quickconnect::QuickConnectId, Option<cloudset::synology::quickconnect::Region>),
+    Direct(cloudset::Endpoint),
+}
+pub fn synology_address(input: &str, allow_http: bool) -> Result<SynologyAddress, AddressError> {
+    use cloudset::synology::quickconnect::{QuickConnectId, Region};
+    if let Ok(id) = QuickConnectId::parse(input) {
+        return Ok(SynologyAddress::QuickConnect(id, Region::from_address(input)));
+    }
+    endpoint(input, allow_http).map(SynologyAddress::Direct)
+}
+
+/// How long the addresses of a NAS get to answer, all at once.
+const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Finds the NAS with a QuickConnect ID: asks the control host of `region` (the other region's when that one can't be
+/// reached), probes every address it lists at once, and opens Synology's relay when none answers. Returns the region
+/// that knew the NAS and the address to use. [`SyncError::NoRemote`]: no NAS has this ID; [`SyncError::Network`]: it
+/// is offline.
+pub fn synology_find(
+    id: &cloudset::synology::quickconnect::QuickConnectId,
+    region: cloudset::synology::quickconnect::Region,
+) -> Result<(cloudset::synology::quickconnect::Region, cloudset::Endpoint), SyncError> {
+    use cloudset::synology::quickconnect;
+    let services = services()?;
+    let config = ClientConfig::new(services.user_agent.clone());
+    let resolve = |region| run(&services, None, quickconnect::resolve(id, region, &config), None);
+    let resolution = match resolve(region) {
+        Err(SyncError::Network | SyncError::Protocol) => resolve(region.other())?,
+        result => result?,
+    };
+    if let Some(endpoint) = first_answering(&services, &resolution, resolution.candidates(), &config) {
+        return Ok((resolution.region(), endpoint));
+    }
+    let relays = run(&services, None, resolution.request_relay(&config), None)?;
+    // The tunnel can take a moment to come up.
+    for attempt in 0..3 {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
+        if let Some(endpoint) = first_answering(&services, &resolution, &relays, &config) {
+            return Ok((resolution.region(), endpoint));
+        }
+    }
+    Err(SyncError::Network)
+}
+
+/// Probes the candidates at once and returns the first, in list order, that answered as this NAS within
+/// [`PROBE_TIMEOUT`]. A transport failure counts as no answer; a probe still running afterwards is left to finish.
+fn first_answering(
+    services: &Services,
+    resolution: &cloudset::synology::quickconnect::Resolution,
+    candidates: &[cloudset::synology::quickconnect::Candidate],
+    config: &ClientConfig,
+) -> Option<cloudset::Endpoint> {
+    if candidates.is_empty() {
+        return None;
+    }
+    let (sender, receiver) = std::sync::mpsc::channel();
+    for (i, candidate) in candidates.iter().enumerate() {
+        let (sender, services, resolution, config) = (sender.clone(), services.clone(), resolution.clone(), config.clone());
+        let endpoint = candidate.endpoint.clone();
+        std::thread::spawn(move || {
+            let answered = run(&services, None, resolution.probe(&endpoint, &config), None).unwrap_or(false);
+            let _ = sender.send((i, answered));
+        });
+    }
+    drop(sender);
+    let deadline = std::time::Instant::now() + PROBE_TIMEOUT;
+    let mut answers: Vec<Option<bool>> = vec![None; candidates.len()];
+    loop {
+        // The first candidate that answered, once every earlier one has failed.
+        if let Some(i) = answers.iter().position(|a| *a != Some(false))
+            && answers[i] == Some(true)
+        {
+            return Some(candidates[i].endpoint.clone());
+        }
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        match receiver.recv_timeout(left) {
+            Ok((i, answered)) => answers[i] = Some(answered),
+            // Out of time, or every probe is done: the earliest that answered.
+            Err(_) => return answers.iter().position(|a| *a == Some(true)).map(|i| candidates[i].endpoint.clone()),
+        }
+    }
+}
+
+/// What a Synology sign-in needs. `Debug` is deliberately absent: it holds the password.
+pub struct SynologyLogin {
+    pub endpoint: cloudset::Endpoint,
+    /// The QuickConnect ID the address was found with, and the region that knew it.
+    pub quickconnect: Option<(cloudset::synology::quickconnect::QuickConnectId, cloudset::synology::quickconnect::Region)>,
+    pub username: String,
+    pub password: Zeroizing<String>,
+    /// The code from the authenticator app, after a sign-in reported [`SyncError::OtpRequired`].
+    pub otp_code: Option<String>,
+    /// A certificate the user confirmed (`https://` addresses typed by the user only).
+    pub trusted: Option<[u8; 32]>,
+}
+/// Signs in to DSM, to the whole NAS: the user picks the folder next ([`synology_list`], [`synology_use_folder`]).
+/// [`SyncError::OtpRequired`]: the account uses two-step verification and needs a code (or the one given was wrong);
+/// [`SyncError::SignIn`]: wrong user name or password; [`SyncError::Forbidden`]: the account can't use File Station.
+/// The connection is kept in memory only until a folder is picked.
+pub fn synology_sign_in(login: SynologyLogin) -> Result<Connection, SyncError> {
+    let services = services()?;
+    let pin = pin_for(&login.endpoint, login.trusted)?;
+    let mut request =
+        cloudset::synology::SignIn::new(login.endpoint, RemotePath::root(), login.username, login.password.as_str().to_owned());
+    if let Some(code) = login.otp_code {
+        request = request.with_otp_code(code);
+    }
+    if let Some((id, region)) = login.quickconnect {
+        request = request.with_quickconnect(id, region);
+    }
+    let connection = run(&services, None, cloudset::synology::sign_in(request, &ClientConfig::new(services.user_agent.clone())), pin)?;
+    match login.trusted {
+        Some(t) => cloudset::PinnedCertificate::from_slice(&t).and_then(|c| connection.with_pinned_certificate(c)).map_err(map_error),
+        None => Ok(connection),
+    }
+}
+
+/// A folder on the NAS while the user picks one: its subfolders, and whether it can hold the backup.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FolderListing {
+    /// Names of the subfolders, sorted.
+    pub folders: Vec<String>,
+    /// A Safay backup is already here.
+    pub has_backup: bool,
+    /// When that backup was last written (Unix milliseconds), if the NAS says.
+    pub backup_saved_ms: Option<i64>,
+    /// Nothing is here but system items (names starting with `.`, `#` or `@`, such as `#recycle` and `@eaDir`).
+    pub empty: bool,
+}
+impl FolderListing {
+    /// Whether a backup may go here: an empty folder, or one that already holds a Safay backup.
+    pub fn usable(&self) -> bool {
+        self.empty || self.has_backup
+    }
+}
+/// Runs an operation on a connection held in memory, keeping a renewed session in `connection`.
+fn run_held<T>(connection: &mut Connection, make: impl FnOnce(&Client) -> BoxOperation<T>) -> Result<T, SyncError> {
+    let services = services()?;
+    let pin = connection.certificate_pin();
+    let client = Client::new(connection.clone(), ClientConfig::new(services.user_agent.clone()));
+    drive(&services, make(&client), pin, |latest| {
+        *connection = latest;
+        Ok(())
+    })
+}
+/// Lists a folder of the NAS (its top level: the shared folders).
+pub fn synology_list(connection: &mut Connection, folder: &RemotePath) -> Result<FolderListing, SyncError> {
+    let entries = run_held(connection, |client| client.list(folder.clone()))?;
+    let system = |name: &str| name.starts_with(['.', '#', '@']);
+    let name = |e: &cloudset::Entry| e.path.name().unwrap_or_default().to_owned();
+    let mut folders: Vec<String> = entries.iter().filter(|e| e.is_dir).map(name).filter(|n| !system(n)).collect();
+    folders.sort_by_key(|n| n.to_lowercase());
+    let backup = entries.iter().find(|e| !e.is_dir && e.path.name() == Some(VAULT_FILE_NAME));
+    Ok(FolderListing {
+        folders,
+        has_backup: backup.is_some(),
+        backup_saved_ms: backup.and_then(|e| e.modified_at).map(crate::sync::to_ms),
+        empty: entries.iter().all(|e| system(&name(e))),
+    })
+}
+/// Creates a folder on the NAS (not at its top level: shared folders are made in DSM).
+pub fn synology_create_folder(connection: &mut Connection, folder: &RemotePath) -> Result<(), SyncError> {
+    run_held(connection, |client| client.create_dir(folder.clone()))
+}
+/// Uses `folder` for the backup: checks and stores the connection moved there, as [`connect`] does. The session
+/// carries over, so no new sign-in or code is needed.
+pub fn synology_use_folder(connection: Connection, folder: RemotePath) -> Result<crate::sync::Location, SyncError> {
+    if folder.is_root() {
+        return Err(SyncError::Forbidden);
+    }
+    connect(connection.with_root_folder(folder).map_err(map_error)?)
 }
 
 /// Starts an OAuth sign-in (PKCE, public client) with 64 bytes from the system CSPRNG.

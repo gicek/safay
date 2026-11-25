@@ -197,6 +197,10 @@ pub enum SyncError {
     /// Sign in again: the token or app password is no longer valid, or the saved sign-in is missing.
     #[error("sign in again")]
     SignIn,
+    /// A Synology account with two-step verification: the sign-in needs the code from the authenticator app, or the one
+    /// given was wrong.
+    #[error("a verification code is needed")]
+    OtpRequired,
     #[error("the server denied access")]
     Forbidden,
     #[error("not enough storage on the server")]

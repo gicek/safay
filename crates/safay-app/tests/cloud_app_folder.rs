@@ -125,44 +125,40 @@ fn backups_live_at_the_root_of_the_app_folder() {
 
         // Another device finds it there.
         let b = device(1000);
-        sync::restore_first_run(&b, b.epoch(), location, PASSWORD).unwrap();
+        sync::restore_first_run(&b, b.epoch(), location.clone(), PASSWORD).unwrap();
         assert_eq!(issuers(&b), vec!["Alpha"], "{provider:?}");
 
-        // A later change: uploaded on its own where the write is checked against the backup it replaces.
+        // A later change is uploaded on its own everywhere: where the provider can't hold the write to the backup it
+        // replaces (Google Drive), Safay checks just before the upload and reads the result back.
         add(&a, "Beta");
-        let later = sync::run(&a, a.epoch(), "Device", Source::Auto);
-        if provider != Provider::GoogleDrive {
-            assert_eq!(later, Ok(Status::Synced), "{provider:?}");
-            continue;
-        }
-        // Google Drive cannot check it: the upload waits for the user, which is neither a failure nor an upload.
-        assert_eq!(later, Err(SyncError::ManualWriteRequired));
-        let waiting = |c: &Controller| c.run(c.epoch(), |s| Ok((s.sync_status(), s.sync_state().history.len()))).unwrap();
-        let (status, entries) = waiting(&a);
-        assert_eq!(status, Status::Failed(SyncError::ManualWriteRequired));
-        assert_eq!(sync::run(&a, a.epoch(), "Device", Source::Auto), Err(SyncError::ManualWriteRequired));
-        assert_eq!(waiting(&a).1, entries, "waiting adds nothing to the history");
+        assert_eq!(sync::run(&a, a.epoch(), "Device", Source::Auto), Ok(Status::Synced), "{provider:?}");
+        assert_eq!(sync::run(&b, b.epoch(), "Other", Source::Auto), Ok(Status::Synced), "{provider:?}");
+        assert_eq!(issuers(&b), vec!["Beta", "Alpha"], "{provider:?}");
+
+        // Both devices change; the other one uploads first. This one finds the backup changed and asks the user instead
+        // of replacing it.
         let stored = || {
             let memory = server.0.lock().unwrap();
             memory.data(&memory.storage_path("vault.safayvault"))
         };
-        let before = stored();
-        sync::replace(&a, a.epoch(), "Device").unwrap();
-        assert_eq!(waiting(&a).0, Status::Synced);
-        assert_ne!(stored(), before, "the approved upload replaced the backup");
-        assert_eq!(sync::run(&b, b.epoch(), "Other", Source::Auto), Ok(Status::Synced));
-        assert_eq!(issuers(&b), vec!["Beta", "Alpha"]);
-
-        // Both devices change; the other one uploads while this one waits. Approving then compares again and finds the
-        // conflict instead of replacing the other device's backup.
         add(&a, "Gamma");
-        assert_eq!(sync::run(&a, a.epoch(), "Device", Source::Auto), Err(SyncError::ManualWriteRequired));
         add(&b, "Delta");
-        sync::replace(&b, b.epoch(), "Other").unwrap();
+        assert_eq!(sync::run(&b, b.epoch(), "Other", Source::Auto), Ok(Status::Synced), "{provider:?}");
         let theirs = stored();
-        sync::replace(&a, a.epoch(), "Device").unwrap();
-        assert_eq!(waiting(&a).0, Status::Conflict);
-        assert_eq!(stored(), theirs, "the other device's backup is still there");
+        assert_eq!(sync::run(&a, a.epoch(), "Device", Source::Auto), Ok(Status::Conflict), "{provider:?}");
+        assert_eq!(stored(), theirs, "{provider:?}: the other device's backup is still there");
+
+        // The other device uploads between this one's read and its write: the write is refused, and nothing changes.
+        let backend = location.backend();
+        let seen = backend.read().unwrap().unwrap();
+        let meta =
+            safay_app::core::backup::BackupMetadata { device_name: "Device".into(), vault_updated_at: UNIX_EPOCH, saved_at: UNIX_EPOCH };
+        let other = [seen.data.as_slice(), b"other device"].concat();
+        backend.write(&other, &meta, &sync::Expect::Any).unwrap();
+        let theirs = stored();
+        let expect = sync::Expect::Unchanged(seen.version.clone().unwrap());
+        assert_eq!(backend.write(&seen.data, &meta, &expect), Err(SyncError::RemoteChanged), "{provider:?}");
+        assert_eq!(stored(), theirs, "{provider:?}");
     }
 }
 

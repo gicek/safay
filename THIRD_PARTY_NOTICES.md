@@ -36,9 +36,9 @@ Versions below are exact pins. Cargo.lock records the full production build grap
 | block2 | 0.6.2 | MIT | macOS lifecycle callbacks |
 | libc | 0.2.189 | MIT OR Apache-2.0 | macOS process information (the app that sent a launcher's Apple event); the device's offset from UTC on macOS and Linux |
 | time | 0.3.55 | MIT OR Apache-2.0 | The device's offset from UTC on Windows; already used by the core |
-| cloudset | 0.3.0 | MIT OR Apache-2.0 | Cloud storage protocols (WebDAV, Nextcloud, Dropbox, OneDrive, Google Drive), sans-IO; replace the cloud backend |
+| cloudset | 0.4.1 | MIT OR Apache-2.0 | Cloud storage protocols (WebDAV, Nextcloud, Synology, Dropbox, OneDrive, Google Drive), sans-IO; replace the cloud backend |
 | ureq | 3.5.1 | MIT OR Apache-2.0 | HTTP executor for cloud backup and site icons (rustls, system certificate verification); already used by NSH |
-| rustls, rustls-pki-types, rustls-platform-verifier | 0.23.46, 1.15.1, 0.7.1 | Apache-2.0 OR ISC OR MIT, MIT OR Apache-2.0, MIT OR Apache-2.0 | The pinned-certificate TLS step for self-signed WebDAV / Nextcloud servers (`src/platform/tls.rs`); the same versions ureq already uses |
+| rustls, rustls-pki-types, rustls-platform-verifier | 0.23.46, 1.15.1, 0.7.1 | Apache-2.0 OR ISC OR MIT, MIT OR Apache-2.0, MIT OR Apache-2.0 | The pinned-certificate TLS step for self-signed WebDAV / Nextcloud / Synology servers (`src/platform/tls.rs`); the same versions ureq already uses |
 | sha2 | 0.11.0 | MIT OR Apache-2.0 | Certificate fingerprints; already used by the core |
 | keyring | 3.6.3 | MIT OR Apache-2.0 | Cloud sign-ins in the macOS Keychain / Windows Credential Manager / Linux Secret Service (over libdbus); replace the credential store adapter |
 | objc2-app-kit, objc2-authentication-services | 0.3.2 | Zlib OR Apache-2.0 OR MIT | macOS system APIs (AppKit, web sign-in sessions) |
@@ -105,7 +105,7 @@ This includes test tools; the production graph is narrower. NSH-generated test r
 | chacha20 | 0.10.2 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/chacha20/0.10.2) |
 | chrono | 0.4.45 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/chrono/0.4.45) |
 | cipher | 0.5.2 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/cipher/0.5.2) |
-| cloudset | 0.3.0 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/cloudset/0.3.0) |
+| cloudset | 0.4.1 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/cloudset/0.4.1) |
 | cmov | 0.5.4 | Apache-2.0 OR MIT | [crates.io](https://crates.io/crates/cmov/0.5.4) |
 | codespan-reporting | 0.13.1 | Apache-2.0 | [crates.io](https://crates.io/crates/codespan-reporting/0.13.1) |
 | color_quant | 1.1.0 | MIT | [crates.io](https://crates.io/crates/color_quant/1.1.0) |
@@ -403,7 +403,7 @@ This includes test tools; the production graph is narrower. NSH-generated test r
 | untrusted | 0.9.0 | ISC | [crates.io](https://crates.io/crates/untrusted/0.9.0) |
 | ureq | 3.5.1 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/ureq/3.5.1) |
 | ureq-proto | 0.7.1 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/ureq-proto/0.7.1) |
-| url | 2.5.8 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/url/2.5.8) |
+| url | 2.5.9 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/url/2.5.9) |
 | usvg | 0.46.0 | Apache-2.0 OR MIT | [crates.io](https://crates.io/crates/usvg/0.46.0) |
 | utf-8 | 0.7.6 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/utf-8/0.7.6) |
 | utf8-zero | 0.8.1 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/utf8-zero/0.8.1) |

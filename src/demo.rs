@@ -156,6 +156,7 @@ pub fn DemoSettingsApp() -> impl IntoElement {
 
 /// Opens one page for a capture: `SAFAY_DEMO_SCENE` = add-scan | add-key | add-text | export | import |
 /// backup | backup-choose | backup-dropbox | backup-onedrive | backup-google-drive | backup-webdav | backup-nextcloud |
+/// backup-synology | backup-synology-folders | backup-synology-backup |
 /// detail | change-password | auth | list | category | category-empty | settings[-security|-shortcuts|-advanced|-about] |
 /// alert. Debug demo builds only.
 pub fn scene(s: crate::store::Store) {
@@ -191,12 +192,35 @@ pub fn scene(s: crate::store::Store) {
                     _ => Provider::Dropbox,
                 });
             }
-            "backup-webdav" | "backup-nextcloud" => {
+            "backup-webdav" | "backup-nextcloud" | "backup-synology" => {
+                use safay_app::cloud::Provider;
                 s.open_sheet(Sheet::Backup);
-                s.open_cloud_setup(if scene == "backup-webdav" {
-                    safay_app::cloud::Provider::Webdav
+                s.open_cloud_setup(match scene.as_str() {
+                    "backup-webdav" => Provider::Webdav,
+                    "backup-synology" => Provider::Synology,
+                    _ => Provider::Nextcloud,
+                });
+            }
+            // Signed in to the NAS, picking the folder for the backup.
+            // `-backup`: first-run restore, in a folder that holds only a backup.
+            "backup-synology-folders" | "backup-synology-backup" => {
+                let found = scene == "backup-synology-backup";
+                if found {
+                    s.choose_restore_cloud(safay_app::cloud::Provider::Synology);
                 } else {
-                    safay_app::cloud::Provider::Nextcloud
+                    s.open_sheet(Sheet::Backup);
+                    s.open_cloud_setup(safay_app::cloud::Provider::Synology);
+                }
+                s.folder_browser.set(crate::store::FolderBrowser {
+                    open: true,
+                    path: if found { vec!["home".into(), "Safay".into()] } else { vec!["home".into()] },
+                    listing: Some(safay_app::cloud::FolderListing {
+                        folders: if found { Vec::new() } else { vec!["Documents".into(), "Photos".into(), "Safay".into()] },
+                        has_backup: found,
+                        backup_saved_ms: found.then_some(1_764_000_000_000),
+                        empty: false,
+                    }),
+                    ..Default::default()
                 });
             }
             "change-password" => s.open_sheet(Sheet::ChangePassword),

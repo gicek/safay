@@ -51,7 +51,7 @@ AWS_LINK = "otpauth://totp/AWS:ops?secret=MFRGGZDFMZTWQ2LK&issuer=AWS&digits=8&p
 SIMPLIFIED_CHINESE = "\u7b80\u4f53\u4e2d\u6587"
 CJK = re.compile("[\u4e00-\u9fff]")
 # Words an untranslated Chinese screen may still show: names of services, accounts and the app.
-NAMES = {"Safay", "Dropbox", "OneDrive", "Google Drive", "Nextcloud", "WebDAV", "GitHub", "AWS", "English"}
+NAMES = {"Safay", "Dropbox", "OneDrive", "Google Drive", "Nextcloud", "Synology", "WebDAV", "GitHub", "AWS", "English"}
 
 
 # ---- Device ----------------------------------------------------------------------------------------------------------
@@ -706,7 +706,7 @@ def settings_dialogs(r: Run):
     d.tap("backup-set-up", settle=1.2)
     s = d.wait("Choose Location")
     r.check(
-        all(s.has(x) for x in ("Dropbox", "OneDrive", "Google Drive", "Nextcloud", "WebDAV")),
+        all(s.has(x) for x in ("Dropbox", "OneDrive", "Google Drive", "Nextcloud", "Synology", "WebDAV")),
         "Choose Location lists the services",
     )
     d.tap("WebDAV", 0, settle=1.2)

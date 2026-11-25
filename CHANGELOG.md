@@ -5,6 +5,15 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+### Added
+
+- **Synology**: back up to a folder you pick or create on your Synology NAS, found by its QuickConnect ID or address,
+  with an optional two-step verification code.
+
+### Changed
+
+- **Google Drive**: changes upload automatically, as on the other services, instead of waiting for you to approve them.
+
 ## [1.5.0] - 2026-11-24
 
 Safay comes to Android, and installs its Raycast and Tinycast extension from Settings.

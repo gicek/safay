@@ -24,10 +24,7 @@ use safay_app::{
 
 /// The cloud services a phone offers, in order: those this build has a client for, then the servers.
 fn providers() -> Vec<Provider> {
-    [Provider::Dropbox, Provider::Onedrive, Provider::GoogleDrive, Provider::Nextcloud, Provider::Webdav]
-        .into_iter()
-        .filter(|p| oauth_configured(*p))
-        .collect()
+    Provider::LISTED.into_iter().filter(|p| oauth_configured(*p)).collect()
 }
 fn is_oauth(provider: Provider) -> bool {
     matches!(provider, Provider::Dropbox | Provider::Onedrive | Provider::GoogleDrive)

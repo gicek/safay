@@ -80,10 +80,10 @@ cannot bind every third-party clipboard tool.
 Safay has no server, account system or telemetry. It makes exactly four kinds of request; everything else works
 offline.
 
-1. **Backup locations the user enables**: WebDAV, Nextcloud, Dropbox, OneDrive and Google Drive. Requests are built
-   only by the core (`cloudset`, a sans-IO client) and sent as built by `src/platform/http.rs`: no redirects followed,
-   no cookies, no caching, response bodies read up to the core's limit, system certificate verification, fixed
-   timeouts. URLs, headers and bodies are never logged.
+1. **Backup locations the user enables**: WebDAV, Nextcloud, Synology, Dropbox, OneDrive and Google Drive. Requests are
+   built only by the core (`cloudset`, a sans-IO client) and sent as built by `src/platform/http.rs`: no redirects
+   followed, no cookies, no caching, response bodies read up to the core's limit, system certificate verification,
+   fixed timeouts. URLs, headers and bodies are never logged.
 2. **Site icons** (optional, on by default per device): fetched only when an account is added or its website changes,
    only from that account's own website, never through a third-party icon service. HTTPS only, public DNS names only,
    at most 3 redirects each re-checked, HTML read up to 256 KiB, images up to 512 KiB and 32–1024 px per side. SVG is
@@ -109,14 +109,22 @@ Remote storage receives only the encrypted vault and a metadata file with a devi
 - Credentials (the serialized connection, including tokens or app passwords) are stored only in the system credential
   store (Keychain, Windows Credential Manager, the Secret Service on Linux); `sync.json` holds the entry's ID and a
   display name. Turning a backup off revokes the token where the provider supports it and deletes the entry.
-- A WebDAV or Nextcloud connection stopped midway (the user leaves it, or Safay locks) keeps nothing: a sign-in that
-  arrives afterwards is revoked and its entry deleted.
-- Plain `http://` WebDAV requires explicit consent in the interface.
-- **Self-signed servers** (WebDAV, Nextcloud): when the system does not trust a server's certificate, Safay shows the
-  leaf certificate's SHA-256 fingerprint for the user to compare. Once confirmed, the location accepts either a
-  certificate the system trusts or exactly that leaf certificate (constant-time comparison within the same handshake
-  that carries the request). A different certificate is reported as changed, with no one-click trust; changing the
-  address discards the pin. Pinned locations always show "Certificate not verified".
+- A WebDAV, Nextcloud or Synology connection stopped midway (the user leaves it, or Safay locks) keeps nothing: a
+  sign-in that arrives afterwards is revoked and its entry deleted.
+- Synology signs in to DSM with the user's password, and the code from an authenticator app when the account uses
+  two-step verification; DSM then trusts the device. Until the user picks the backup folder, the sign-in is held in
+  memory only, and leaving or locking signs it out. The stored connection keeps the password and that device token,
+  because DSM sessions expire and are renewed without the user. With a QuickConnect ID, Safay asks Synology's
+  QuickConnect servers (`quickconnect.to`, or `quickconnect.cn` for mainland China) for the NAS's addresses, sending
+  only the ID, and probes them without credentials; when none answers, it opens Synology's relay. A probe only tells
+  addresses apart: the password is protected by TLS with a certificate the system trusts, and an address found this
+  way is never pinned. When the stored address stops answering, a sync looks the ID up again.
+- Plain `http://` WebDAV and Synology addresses require explicit consent in the interface.
+- **Self-signed servers** (WebDAV, Nextcloud, Synology): when the system does not trust a server's certificate, Safay
+  shows the leaf certificate's SHA-256 fingerprint for the user to compare. Once confirmed, the location accepts
+  either a certificate the system trusts or exactly that leaf certificate (constant-time comparison within the same
+  handshake that carries the request). A different certificate is reported as changed, with no one-click trust;
+  changing the address discards the pin. Pinned locations always show "Certificate not verified".
 
 ### Backup and sync
 
@@ -125,6 +133,9 @@ Remote storage receives only the encrypted vault and a metadata file with a devi
   opens in memory. Linking a location first checks it read-only and refuses to overwrite another vault's backup.
 - Conflicts show both sides and let the user merge, keep the local vault or use the backup; nothing is overwritten
   silently. Remote work runs outside the session lock, and results arriving after a lock are discarded.
+- Uploads that replace a backup are conditional on the version last compared. Google Drive and Synology cannot make a
+  write conditional, so Safay checks the version just before the upload and reads the result back; only another
+  device's upload within those moments can be replaced without a conflict.
 - **iCloud**: the private database, a zone `Safay`, one record whose asset is the encrypted envelope as is (device name
   and timestamp in `encryptedValues`). Every write is conditional on the record's change tag. Safay records the iCloud
   user's opaque ID when iCloud is chosen and stops syncing if the account changes. Silent pushes carry no data and only

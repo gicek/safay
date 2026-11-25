@@ -384,6 +384,29 @@ fn restore_offers_cloud_storage_and_back_leaves_it() {
     app.wait_for_gone("Connect to WebDAV", Duration::from_secs(5)).unwrap();
     app.wait_for("Safay Exported File").unwrap();
 }
+/// Synology asks for a QuickConnect ID or an address, the account and, optionally, a verification code, with the
+/// restore wording; Back closes the sheet.
+#[test]
+fn synology_setup_asks_for_the_nas_account_and_folder() {
+    let _serial = serial();
+    let mut app = open();
+    app.wait_for("Restore a backup").unwrap();
+    app.press("role:button[Restore a backup]").unwrap();
+    app.press("role:button[Synology]").unwrap();
+    app.wait_for("Connect to Synology").unwrap();
+    app.wait_for("Safay only reads your encrypted backup from your server.").unwrap();
+    app.wait_for("QuickConnect ID or Address").unwrap();
+    // The code is optional: Connect needs only the NAS and the account. The folder is picked after signing in.
+    app.wait_for("Verification Code (Optional)").unwrap();
+    assert!(matches!(app.screen().input_text("id:cloud-folder"), Ok(None) | Err(_)), "no folder field");
+    assert_eq!(app.screen().input_text("id:cloud-otp").unwrap(), Some(""));
+    app.type_text("id:cloud-address", "my-nas").unwrap();
+    app.type_text("id:cloud-username", "fixture").unwrap();
+    app.type_text("id:cloud-password", "synthetic").unwrap();
+    app.press("role:button[Back] >> nth=0").unwrap();
+    app.wait_for_gone("Connect to Synology", Duration::from_secs(5)).unwrap();
+    app.wait_for("Safay Exported File").unwrap();
+}
 /// The eye in a password field is not a Tab stop: Tab goes from the new password straight to its confirmation.
 #[test]
 fn tab_skips_the_reveal_button() {

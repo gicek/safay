@@ -71,6 +71,8 @@ pub struct CloudForm {
     pub address: String,
     pub username: String,
     pub password: Zeroizing<String>,
+    /// Synology: the code from the authenticator app, for an account with two-step verification (optional).
+    pub otp: Zeroizing<String>,
     /// The user accepted sending the password over plain HTTP.
     pub insecure: bool,
     pub needs_consent: bool,
@@ -81,11 +83,32 @@ pub struct CloudForm {
     pub working: bool,
     /// Waiting for the user to finish signing in in the browser (Nextcloud).
     pub waiting: bool,
-    /// The user allowed Safay in the browser; connecting to the account (Nextcloud).
+    /// The user allowed Safay in the browser; connecting to the account (Nextcloud). Synology: the NAS was found;
+    /// signing in.
     pub allowed: bool,
     /// Connected; looking for a backup there (first-run restore), the third step.
     pub checking: bool,
     pub error: Option<SharedString>,
+}
+/// Synology, once signed in: the folder the user is looking at while picking where the backup goes.
+#[derive(Clone, Default, PartialEq)]
+pub struct FolderBrowser {
+    /// Signed in and picking a folder.
+    pub open: bool,
+    /// The folder shown, as segments; empty for the NAS's top level, its shared folders.
+    pub path: Vec<String>,
+    /// What it holds; `None` while it loads.
+    pub listing: Option<safay_app::cloud::FolderListing>,
+    pub working: bool,
+    /// The name of a new folder, while the user types it.
+    pub new_folder: Option<String>,
+    pub error: Option<SharedString>,
+}
+impl FolderBrowser {
+    /// The top level holds shared folders, which can't take the backup themselves.
+    pub fn at_top(&self) -> bool {
+        self.path.is_empty()
+    }
 }
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub enum AddTab {
@@ -244,6 +267,7 @@ pub struct Store {
     pub settings_page: Signal<SettingsPage>,
     pub backup_page: Signal<BackupPage>,
     pub cloud_form: Signal<CloudForm>,
+    pub folder_browser: Signal<FolderBrowser>,
     pub review: Signal<Option<safay_app::sync::Review>>,
     pub prefer_remote: Signal<BTreeSet<Uuid>>,
     pub syncing: Signal<bool>,
@@ -269,6 +293,8 @@ pub struct Store {
     cloud_attempt: Signal<u64>,
     /// Cloud sign-ins made during first-run restore, reused when the service is chosen again (memory only).
     restore_sign_ins: Stored<safay_app::cloud::RestoreSignIns<CloudForm>>,
+    /// Synology: the sign-in to the whole NAS while the user picks a folder. Memory only; signed out when left.
+    synology_session: Stored<Option<safay_app::cloudset::Connection>>,
     pub form: Signal<Form>,
     pub marks: Signal<Marks>,
     /// zxcvbn runs only when the new password itself changes, never per keystroke elsewhere.
@@ -372,6 +398,7 @@ impl Store {
             settings_page: signal(SettingsPage::General),
             backup_page: signal(BackupPage::Overview),
             cloud_form: signal(CloudForm::default()),
+            folder_browser: signal(FolderBrowser::default()),
             review: signal(None),
             prefer_remote: signal(BTreeSet::new()),
             syncing: signal(false),
@@ -386,6 +413,7 @@ impl Store {
             cloud_restore: signal(false),
             cloud_attempt: signal(0),
             restore_sign_ins: stored(Default::default()),
+            synology_session: stored(None),
             form,
             strength,
             marks: signal(Marks::default()),
@@ -538,6 +566,7 @@ impl Store {
         self.reset_transient();
     }
     pub fn lock(self) {
+        self.release_synology();
         self.controller.get().request_lock();
         self.after_lock();
     }
@@ -1982,6 +2011,7 @@ impl Store {
     }
     pub fn open_cloud_setup(self, provider: safay_app::cloud::Provider) {
         self.status.set(None);
+        self.release_synology();
         self.cloud_form.set(CloudForm::default());
         self.backup_page.set(BackupPage::Setup(provider));
     }
@@ -1994,12 +2024,13 @@ impl Store {
         self.cloud_restore.set(true);
         self.open_cloud_setup(provider);
         self.sheet.set(Some(Sheet::Backup));
-        // Chosen again: WebDAV and Nextcloud show the form as submitted (Nextcloud's Connect reuses the sign-in); the
-        // other services, already signed in to Safay's app folder, look for the backup again straight away.
+        // Chosen again: WebDAV, Nextcloud and Synology show the form as submitted (Nextcloud's and Synology's Connect reuse
+        // the sign-in); the other services, already signed in to Safay's app folder, look for the backup again straight
+        // away.
         if let Some(form) = self.restore_sign_ins.with(|k| k.form(provider)) {
             self.cloud_form.set(form);
         }
-        if !matches!(provider, safay_app::cloud::Provider::Webdav | safay_app::cloud::Provider::Nextcloud)
+        if !provider.has_server()
             && let Some(connection) = self.restore_sign_ins.with(|k| k.connection(provider))
         {
             self.cloud_form.update(|f| {
@@ -2096,21 +2127,25 @@ impl Store {
     }
     pub fn leave_cloud_setup(self) {
         platform::cancel_web_sign_in();
+        self.release_synology();
         self.cloud_attempt.update(|a| *a = a.wrapping_add(1));
         self.cloud_form.set(CloudForm::default());
         self.status.set(None);
         self.backup_page.set(BackupPage::Choose);
     }
-    /// During first-run restore: the Nextcloud sign-in kept for the server, certificate and consent in `form`.
-    fn kept_nextcloud(self, form: &CloudForm) -> Option<Zeroizing<Vec<u8>>> {
-        use safay_app::cloud::Provider;
+    /// During first-run restore: the Nextcloud or Synology sign-in kept for the server, account, folder, certificate and
+    /// consent in `form`.
+    fn kept_sign_in(self, provider: safay_app::cloud::Provider, form: &CloudForm) -> Option<Zeroizing<Vec<u8>>> {
         if !self.cloud_restore.get() {
             return None;
         }
         self.restore_sign_ins.with(|k| {
-            let kept = k.form(Provider::Nextcloud)?;
-            let same = kept.address.trim() == form.address.trim() && kept.trusted == form.trusted && kept.insecure == form.insecure;
-            if same { k.connection(Provider::Nextcloud) } else { None }
+            let kept = k.form(provider)?;
+            let same = kept.address.trim() == form.address.trim()
+                && kept.username.trim() == form.username.trim()
+                && kept.trusted == form.trusted
+                && kept.insecure == form.insecure;
+            if same { k.connection(provider) } else { None }
         })
     }
     /// WebDAV: checks the address and credentials, stores the sign-in, then links the location (read-only check first).
@@ -2126,6 +2161,9 @@ impl Store {
         }
         if self.fixture || self.cloud_form.with(|f| f.working) {
             return;
+        }
+        if provider == Provider::Synology {
+            return self.connect_synology();
         }
         let form = self.cloud_form.get();
         let endpoint = match cloud::endpoint(&form.address, form.insecure) {
@@ -2173,7 +2211,7 @@ impl Store {
                 blocking(move || cloud::webdav(endpoint, username, password, trusted).and_then(cloud::connect))
                     .await
                     .unwrap_or(Err(safay_app::sync::SyncError::Storage))
-            } else if let Some(kept) = self.kept_nextcloud(&form) {
+            } else if let Some(kept) = self.kept_sign_in(Provider::Nextcloud, &form) {
                 // The same server as a sign-in kept during this restore: reuse it; a revoked one signs in anew. Safay is
                 // already allowed, so the steps start at connecting to the account.
                 self.cloud_form.update(|f| f.allowed = true);
@@ -2264,6 +2302,291 @@ impl Store {
                     self.connected(location, Some(Some(submitted)));
                 }
                 Err(e) => fail(e),
+            }
+        });
+    }
+    /// Synology: finds the NAS (a QuickConnect ID is looked up, an address is used as typed) and signs in to it, with the
+    /// verification code when one was entered; then the user picks the folder ([`Self::open_synology_folder`],
+    /// [`Self::use_synology_folder`]). During first-run restore, a sign-in kept for the same NAS and account is reused:
+    /// its folder is looked at again, with no new code.
+    fn connect_synology(self) {
+        use safay_app::cloud::{self, AddressError, Provider, SynologyAddress, SynologyLogin};
+        use safay_app::cloudset::synology::quickconnect::Region;
+        use safay_app::sync::SyncError;
+        let form = self.cloud_form.get();
+        let address = match cloud::synology_address(&form.address, form.insecure) {
+            Ok(a) => a,
+            Err(AddressError::NeedsInsecureConsent) => {
+                self.cloud_form.update(|f| f.needs_consent = true);
+                return;
+            }
+            Err(AddressError::Invalid) => {
+                let error = self.label("Enter a QuickConnect ID, or an address that starts with https:// or http://");
+                self.cloud_form.update(|f| f.error = Some(error));
+                return;
+            }
+        };
+        self.cloud_form.update(|f| {
+            f.working = true;
+            f.allowed = false;
+            f.error = None;
+        });
+        let epoch = self.controller.get().epoch();
+        self.cloud_attempt.update(|a| *a = a.wrapping_add(1));
+        let attempt = self.cloud_attempt.get();
+        let current = move || self.controller.get().epoch() == epoch && self.cloud_attempt.get() == attempt;
+        // Mainland China has QuickConnect servers of its own; the other region is asked when the first can't be reached.
+        let preferred = if self.language.get_untracked() == crate::i18n::Language::Hans { Region::ChinaMainland } else { Region::Global };
+        let quickconnect = matches!(address, SynologyAddress::QuickConnect(..));
+        let otp = form.otp.trim().to_owned();
+        let had_code = !otp.is_empty();
+        let fail = move |e: SyncError| {
+            if !current() {
+                return;
+            }
+            let found = self.cloud_form.with(|f| f.allowed);
+            let message = match e {
+                SyncError::CertificateUnverified(_) => None,
+                SyncError::NoRemote if quickconnect && !found => Some("No Synology NAS uses this QuickConnect ID"),
+                SyncError::Network if quickconnect && !found => {
+                    Some("Can’t reach your NAS. Check that it’s on and connected to the internet")
+                }
+                SyncError::SignIn => Some("Incorrect username or password"),
+                SyncError::Forbidden => Some("Your NAS denied access. Check that this account can use File Station"),
+                SyncError::OtpRequired if !had_code => {
+                    Some("This account uses two-step verification. Enter the code from your authenticator app")
+                }
+                SyncError::OtpRequired => Some("Incorrect verification code"),
+                e => Some(sync_error_key(e)),
+            };
+            self.cloud_form.update(|f| {
+                f.working = false;
+                f.allowed = false;
+                if let SyncError::CertificateUnverified(fingerprint) = e
+                    && f.trusted.is_none()
+                {
+                    f.untrusted = Some(fingerprint);
+                }
+                // A code is good once.
+                f.otp = Zeroizing::default();
+                f.error = message.map(|m| self.label(m));
+            });
+        };
+        self.task(async move {
+            if let Some(kept) = self.kept_sign_in(Provider::Synology, &form) {
+                self.cloud_form.update(|f| f.allowed = true);
+                match blocking(move || cloud::reconnect(&kept)).await.unwrap_or(Err(SyncError::Storage)) {
+                    Err(SyncError::SignIn) => {
+                        self.restore_sign_ins.with(|k| k.invalid(Provider::Synology));
+                        if !current() {
+                            return;
+                        }
+                        self.cloud_form.update(|f| f.working = false);
+                        return self.connect_synology();
+                    }
+                    Ok(location) => {
+                        if !current() {
+                            return self.keep_restore_sign_in(&location).await;
+                        }
+                        self.cloud_form.set(CloudForm::default());
+                        return self.connected(location, None);
+                    }
+                    Err(e) => return fail(e),
+                }
+            }
+            let found = match address {
+                SynologyAddress::QuickConnect(id, region) => blocking(move || {
+                    cloud::synology_find(&id, region.unwrap_or(preferred)).map(|(region, endpoint)| (endpoint, Some((id, region))))
+                })
+                .await
+                .unwrap_or(Err(SyncError::Storage)),
+                SynologyAddress::Direct(endpoint) => Ok((endpoint, None)),
+            };
+            let (endpoint, quickconnect) = match found {
+                Ok(found) => found,
+                Err(e) => return fail(e),
+            };
+            if !current() {
+                return;
+            }
+            self.cloud_form.update(|f| f.allowed = true);
+            let login = SynologyLogin {
+                endpoint,
+                quickconnect,
+                username: form.username.trim().to_owned(),
+                password: form.password.clone(),
+                otp_code: (!otp.is_empty()).then(|| otp.clone()),
+                trusted: form.trusted,
+            };
+            match blocking(move || cloud::synology_sign_in(login)).await.unwrap_or(Err(SyncError::Storage)) {
+                Ok(connection) if current() => {
+                    self.synology_session.replace(Some(connection));
+                    self.cloud_form.update(|f| {
+                        f.working = false;
+                        f.allowed = false;
+                        f.otp = Zeroizing::default();
+                    });
+                    self.folder_browser.set(FolderBrowser { open: true, ..Default::default() });
+                    self.load_synology_folder(Vec::new());
+                }
+                // Signed in after the user left: signed out again.
+                Ok(connection) => {
+                    let bytes = connection.to_bytes();
+                    drop(blocking(move || cloud::revoke(&bytes)).await);
+                }
+                Err(e) => fail(e),
+            }
+        });
+    }
+    /// Signs out of the NAS the user was picking a folder on, if any, and closes the folder list.
+    pub fn release_synology(self) {
+        self.folder_browser.set(FolderBrowser::default());
+        if let Some(connection) = self.synology_session.replace(None) {
+            let bytes = connection.to_bytes();
+            self.task(async move { drop(blocking(move || safay_app::cloud::revoke(&bytes)).await) });
+        }
+    }
+    /// Runs `work` on the NAS sign-in held while picking a folder, off the main thread; the sign-in comes back with any
+    /// renewed session. `None` when there is none, or the user left meanwhile.
+    async fn with_synology<T: Send + 'static>(
+        self,
+        work: impl FnOnce(&mut safay_app::cloudset::Connection) -> T + Send + 'static,
+    ) -> Option<T> {
+        let mut connection = self.synology_session.replace(None)?;
+        let attempt = self.cloud_attempt.get();
+        let (connection, result) = blocking(move || {
+            let result = work(&mut connection);
+            (connection, result)
+        })
+        .await
+        .ok()?;
+        if self.cloud_attempt.get() != attempt || !self.folder_browser.with(|b| b.open) {
+            let bytes = connection.to_bytes();
+            drop(blocking(move || safay_app::cloud::revoke(&bytes)).await);
+            return None;
+        }
+        self.synology_session.replace(Some(connection));
+        Some(result)
+    }
+    fn synology_path(path: &[String]) -> safay_app::cloudset::RemotePath {
+        safay_app::cloudset::RemotePath::from_segments(path.iter().cloned()).unwrap_or_default()
+    }
+    /// Shows the folder at `path` (segments; empty for the shared folders).
+    fn load_synology_folder(self, path: Vec<String>) {
+        if self.folder_browser.with(|b| b.working) {
+            return;
+        }
+        self.folder_browser.update(|b| {
+            b.working = true;
+            b.error = None;
+            b.new_folder = None;
+        });
+        let folder = Self::synology_path(&path);
+        self.task(async move {
+            let Some(result) = self.with_synology(move |c| safay_app::cloud::synology_list(c, &folder)).await else { return };
+            self.folder_browser.update(|b| {
+                b.working = false;
+                match result {
+                    Ok(listing) => {
+                        b.path = path;
+                        b.listing = Some(listing);
+                    }
+                    Err(e) => b.error = Some(self.label(sync_error_key(e))),
+                }
+            });
+        });
+    }
+    pub fn open_synology_folder(self, name: String) {
+        let mut path = self.folder_browser.with(|b| b.path.clone());
+        path.push(name);
+        self.load_synology_folder(path);
+    }
+    pub fn synology_folder_up(self) {
+        let mut path = self.folder_browser.with(|b| b.path.clone());
+        path.pop();
+        self.load_synology_folder(path);
+    }
+    /// Starts naming a new folder in the one shown: `Safay` unless that is taken.
+    pub fn start_synology_folder(self) {
+        self.folder_browser.update(|b| {
+            let taken = b.listing.as_ref().is_some_and(|l| l.folders.iter().any(|f| f == "Safay"));
+            b.new_folder = Some(if taken { String::new() } else { "Safay".into() });
+            b.error = None;
+        });
+    }
+    /// Creates the folder being named and opens it.
+    pub fn create_synology_folder(self) {
+        let Some(name) = self.folder_browser.with(|b| b.new_folder.clone()).map(|n| n.trim().to_owned()) else { return };
+        let mut path = self.folder_browser.with(|b| b.path.clone());
+        if name.is_empty() || self.folder_browser.with(|b| b.working || b.at_top()) {
+            return;
+        }
+        let Ok(folder) = Self::synology_path(&path).join(&name) else {
+            self.folder_browser.update(|b| b.error = Some(self.label("This name can’t be used for a folder")));
+            return;
+        };
+        self.folder_browser.update(|b| {
+            b.working = true;
+            b.error = None;
+        });
+        self.task(async move {
+            let Some(result) = self.with_synology(move |c| safay_app::cloud::synology_create_folder(c, &folder)).await else { return };
+            self.folder_browser.update(|b| b.working = false);
+            match result {
+                Ok(()) => {
+                    path.push(name);
+                    self.load_synology_folder(path);
+                }
+                Err(e) => self.folder_browser.update(|b| b.error = Some(self.label(sync_error_key(e)))),
+            }
+        });
+    }
+    /// Uses the folder shown: the backup goes there (backing up: an empty folder or one with a Safay backup; restoring:
+    /// one with a backup). The sign-in is stored for it, then the location is linked or read as for any service.
+    pub fn use_synology_folder(self) {
+        let (path, usable) = self.folder_browser.with(|b| {
+            let listing = b.listing.as_ref();
+            let usable = !b.at_top()
+                && !b.working
+                && listing.is_some_and(|l| if self.cloud_restore.get_untracked() { l.has_backup } else { l.usable() });
+            (b.path.clone(), usable)
+        });
+        let Some(connection) = self.synology_session.with(|c| c.clone()).filter(|_| usable) else { return };
+        self.folder_browser.update(|b| b.working = true);
+        let folder = Self::synology_path(&path);
+        let form = self.cloud_form.get();
+        let attempt = self.cloud_attempt.get();
+        let epoch = self.controller.get().epoch();
+        self.task(async move {
+            let result = blocking(move || safay_app::cloud::synology_use_folder(connection, folder))
+                .await
+                .unwrap_or(Err(safay_app::sync::SyncError::Storage));
+            if self.cloud_attempt.get() != attempt || self.controller.get().epoch() != epoch {
+                if let Ok(safay_app::sync::Location::Cloud { credential, .. }) = result {
+                    drop(blocking(move || safay_app::cloud::forget(&credential)).await);
+                }
+                return;
+            }
+            match result {
+                Ok(location) => {
+                    // The stored sign-in carries the session on; the one held for browsing is just dropped.
+                    self.synology_session.replace(None);
+                    self.folder_browser.set(FolderBrowser::default());
+                    self.cloud_form.set(CloudForm::default());
+                    let submitted = CloudForm {
+                        address: form.address,
+                        username: form.username,
+                        password: form.password,
+                        insecure: form.insecure,
+                        trusted: form.trusted,
+                        ..Default::default()
+                    };
+                    self.connected(location, Some(Some(submitted)));
+                }
+                Err(e) => self.folder_browser.update(|b| {
+                    b.working = false;
+                    b.error = Some(self.label(sync_error_key(e)));
+                }),
             }
         });
     }
@@ -2786,6 +3109,7 @@ pub fn sync_error_key(e: safay_app::sync::SyncError) -> &'static str {
         CertificateUnverified(_) => "The server’s certificate can’t be verified",
         CertificateChanged => "The server’s certificate has changed. Set up this location again to check the new certificate",
         SignIn => "Sign in again to keep syncing",
+        OtpRequired => "Enter the verification code from your authenticator app",
         Forbidden => "The server denied access to this folder",
         Quota => "Not enough storage space on the server",
         RateLimited => "The server is busy. Try again later",

@@ -103,7 +103,7 @@
   "privacy_app_updates": "<strong>檢查更新。</strong>在你同意後，Safay 每天向 GitHub 檢查一次新版本，並從那裡下載。要求中不包含任何關於你或你的保險庫的資訊。可以在「設定」中關閉。",
   "privacy_app_none": "Safay 沒有任何形式的遙測、當機回報、廣告或追蹤。",
   "privacy_backup_title": "備份與同步",
-  "privacy_backup_where": "<strong>備份只去你選擇的地方。</strong>備份預設關閉。打開後，你需要選擇一個位置：iCloud、Dropbox、OneDrive、Google Drive、Nextcloud、WebDAV 伺服器或一個檔案夾。連線從你的裝置直接到該服務，中間沒有 Safay 的伺服器，我們也看不到它。",
+  "privacy_backup_where": "<strong>備份只去你選擇的地方。</strong>備份預設關閉。打開後，你需要選擇一個位置：iCloud、Dropbox、OneDrive、Google Drive、Nextcloud、Synology NAS、WebDAV 伺服器或一個檔案夾。連線從你的裝置直接到該服務，中間沒有 Safay 的伺服器，我們也看不到它。使用 Synology QuickConnect ID 時，由 Synology 的 QuickConnect 服務尋找你的 NAS；無法直接連線時，由它轉送加密的連線。",
   "privacy_backup_what": "<strong>離開裝置的只有密文。</strong>Safay 上傳兩個檔案：加密後的保險庫，以及一個很小的後設資料檔案，裡面是裝置名稱和備份時間。沒有你的主密碼，儲存服務商和其他任何人都讀不到你的帳號。",
   "privacy_backup_icloud": "<strong>iCloud。</strong>Safay 透過系統使用你的 iCloud 私人資料庫。它不讀取其他 iCloud 資料，只記住一個不透明的帳號識別碼，以便在裝置切換到另一個 Apple 帳號時停止同步。",
   "privacy_cloud_title": "Google Drive、Dropbox 和 OneDrive",

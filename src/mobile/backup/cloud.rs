@@ -22,7 +22,7 @@ pub fn setup_sheet(s: Store) -> impl IntoElement {
     });
     let close = move || {
         // After the browser came back, the sign-in finishes: nothing to leave then.
-        if s.cloud_form.with(|f| f.working && !f.waiting && !matches!(connecting(s), Some(Provider::Nextcloud | Provider::Webdav))) {
+        if s.cloud_form.with(|f| f.working && !f.waiting && !connecting(s).is_some_and(Provider::has_server)) {
             return;
         }
         dismiss_keyboard();
@@ -41,12 +41,7 @@ pub fn setup_sheet(s: Store) -> impl IntoElement {
 fn setup(s: Store, provider: Provider, close: impl Fn() + Copy + 'static) -> impl IntoElement {
     let restore = move || s.cloud_restore.get();
     let oauth = is_oauth(provider);
-    let ready = move || {
-        oauth
-            || s.cloud_form.with(|f| {
-                !f.address.trim().is_empty() && (provider != Provider::Webdav || (!f.username.trim().is_empty() && !f.password.is_empty()))
-            })
-    };
+    let ready = move || oauth || s.cloud_form.with(|f| crate::pages::backup::form_ready(provider, f));
     let go = move || {
         if !ready() || s.cloud_form.with(|f| f.working) {
             return;
@@ -82,7 +77,9 @@ fn setup(s: Store, provider: Provider, close: impl Fn() + Copy + 'static) -> imp
                         .pt(px(8.0))
                         .gap(px(20.0))
                         .child(pairing(s, provider))
-                        .child(when(move || oauth, move || oauth_body(s, provider)).otherwise(move || server_body(s, provider, go)))
+                        .child(when(move || s.folder_browser.with(|b| b.open), move || folder_browser(s)).otherwise(move || {
+                            when(move || oauth, move || oauth_body(s, provider)).otherwise(move || server_body(s, provider, go))
+                        }))
                         .child(when(
                             move || s.cloud_form.with(|f| f.error.is_some()),
                             move || {
@@ -104,13 +101,28 @@ fn setup(s: Store, provider: Provider, close: impl Fn() + Copy + 'static) -> imp
                     })
                 })
                 .otherwise(move || {
-                    ui::primary_button(
-                        move || s.label(if oauth { "Sign In" } else { "Connect" }),
-                        ready,
-                        move || s.cloud_form.with(|f| f.working),
+                    // Picking a Synology folder: the button uses the folder shown.
+                    when(
+                        move || s.folder_browser.with(|b| b.open),
+                        move || {
+                            ui::primary_button(
+                                move || s.label("Use This Folder"),
+                                move || crate::pages::backup::folder_usable(s),
+                                move || s.folder_browser.with(|b| b.working),
+                            )
+                            .test_id("use-folder")
+                            .on_press(move || s.use_synology_folder())
+                        },
                     )
-                    .test_id("connect")
-                    .on_press(go)
+                    .otherwise(move || {
+                        ui::primary_button(
+                            move || s.label(if oauth { "Sign In" } else { "Connect" }),
+                            ready,
+                            move || s.cloud_form.with(|f| f.working),
+                        )
+                        .test_id("connect")
+                        .on_press(go)
+                    })
                 }),
             ),
         )
@@ -149,6 +161,7 @@ fn pairing(s: Store, provider: Provider) -> impl IntoElement {
             ui::title(text(move || {
                 s.label(match provider {
                     Provider::Webdav => "Connect to your own server or NAS",
+                    Provider::Synology => "Sign in to your Synology NAS",
                     Provider::Nextcloud => "Sign in with your Nextcloud account",
                     Provider::Dropbox => "Sign in with your Dropbox account",
                     Provider::Onedrive => "Sign in with your Microsoft account",
@@ -158,7 +171,7 @@ fn pairing(s: Store, provider: Provider) -> impl IntoElement {
             .text_center(),
         )
         .child(
-            ui::dim(ui::body(text(move || match (s.cloud_restore.get(), provider == Provider::Webdav) {
+            ui::dim(ui::body(text(move || match (s.cloud_restore.get(), matches!(provider, Provider::Webdav | Provider::Synology)) {
                 (false, true) => s.label("Only the encrypted vault is stored on your server."),
                 (false, false) => s.fmt("Only the encrypted vault is stored in {}.", &[provider.name()]),
                 (true, true) => s.label("Safay only reads your encrypted backup from your server."),
@@ -202,14 +215,6 @@ fn oauth_body(s: Store, provider: Provider) -> impl IntoElement {
                     s.fmt(key, &[provider.name()])
                 }))))),
         )
-        .child(when(
-            move || provider == Provider::GoogleDrive && !s.cloud_restore.get(),
-            move || {
-                ui::dim(ui::caption(text(move || {
-                    s.fmt("After the first backup, Safay asks before it uploads changes to {}.", &[provider.name()])
-                })))
-            },
-        ))
         .child(steps(
             vec![
                 Box::new(move || s.fmt("Sign in to {} and allow Safay", &[provider.name()])),
@@ -257,14 +262,18 @@ fn steps(labels: Vec<Box<dyn Fn() -> SharedString>>, phase: impl Fn() -> usize +
 fn server_body(s: Store, provider: Provider, go: impl Fn() + Copy + 'static) -> impl IntoElement {
     let username = element_ref();
     let password = element_ref();
-    let webdav = provider == Provider::Webdav;
+    let otp = element_ref();
+    let synology = provider == Provider::Synology;
+    let webdav = provider == Provider::Webdav || synology;
+    // After the password, Synology's optional code; WebDAV connects.
+    let after_password = move || if synology { otp.focus() } else { go() };
     view()
         .gap(px(12.0))
         .child(ui::field(
             s,
             "server-address",
             Entry::Text,
-            move || s.label("Server Address"),
+            move || s.label(if synology { "QuickConnect ID or Address" } else { "Server Address" }),
             move || s.cloud_form.with(|f| f.address.clone()),
             move |v| {
                 s.cloud_form.update(|f| {
@@ -282,10 +291,10 @@ fn server_body(s: Store, provider: Provider, go: impl Fn() + Copy + 'static) -> 
         ))
         .child(
             ui::dim(ui::caption(text(move || {
-                s.label(if webdav {
-                    "The WebDAV address of the folder, for example https://example.com/remote.php/webdav/"
-                } else {
-                    "For example https://cloud.example.com. You’ll sign in and allow Safay in your browser."
+                s.label(match provider {
+                    Provider::Webdav => "The WebDAV address of the folder, for example https://example.com/remote.php/webdav/",
+                    Provider::Synology => "For example my-nas, or https://192.168.1.10:5001 on your network",
+                    _ => "For example https://cloud.example.com. You’ll sign in and allow Safay in your browser.",
                 })
             })))
             .px(px(16.0)),
@@ -315,12 +324,38 @@ fn server_body(s: Store, provider: Provider, go: impl Fn() + Copy + 'static) -> 
                         move || s.label("Password"),
                         move || s.cloud_form.with(|f| f.password.to_string()),
                         move |v| s.cloud_form.update(|f| f.password = Zeroizing::new(v.to_owned())),
+                        after_password,
+                        |_| {},
+                        || false,
+                        if synology { ReturnKeyType::Next } else { ReturnKeyType::Go },
+                        Some(password),
+                    ))
+            },
+        ))
+        .child(when(
+            move || synology,
+            move || {
+                view()
+                    .gap(px(12.0))
+                    .child(ui::field(
+                        s,
+                        "server-otp",
+                        Entry::Text,
+                        move || s.label("Verification Code (Optional)"),
+                        move || s.cloud_form.with(|f| f.otp.to_string()),
+                        move |v| s.cloud_form.update(|f| f.otp = Zeroizing::new(v.to_owned())),
                         go,
                         |_| {},
                         || false,
                         ReturnKeyType::Go,
-                        Some(password),
+                        Some(otp),
                     ))
+                    .child(
+                        ui::dim(ui::caption(text(move || {
+                            s.label("Only if this account uses two-step verification: the code from your authenticator app.")
+                        })))
+                        .px(px(16.0)),
+                    )
             },
         ))
         .child(when(
@@ -342,6 +377,130 @@ fn server_body(s: Store, provider: Provider, go: impl Fn() + Copy + 'static) -> 
                             &[provider.name()],
                         )
                     }))))
+            },
+        ))
+}
+
+/// Picking the Synology folder for the backup: the folder's path with up and New Folder, its subfolders, and what it
+/// means for the backup.
+fn folder_browser(s: Store) -> impl IntoElement {
+    use crate::pages::backup::{backup_saved, folder_hint, folder_title};
+    let busy = move || s.folder_browser.with(|b| b.working);
+    let rows = move || {
+        let folders = s.folder_browser.with(|b| b.listing.as_ref().map(|l| l.folders.clone()));
+        let backup = s.folder_browser.with(|b| b.listing.as_ref().filter(|l| l.has_backup).map(|l| l.backup_saved_ms));
+        let found = move || {
+            view()
+                .flex_row()
+                .items_center()
+                .gap(px(16.0))
+                .px(px(16.0))
+                .h(px(64.0))
+                .child(view().text_color(move || theme().primary).child(icon(Icon::LockShieldFill).size(px(22.0))))
+                .child(
+                    view()
+                        .flex_1()
+                        .gap(px(2.0))
+                        .child(ui::label(text(move || s.label("Safay Backup Found"))))
+                        .child(ui::dim(ui::caption(text(move || backup_saved(s, backup.flatten()))))),
+                )
+        };
+        match folders {
+            None => view().h(px(96.0)).items_center().justify_center().child(crate::components::spinner(20.0)).into_element(),
+            Some(folders) if folders.is_empty() && backup.is_some() => found().into_element(),
+            Some(folders) if folders.is_empty() => view()
+                .h(px(96.0))
+                .items_center()
+                .justify_center()
+                .child(ui::dim(ui::body(text(move || s.label("No folders")))))
+                .into_element(),
+            Some(folders) => view()
+                .child(when(move || backup.is_some(), found))
+                .children(folders.into_iter().map(|name| {
+                    let label = name.clone();
+                    nsh_base::button()
+                        .accessibility_label({
+                            let name = name.clone();
+                            move || Some(name.clone().into())
+                        })
+                        .disabled(busy)
+                        .flex_row()
+                        .items_center()
+                        .gap(px(16.0))
+                        .px(px(16.0))
+                        .h(px(56.0))
+                        .on_press(move || s.open_synology_folder(name.clone()))
+                        .child(view().text_color(move || theme().primary).child(icon(Icon::FolderFill).size(px(22.0))))
+                        .child(ui::body_large(text(label)).flex_1().number_of_lines(1))
+                        .child(view().text_color(move || theme().muted_foreground).child(icon(Icon::ChevronRight).size(px(16.0))))
+                        .into_element()
+                }))
+                .into_element(),
+        }
+    };
+    view()
+        .gap(px(12.0))
+        .child(
+            view()
+                .flex_row()
+                .items_center()
+                .gap(px(4.0))
+                .child(
+                    ui::icon_button(move || s.label("Back"), || Icon::ChevronLeft)
+                        .disabled(move || busy() || s.folder_browser.with(|b| b.at_top()))
+                        .on_press(move || s.synology_folder_up()),
+                )
+                .child(ui::title(text(move || folder_title(s))).flex_1().number_of_lines(1))
+                .child(when(
+                    move || crate::pages::backup::can_create_folder(s),
+                    move || {
+                        ui::icon_button(move || s.label("New Folder"), || Icon::FolderPlus)
+                            .disabled(move || busy() || s.folder_browser.with(|b| b.at_top() || b.new_folder.is_some()))
+                            .on_press(move || s.start_synology_folder())
+                    },
+                )),
+        )
+        .child(when(
+            move || s.folder_browser.with(|b| b.new_folder.is_some()),
+            move || {
+                view()
+                    .gap(px(8.0))
+                    .child(ui::field(
+                        s,
+                        "new-folder",
+                        Entry::Text,
+                        move || s.label("Folder Name"),
+                        move || s.folder_browser.with(|b| b.new_folder.clone().unwrap_or_default()),
+                        move |v| s.folder_browser.update(|b| b.new_folder = Some(v.to_owned())),
+                        move || s.create_synology_folder(),
+                        |_| {},
+                        || false,
+                        ReturnKeyType::Done,
+                        None,
+                    ))
+                    .child(
+                        view()
+                            .flex_row()
+                            .justify_end()
+                            .gap(px(4.0))
+                            .child(
+                                ui::text_button(move || s.label("Cancel"), false)
+                                    .on_press(move || s.folder_browser.update(|b| b.new_folder = None)),
+                            )
+                            .child(ui::text_button(move || s.label("Create"), true).on_press(move || s.create_synology_folder())),
+                    )
+            },
+        ))
+        .child(view().rounded(px(24.0)).bg(move || theme().secondary).overflow_hidden().child(dynamic(rows)))
+        .child(when(
+            move || folder_hint(s).is_some(),
+            move || ui::dim(ui::caption(text(move || folder_hint(s).map(|(_, t)| t).unwrap_or_default()))).px(px(16.0)),
+        ))
+        .child(when(
+            move || s.folder_browser.with(|b| b.error.is_some()),
+            move || {
+                ui::body(text(move || s.folder_browser.with(|b| b.error.clone().unwrap_or_default())))
+                    .text_color(move || theme().destructive)
             },
         ))
 }

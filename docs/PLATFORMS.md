@@ -12,7 +12,7 @@ marked *coded* are written and untested on a real system. The interface shows a 
 |---|---|---|---|---|
 | Vault, accounts, categories, codes, import and export | Yes | Coded | Coded | Yes (exports go to the share sheet) |
 | Folder backup | Yes | Coded | Coded | — |
-| WebDAV and Nextcloud backup | Yes | Coded (Credential Manager) | Yes (the Secret Service: GNOME Keyring, KWallet) | Yes |
+| WebDAV, Nextcloud and Synology backup | Yes | Coded (Credential Manager) | Yes (the Secret Service: GNOME Keyring, KWallet) | Yes |
 | Dropbox, OneDrive, Google Drive | Yes | Coded (sign-in in the browser) | Coded (sign-in in the browser) | Yes (sign-in in a Custom Tab) |
 | iCloud | Yes | — | — | — |
 | Touch ID / hardware-protected unlock | Touch ID | Planned: Windows Hello key release | Not planned (no common hardware key API) | Strong biometrics (a Keystore key) |

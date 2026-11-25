@@ -802,7 +802,7 @@ fn restore_locations(s: Store) -> impl IntoElement {
     }
     if crate::platform::supports::CLOUD {
         use safay_app::cloud::Provider;
-        for provider in [Provider::Dropbox, Provider::Onedrive, Provider::GoogleDrive, Provider::Nextcloud, Provider::Webdav] {
+        for provider in Provider::LISTED {
             if super::backup::oauth_configured(provider) {
                 cells.push(
                     location_cell(

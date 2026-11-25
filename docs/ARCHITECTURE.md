@@ -17,7 +17,7 @@ application layer owns the single unlocked session; the interface is written wit
 | `previews/` | Debug-only, in-memory entry points for UI tests and screenshots. |
 | `locales/`, `theme*.json`, `assets/` | Translations, design tokens per platform, fonts and images. |
 
-Cloud storage protocols (WebDAV, Nextcloud, Dropbox, OneDrive, Google Drive) come from the
+Cloud storage protocols (WebDAV, Nextcloud, Synology, Dropbox, OneDrive, Google Drive) come from the
 [cloudset](https://crates.io/crates/cloudset) crate, a sans-IO client: it builds requests, parses responses and
 advances state machines, and `src/platform/http.rs` sends the requests.
 
@@ -66,8 +66,14 @@ so a development build never touches a release build's data:
 
 Exports are encrypted files of the same format with their own salt, marked `"app": "safay"`. A backup location holds
 `vault.safayvault` (the vault as is) and `vault.metadata.json` (device name and time): in a `Safay` folder inside the
-chosen folder or the WebDAV and Nextcloud account, and at the root of Safay's app folder on Dropbox, OneDrive and Google
-Drive ("Apps › Safay", or the folder named for it in My Drive). iCloud keeps them in one CloudKit record.
+chosen folder or the WebDAV and Nextcloud account, in the folder picked on a Synology NAS, and at the root of Safay's
+app folder on Dropbox, OneDrive and Google Drive ("Apps › Safay", or the folder named for it in My Drive). iCloud keeps
+them in one CloudKit record.
+
+A Synology sign-in reaches the whole NAS (`cloud::synology_sign_in`) and stays in memory while the user picks a folder
+inside a shared folder: an empty one or one with a Safay backup when backing up, one with a backup when restoring. The
+connection then moves to that folder (`Connection::with_root_folder`, keeping the session) and is stored like any
+other; leaving or locking before then signs out.
 
 ## Backup and sync
 
@@ -81,13 +87,15 @@ difference: a merge keeps the deletion of an account deleted on either side, so 
 
 ### Cloud backup consistency
 
-Automatic uploads that replace a backup require an atomic revision check. If the provider cannot enforce it, the
-upload waits (`SyncError::ManualWriteRequired`, shown as a warning and not recorded as a failure) and Backup & Sync
-offers **Upload**. Approving runs the sync again (`sync::replace`): the backup is read and compared once more, so a
-change from another device becomes a conflict, and only then is the backup written without the check. Google Drive
-writes need this approval, as do versioned OneDrive writes that use an upload session and WebDAV overwrites with a
-weak or missing revision. The first backup replaces nothing, so it is uploaded without asking even where the
-provider cannot create a file atomically; the sign-in page for Google Drive says that later uploads ask.
+An upload that replaces a backup is conditional on the version the sync compared against. Where the provider enforces
+the condition atomically (Dropbox, OneDrive single requests, WebDAV and Nextcloud with strong ETags, iCloud), a change
+from another device makes the write fail. Where it cannot (Google Drive, Synology, OneDrive upload sessions, WebDAV
+with weak ETags), `CloudBackend` checks the version just before the upload and reads the file back after it; a
+difference either way is reported as `SyncError::RemoteChanged`, and the sync reads and compares again, so the other
+device's change becomes a conflict. Only another device's upload within those moments can still be replaced. Synology
+files have no revision: their modification time is the version. A backup with no version at all (a WebDAV server
+without ETags) cannot be checked, so its upload waits (`SyncError::ManualWriteRequired`, shown as a warning and not
+recorded as a failure) until the user approves it in Backup & Sync (`sync::replace`, which compares once more first).
 A completed upload with an uncertain outcome is checked by reading back the ciphertext. Sync records its baseline
 only when the upload succeeded or the read returned the same bytes. The cloud upload and restore limits both use
 `storage::MAX_FILE_BYTES` (16 MiB). Refreshed credentials go to the credential store before the next HTTP request.
