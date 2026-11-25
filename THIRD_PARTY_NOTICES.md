@@ -9,7 +9,7 @@ Safay, including `safay-core` and `safay-app`, is licensed under MIT. NSH is lic
 
 ## Backup location brand marks
 
-- Source: the iCloud, Dropbox and Nextcloud shapes come from Simple Icons 11.15.0 with brand colors added; the OneDrive and Google Drive marks were drawn for this project.
+- Source: the iCloud, Dropbox and Nextcloud shapes come from Simple Icons 11.15.0 with brand colors added; the OneDrive and Google Drive marks were drawn for this project, and `synology.svg` is a generic NAS drawn for this project (not Synology's logo).
 - License: the Simple Icons shapes are CC0 1.0. The marks are trademarks of Apple, Dropbox, Microsoft, Google and Nextcloud, used only to identify the corresponding service in the backup location list; no partnership or endorsement is implied.
 - Location: `assets/brands/`; used only by `src/pages/backup.rs::location_mark`. Removal: delete the files and fall back to the generic symbols.
 

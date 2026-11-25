@@ -613,6 +613,15 @@ pub fn location_mark(kind: LocationIcon, size: f32) -> impl IntoElement + Styled
         .justify_center()
         // `.quaternary.opacity(0.6)`.
         .bg(move || theme().foreground.opacity(0.06));
+    // Synology: a NAS drawn for this project in one color, tinted and sized as the symbols are.
+    if kind == LocationIcon::Cloud(Provider::Synology) {
+        return plate.child(
+            svg(nsh_core::element::ImageSrc::svg_markup(include_str!("../../assets/brands/synology.svg")))
+                .size(px(size * 0.5 * 24.0 / 17.0))
+                .text_color(move || tok("code-accent"))
+                .into_element(),
+        );
+    }
     match brand {
         Some(markup) => {
             plate.child(svg(nsh_core::element::ImageSrc::svg_markup(markup)).size(px(size * 0.62)).overflow_hidden().into_element())
