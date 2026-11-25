@@ -999,6 +999,10 @@ fn render_icon(png: &[u8]) -> Option<(String, bool)> {
 /// A small indeterminate spinner; its interval belongs to the
 /// view and stops with it.
 pub fn spinner(size: f32) -> impl IntoElement {
+    spinner_in(size, move || theme().muted_foreground)
+}
+/// As [`spinner`], in `color` (on a filled button, its label's color).
+pub fn spinner_in(size: f32, color: impl Fn() -> AdaptiveColor + 'static) -> impl IntoElement {
     let angle = signal(0.0_f32);
     set_interval(std::time::Duration::from_millis(80), move || {
         angle.update(|a| *a = (*a + std::f32::consts::PI / 6.0) % std::f32::consts::TAU)
@@ -1008,6 +1012,6 @@ pub fn spinner(size: f32) -> impl IntoElement {
             "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round'><path d='M12 3a9 9 0 1 1-9 9' /></svg>",
         ))
         .size(px(size))
-        .text_color(move || theme().muted_foreground),
+        .text_color(color),
     )
 }

@@ -108,11 +108,22 @@ pub fn primary_button(
         .ease_out()
         .active(|s| s.opacity(0.88))
         .disabled(move || !enabled() || busy())
-        .child(when(busy, || crate::components::spinner(20.0)).otherwise(move || {
-            label(text(label_))
-                .text_size(px(16.0))
-                .text_color(move || if enabled() { theme().primary_foreground } else { theme().foreground.opacity(0.38) })
-        }))
+        // The spinner takes the label's color, so it reads on the filled button.
+        .child(
+            when(busy, move || {
+                crate::components::spinner_in(
+                    20.0,
+                    move || {
+                        if enabled() { theme().primary_foreground } else { theme().foreground.opacity(0.38) }
+                    },
+                )
+            })
+            .otherwise(move || {
+                label(text(label_))
+                    .text_size(px(16.0))
+                    .text_color(move || if enabled() { theme().primary_foreground } else { theme().foreground.opacity(0.38) })
+            }),
+        )
 }
 /// A secondary action beside or under a primary one: 48 pt, outlined.
 pub fn outlined_button(label_: impl Fn() -> SharedString + Copy + 'static) -> nsh_base::ButtonElement {

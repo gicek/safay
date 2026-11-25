@@ -763,7 +763,7 @@ fn restore(s: Store) -> impl IntoElement {
                     push_button(move || s.label("Unlock & Continue"), Kind::Primary, true)
                         .disabled(move || !ready() || s.busy.get())
                         .on_press(submit)
-                        .child(when(move || s.busy.get(), || spinner(12.0))),
+                        .child(when(move || s.busy.get(), || spinner_in(12.0, move || theme().primary_foreground))),
                 )
         }),
     )
