@@ -717,6 +717,25 @@ def settings_dialogs(r: Run):
     r.check(bool(t) and s.visible(t[0]), "the WebDAV sheet stays on screen above the keyboard")
     d.hide_keyboard()
     d.tap("Close")
+
+    # Synology: the NAS, the account and an optional code; the folder is picked after signing in. Closing a sheet goes
+    # back to Settings, so the locations are opened again.
+    d.tap("backup-set-up", settle=1.2)
+    d.wait("Choose Location")
+    d.tap("Synology", 0, settle=1.2)
+    s = d.wait("Connect to Synology")
+    r.check(
+        all(s.has(x) for x in ("QuickConnect ID or Address", "Username", "Password", "Verification Code (Optional)"))
+        and not s.has("Shared Folder"),
+        "the Synology sheet asks for the NAS, the account and an optional code",
+    )
+    d.fill("QuickConnect ID or Address", "my-nas")
+    s = d.screen()
+    t = s.find("Connect to Synology")
+    r.check(bool(t) and s.visible(t[0]), "the Synology sheet stays on screen above the keyboard")
+    d.hide_keyboard()
+    d.shot("backup-synology")
+    d.tap("Close")
     d.tap("Back")
 
 
