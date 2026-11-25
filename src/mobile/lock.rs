@@ -1,6 +1,7 @@
-//! The lock screen: the mark, "Safay is locked" and the password field in one centered group. The keyboard's Go key
-//! unlocks; there is no button.
-use super::ui::{self, Entry};
+//! The lock screen: the mark, "Safay is locked", what unlocks it and the password field in one centered group. Under
+//! the field, a round button: the fingerprint where biometrics unlock, else an arrow that does what the keyboard's Go
+//! key does.
+use super::ui;
 use crate::{components::app_icon, store::Store};
 use nsh_base::theme;
 use nsh_core::prelude::*;
@@ -42,12 +43,23 @@ pub fn page(s: Store) -> impl IntoElement {
                     .max_w(px(400.0))
                     .items_center()
                     .child(app_icon(120.0))
-                    .child(ui::headline(text(move || s.label("Safay is locked"))).mt(px(16.0)).mb(px(56.0)))
+                    .child(ui::headline(text(move || s.label("Safay is locked"))).mt(px(16.0)).mb(px(40.0)))
+                    // What unlocks it, over a field of its own shape: the field needs no label then.
                     .child(
-                        ui::field(
+                        ui::dim(ui::body(text(move || {
+                            s.label(if s.touch_id_ready() {
+                                "Use your master password or fingerprint to unlock"
+                            } else {
+                                "Use your master password to unlock"
+                            })
+                        })))
+                        .text_center()
+                        .mb(px(12.0)),
+                    )
+                    .child(
+                        ui::pill_password(
                             s,
                             "password",
-                            Entry::Password,
                             move || s.label("Master Password"),
                             move || s.form.with(|f| f.password.to_string()),
                             move |v| {
@@ -55,10 +67,7 @@ pub fn page(s: Store) -> impl IntoElement {
                                 s.form.update(|f| f.password = Zeroizing::new(v.to_owned()));
                             },
                             submit,
-                            |_| {},
                             move || s.error.get().is_some(),
-                            ReturnKeyType::Go,
-                            None,
                         )
                         .w_full(),
                     )
@@ -69,27 +78,49 @@ pub fn page(s: Store) -> impl IntoElement {
                             .mt(px(12.0))
                             .text_color(move || theme().destructive),
                     )
-                    .child(when(
-                        move || s.touch_id_ready(),
-                        move || {
-                            nsh_base::button()
-                                .test_id("biometric")
-                                .accessibility_label(move || Some(s.label("Unlock with biometrics")))
-                                .size(px(68.0))
-                                .mt(px(8.0))
-                                .items_center()
-                                .justify_center()
-                                .rounded_full()
-                                .text_color(move || theme().primary)
-                                .active(|st| st.bg(move || crate::components::tok("pressed")))
-                                .disabled(move || s.busy.get())
-                                .on_press(move || {
-                                    dismiss_keyboard();
-                                    s.unlock_touch_id()
-                                })
-                                .child(crate::icons::icon(crate::icons::Icon::TouchId).size(px(44.0)))
-                        },
-                    )),
+                    // A round button under it: the fingerprint where it unlocks, else Enter's arrow.
+                    .child(
+                        when(
+                            move || s.touch_id_ready(),
+                            move || {
+                                round_action(s)
+                                    .test_id("biometric")
+                                    .accessibility_label(move || Some(s.label("Unlock with biometrics")))
+                                    .disabled(move || s.busy.get())
+                                    .on_press(move || {
+                                        dismiss_keyboard();
+                                        s.unlock_touch_id()
+                                    })
+                                    .child(crate::icons::icon(crate::icons::Icon::TouchId).size(px(36.0)))
+                            },
+                        )
+                        .otherwise(move || {
+                            let ready = move || waiting() == 0 && s.form.with(|f| !f.password.is_empty());
+                            round_action(s)
+                                .test_id("unlock")
+                                .accessibility_label(move || Some(s.label("Unlock")))
+                                .disabled(move || !ready() || s.busy.get())
+                                .opacity(move || if ready() || s.busy.get() { 1.0_f32 } else { 0.38 })
+                                .on_press(submit)
+                                .child(
+                                    when(move || s.busy.get(), move || crate::components::spinner_in(24.0, move || theme().primary))
+                                        .otherwise(|| crate::icons::icon(crate::icons::Icon::ArrowRight).size(px(28.0))),
+                                )
+                        }),
+                    ),
             ),
     )
+}
+
+/// The round button under the password field: 64 pt on a tint of the accent, the glyph in the accent.
+fn round_action(_s: Store) -> nsh_base::ButtonElement {
+    nsh_base::button()
+        .size(px(64.0))
+        .mt(px(8.0))
+        .items_center()
+        .justify_center()
+        .rounded_full()
+        .bg(move || theme().primary.opacity(0.12))
+        .text_color(move || theme().primary)
+        .active(|st| st.bg(move || theme().primary.opacity(0.2)))
 }

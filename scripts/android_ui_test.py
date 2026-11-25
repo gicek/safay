@@ -793,17 +793,22 @@ def lock(r: Run):
     d.tap("Lock Now", settle=1.5)
     s = d.wait("Safay is locked")
     r.check(s.has("Safay is locked"), "Lock Now locks")
-    d.fill("Master Password", "wrong-password")
+    r.check(s.has("Use your master password to unlock") and s.has("unlock"), "it says what unlocks it, with Enter's arrow")
+    d.shot("lock")
+    # The field has no label on screen: it is found by its ID.
+    d.tap("password", settle=0.5)
+    d.type("wrong-password")
     d.key(66, settle=2.0)
     s = d.screen()
     r.check(
         s.has("Incorrect master password", exact=False) or s.has("incorrect", exact=False),
         "a wrong password is called out",
     )
-    d.fill("Master Password", PASSWORD)
-    d.key(66, settle=2.5)
+    d.tap("password", settle=0.5)
+    d.type(PASSWORD)
+    d.tap("unlock", settle=2.5)
     s = d.wait(ROW, exact=False)
-    r.check(len(rows(s)) == 3, "the right password unlocks to the list")
+    r.check(len(rows(s)) == 3, "the right password, and the arrow, unlock to the list")
 
 
 def back_navigation(r: Run):

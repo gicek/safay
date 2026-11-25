@@ -46,6 +46,8 @@ pub enum Icon {
     WarningFill,
     FolderFill,
     ServerRack,
+    /// Go on, as the keyboard's Enter: a right arrow.
+    ArrowRight,
     LockFill,
     LockOpenFill,
     CameraViewfinder,
@@ -155,6 +157,7 @@ fn shape(name: Icon) -> &'static str {
         Icon::FolderFill => {
             "<path fill='currentColor' d='M3.5 7V6a1.5 1.5 0 0 1 1.5-1.5h4.4l2 2.5h7.6A1.5 1.5 0 0 1 20.5 8.5v9.5a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 18Z'/>"
         }
+        Icon::ArrowRight => "<path d='M5 12h14M13 6l6 6-6 6' stroke-width='2'/>",
         Icon::ServerRack => {
             "<rect x='4' y='4.5' width='16' height='6' rx='1.5'/><rect x='4' y='13.5' width='16' height='6' rx='1.5'/><path d='M7.5 7.5h.01M7.5 16.5h.01'/>"
         }

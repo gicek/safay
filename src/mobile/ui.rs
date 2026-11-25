@@ -415,6 +415,63 @@ pub fn field(
         }))
 }
 
+/// A password field in a capsule, with no label of its own on screen (the text above it says what it is; `label_` is for
+/// screen readers): 56 pt, outlined as `field` is, the show and hide control at its end.
+#[allow(clippy::too_many_arguments)]
+pub fn pill_password(
+    s: Store,
+    id: &'static str,
+    label_: impl Fn() -> SharedString + Copy + 'static,
+    get: impl Fn() -> String + Copy + 'static,
+    set: impl Fn(&str) + 'static,
+    on_submit: impl Fn() + 'static,
+    error: impl Fn() -> bool + Copy + 'static,
+) -> impl IntoElement + Styled {
+    let focused = signal(false);
+    let shown = signal(false);
+    let me = element_ref();
+    outlined(focused, error, me)
+        .mt(px(0.0))
+        .rounded_full()
+        .flex_row()
+        .items_center()
+        .min_h(move || px(CONTROL) * font_scale())
+        .pl(px(24.0))
+        .pr(px(8.0))
+        .child(
+            view().flex_1().min_w(px(0.0)).justify_center().child(
+                themed_input(input())
+                    .element_ref(&me)
+                    .test_id(id)
+                    .label(label_)
+                    .masked(move || !shown.get())
+                    .font_family(move || SharedString::from(if shown.get() { CODE_FONT.family } else { "system-ui" }))
+                    .value(get)
+                    .on_change(move |v: &str| {
+                        s.controller.get().activity();
+                        set(v);
+                    })
+                    .on_submit(move |_: &str| on_submit())
+                    .on_focus(move |_: &()| focused.set(true))
+                    .on_blur(move |_: &()| focused.set(false))
+                    .return_key_type(ReturnKeyType::Go)
+                    .auto_correct(false)
+                    .auto_capitalize(nsh_core::AutoCapitalize::None)
+                    .auto_fill(nsh_core::AutoFill::Off)
+                    .text_size(px(16.0))
+                    .text_color(move || theme().foreground)
+                    .disabled(move || s.busy.get()),
+            ),
+        )
+        .child(
+            icon_button(
+                move || s.label(if shown.get() { "Hide password" } else { "Show password" }),
+                move || if shown.get() { Icon::EyeSlash } else { Icon::Eye },
+            )
+            .on_press(move || shown.update(|v| *v = !*v)),
+        )
+}
+
 /// A text field of several lines, `height` points tall at least, outlined as `field` is. Down, its label stands on
 /// the first line; `placeholder` shows only once the label has floated, while the field is empty.
 #[allow(clippy::too_many_arguments)]
