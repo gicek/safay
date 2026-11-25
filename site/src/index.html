@@ -19,13 +19,13 @@
             <span class="h1-sub">{{hero_title_sub}}</span>
           </h1>
           <div class="cta-row">
-            <a class="button" href="{{@link mac}}">
+            <a class="button" href="{{@link mac}}" data-android-href="{{@link android}}">
               <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M10 3v10m0 0-4-4m4 4 4-4M4 16.5h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              {{hero_cta}}
+              <span data-android-text="{{dl_android_cta}}">{{hero_cta}}</span>
             </a>
             <a class="text-link" href="{{@link repository}}">{{hero_source}} <span aria-hidden="true">→</span></a>
           </div>
-          <p class="fine">{{hero_cta_note}}</p>
+          <p class="fine" data-android-text="{{hero_cta_note_android}}">{{hero_cta_note}}</p>
         </div>
         <div class="wrap-wide">
           <img class="hero-shot" src="{{@shot main-split}}" width="1960" height="1360" alt="{{shot_main_alt}}" fetchpriority="high">
@@ -164,14 +164,14 @@
           <div class="section-copy">
             <p class="eyebrow">{{dl_kicker}}</p>
             <h2>{{dl_title}}</h2>
-            <p>{{dl_body}}</p>
+            <p data-android-text="{{dl_body_android}}">{{dl_body}}</p>
           </div>
           <div class="download-actions">
-            <a class="button" href="{{@link mac}}">
+            <a class="button" href="{{@link mac}}" data-android-href="{{@link android}}">
               <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M10 3v10m0 0-4-4m4 4 4-4M4 16.5h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              {{hero_cta}}
+              <span data-android-text="{{dl_android_cta}}">{{hero_cta}}</span>
             </a>
-            <p class="fine">{{dl_meta}}</p>
+            <p class="fine" data-android-text="{{dl_meta_android}}">{{dl_meta}}</p>
             <p class="download-links">
               <a href="{{@link changelog}}">{{dl_changelog}}</a>
               <a href="{{@link releases}}">{{dl_all_releases}}</a>
@@ -181,8 +181,9 @@
               <li><span>Windows</span><span class="platform-state">{{platform_soon}}</span></li>
               <li><span>Linux</span><span class="platform-state">{{platform_soon}}</span></li>
               <li><span>{{platform_ios}}</span><span class="platform-state">{{platform_soon}}</span></li>
-              <li><span>Android</span><span class="platform-state">{{platform_soon}}</span></li>
+              <li class="is-available"><span>Android</span><a class="platform-state" href="{{@link android}}">{{platform_apk}}</a></li>
             </ul>
+            <p class="fine">{{dl_android_note}}<a href="{{@link android_32}}">{{dl_android_32}}</a></p>
           </div>
         </div>
       </section>

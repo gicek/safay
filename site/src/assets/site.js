@@ -32,6 +32,12 @@
     if (event.key === "Escape") document.querySelectorAll(".lang-menu[open]").forEach((menu) => menu.removeAttribute("open"));
   });
 
+  // On Android, the download buttons offer the APK, and their notes say what it needs.
+  if (/Android/i.test(navigator.userAgent)) {
+    document.querySelectorAll("[data-android-href]").forEach((link) => { link.href = link.dataset.androidHref; });
+    document.querySelectorAll("[data-android-text]").forEach((element) => { element.textContent = element.dataset.androidText; });
+  }
+
   // Header hairline once the page scrolls.
   const header = document.querySelector(".site-header");
   if (header) {
