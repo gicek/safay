@@ -113,7 +113,8 @@ Remote storage receives only the encrypted vault and a metadata file with a devi
   sign-in that arrives afterwards is revoked and its entry deleted.
 - Synology signs in to DSM with the user's password, and the code from an authenticator app when the account uses
   two-step verification; DSM then trusts the device. Until the user picks the backup folder, the sign-in is held in
-  memory only, and leaving or locking signs it out. The stored connection keeps the password and that device token,
+  memory only; choosing another service or location, going back to the sign-in form, or locking signs it out, and
+  nothing of it is written anywhere. The stored connection keeps the password and that device token,
   because DSM sessions expire and are renewed without the user. With a QuickConnect ID, Safay asks Synology's
   QuickConnect servers (`quickconnect.to`, or `quickconnect.cn` for mainland China) for the NAS's addresses, sending
   only the ID, and probes them without credentials; when none answers, it opens Synology's relay. A probe only tells

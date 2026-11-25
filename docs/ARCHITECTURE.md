@@ -73,7 +73,9 @@ them in one CloudKit record.
 A Synology sign-in reaches the whole NAS (`cloud::synology_sign_in`) and stays in memory while the user picks a folder
 inside a shared folder: an empty one or one with a Safay backup when backing up, one with a backup when restoring. The
 connection then moves to that folder (`Connection::with_root_folder`, keeping the session) and is stored like any
-other; leaving or locking before then signs out.
+other. Until then the sign-in outlives the sheet, so choosing Synology again returns to the folders; choosing another
+service, linking another location, creating the vault on first run, going back to the sign-in form or locking signs
+it out.
 
 ## Backup and sync
 

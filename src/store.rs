@@ -293,8 +293,12 @@ pub struct Store {
     cloud_attempt: Signal<u64>,
     /// Cloud sign-ins made during first-run restore, reused when the service is chosen again (memory only).
     restore_sign_ins: Stored<safay_app::cloud::RestoreSignIns<CloudForm>>,
-    /// Synology: the sign-in to the whole NAS while the user picks a folder. Memory only; signed out when left.
-    synology_session: Stored<Option<safay_app::cloudset::Connection>>,
+    /// Synology: the sign-in to the whole NAS while the user picks a folder, with the form it came from. Memory only; it
+    /// outlives the sheet (choosing Synology again comes back to the folders) and is signed out when another service is
+    /// chosen, a location is linked, the vault comes into being on first run, or Safay locks.
+    synology_session: Stored<Option<(safay_app::cloudset::Connection, CloudForm)>>,
+    /// Counts sign-outs of `synology_session`, so work started before one drops what it gets back.
+    synology_generation: Stored<u64>,
     pub form: Signal<Form>,
     pub marks: Signal<Marks>,
     /// zxcvbn runs only when the new password itself changes, never per keystroke elsewhere.
@@ -414,6 +418,7 @@ impl Store {
             cloud_attempt: signal(0),
             restore_sign_ins: stored(Default::default()),
             synology_session: stored(None),
+            synology_generation: stored(0),
             form,
             strength,
             marks: signal(Marks::default()),
@@ -566,11 +571,12 @@ impl Store {
         self.reset_transient();
     }
     pub fn lock(self) {
-        self.release_synology();
         self.controller.get().request_lock();
         self.after_lock();
     }
     fn after_lock(self) {
+        // Locking, by hand or on its own, signs out of a NAS whose folders were being picked.
+        self.release_synology();
         self.clear();
         self.toast.set(None);
         self.sheet.set(None);
@@ -657,6 +663,7 @@ impl Store {
                         let due = projection.sync.due;
                         if projection.exists && !self.projection.with(|p| p.exists) {
                             self.release_restore_sign_ins(None);
+                            self.release_synology();
                         }
                         self.projection.set(projection);
                         // Only the main window runs backups, so two windows never sync the same change twice.
@@ -1980,6 +1987,7 @@ impl Store {
         self.backup_page.set(BackupPage::Overview);
     }
     pub fn link(self, location: safay_app::sync::Location) {
+        self.release_synology();
         self.status.set(None);
         self.refused.set(None);
         let title = location.title();
@@ -2011,9 +2019,28 @@ impl Store {
     }
     pub fn open_cloud_setup(self, provider: safay_app::cloud::Provider) {
         self.status.set(None);
-        self.release_synology();
-        self.cloud_form.set(CloudForm::default());
+        // Synology again while still signed in: back to its folders, where the user left them.
+        let held = self.synology_session.with(|h| h.as_ref().map(|(_, form)| form.clone()));
+        match held {
+            Some(form) if provider == safay_app::cloud::Provider::Synology => {
+                self.cloud_form.set(form);
+                self.folder_browser.update(|b| {
+                    b.open = true;
+                    b.working = false;
+                    b.new_folder = None;
+                    b.error = None;
+                });
+            }
+            _ => {
+                self.release_synology();
+                self.cloud_form.set(CloudForm::default());
+            }
+        }
         self.backup_page.set(BackupPage::Setup(provider));
+    }
+    /// Whether Synology is signed in and its folders are waiting.
+    fn synology_held(self) -> bool {
+        self.synology_session.with(|h| h.is_some())
     }
     /// First run: the connection sheet for a cloud storage service, in restore mode.
     pub fn choose_restore_cloud(self, provider: safay_app::cloud::Provider) {
@@ -2027,7 +2054,7 @@ impl Store {
         // Chosen again: WebDAV, Nextcloud and Synology show the form as submitted (Nextcloud's and Synology's Connect reuse
         // the sign-in); the other services, already signed in to Safay's app folder, look for the backup again straight
         // away.
-        if let Some(form) = self.restore_sign_ins.with(|k| k.form(provider)) {
+        if let Some(form) = self.restore_sign_ins.with(|k| k.form(provider)).filter(|_| !self.synology_held()) {
             self.cloud_form.set(form);
         }
         if !provider.has_server()
@@ -2127,7 +2154,6 @@ impl Store {
     }
     pub fn leave_cloud_setup(self) {
         platform::cancel_web_sign_in();
-        self.release_synology();
         self.cloud_attempt.update(|a| *a = a.wrapping_add(1));
         self.cloud_form.set(CloudForm::default());
         self.status.set(None);
@@ -2420,7 +2446,8 @@ impl Store {
             };
             match blocking(move || cloud::synology_sign_in(login)).await.unwrap_or(Err(SyncError::Storage)) {
                 Ok(connection) if current() => {
-                    self.synology_session.replace(Some(connection));
+                    let kept = CloudForm { otp: Zeroizing::default(), error: None, working: false, allowed: false, ..form.clone() };
+                    self.synology_session.replace(Some((connection, kept)));
                     self.cloud_form.update(|f| {
                         f.working = false;
                         f.allowed = false;
@@ -2441,31 +2468,34 @@ impl Store {
     /// Signs out of the NAS the user was picking a folder on, if any, and closes the folder list.
     pub fn release_synology(self) {
         self.folder_browser.set(FolderBrowser::default());
-        if let Some(connection) = self.synology_session.replace(None) {
+        self.synology_generation.with(|g| *g = g.wrapping_add(1));
+        if let Some((connection, _)) = self.synology_session.replace(None) {
             let bytes = connection.to_bytes();
             self.task(async move { drop(blocking(move || safay_app::cloud::revoke(&bytes)).await) });
         }
     }
     /// Runs `work` on the NAS sign-in held while picking a folder, off the main thread; the sign-in comes back with any
-    /// renewed session. `None` when there is none, or the user left meanwhile.
+    /// renewed session. `None` when there is none, or it was signed out meanwhile.
     async fn with_synology<T: Send + 'static>(
         self,
         work: impl FnOnce(&mut safay_app::cloudset::Connection) -> T + Send + 'static,
     ) -> Option<T> {
-        let mut connection = self.synology_session.replace(None)?;
-        let attempt = self.cloud_attempt.get();
+        let mut connection = self.synology_session.with(|h| h.as_ref().map(|(c, _)| c.clone()))?;
+        let generation = self.synology_generation.with(|g| *g);
         let (connection, result) = blocking(move || {
             let result = work(&mut connection);
             (connection, result)
         })
         .await
         .ok()?;
-        if self.cloud_attempt.get() != attempt || !self.folder_browser.with(|b| b.open) {
-            let bytes = connection.to_bytes();
-            drop(blocking(move || safay_app::cloud::revoke(&bytes)).await);
+        if self.synology_generation.with(|g| *g) != generation {
             return None;
         }
-        self.synology_session.replace(Some(connection));
+        self.synology_session.with(|h| {
+            if let Some((held, _)) = h.as_mut() {
+                *held = connection;
+            }
+        });
         Some(result)
     }
     fn synology_path(path: &[String]) -> safay_app::cloudset::RemotePath {
@@ -2501,7 +2531,11 @@ impl Store {
         path.push(name);
         self.load_synology_folder(path);
     }
+    /// Up one folder; from the shared folders, back to the sign-in form (signing out), to use another account or NAS.
     pub fn synology_folder_up(self) {
+        if self.folder_browser.with(|b| b.at_top()) {
+            return self.release_synology();
+        }
         let mut path = self.folder_browser.with(|b| b.path.clone());
         path.pop();
         self.load_synology_folder(path);
@@ -2551,7 +2585,7 @@ impl Store {
                 && listing.is_some_and(|l| if self.cloud_restore.get_untracked() { l.has_backup } else { l.usable() });
             (b.path.clone(), usable)
         });
-        let Some(connection) = self.synology_session.with(|c| c.clone()).filter(|_| usable) else { return };
+        let Some(connection) = self.synology_session.with(|h| h.as_ref().map(|(c, _)| c.clone())).filter(|_| usable) else { return };
         self.folder_browser.update(|b| b.working = true);
         let folder = Self::synology_path(&path);
         let form = self.cloud_form.get();
@@ -2571,6 +2605,7 @@ impl Store {
                 Ok(location) => {
                     // The stored sign-in carries the session on; the one held for browsing is just dropped.
                     self.synology_session.replace(None);
+                    self.synology_generation.with(|g| *g = g.wrapping_add(1));
                     self.folder_browser.set(FolderBrowser::default());
                     self.cloud_form.set(CloudForm::default());
                     let submitted = CloudForm {

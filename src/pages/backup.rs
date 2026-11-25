@@ -1255,7 +1255,7 @@ fn folder_browser(s: Store) -> impl IntoElement {
                 .gap(px(6.0))
                 .child(
                     icon_button(move || s.label("Back"), Icon::ChevronLeft)
-                        .disabled(move || busy() || s.folder_browser.with(|b| b.at_top()))
+                        .disabled(busy)
                         .disabled_style(|st| st.opacity(0.35))
                         .on_press(move || s.synology_folder_up()),
                 )

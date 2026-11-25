@@ -446,9 +446,7 @@ fn folder_browser(s: Store) -> impl IntoElement {
                 .items_center()
                 .gap(px(4.0))
                 .child(
-                    ui::icon_button(move || s.label("Back"), || Icon::ChevronLeft)
-                        .disabled(move || busy() || s.folder_browser.with(|b| b.at_top()))
-                        .on_press(move || s.synology_folder_up()),
+                    ui::icon_button(move || s.label("Back"), || Icon::ChevronLeft).disabled(busy).on_press(move || s.synology_folder_up()),
                 )
                 .child(ui::title(text(move || folder_title(s))).flex_1().number_of_lines(1))
                 .child(when(
