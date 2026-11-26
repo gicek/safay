@@ -1450,12 +1450,8 @@ pub fn dialog<E: IntoElement>(
 ) -> impl IntoElement {
     // Its fields and notes are an alert's (`compact`).
     let content = compact(content);
-    let scrim = view().flex_1().items_center().justify_center().px(px(27.0)).pt_safe_area();
-    // Android resizes the dialog's window to end at the keyboard's top (as it does a sheet's, below), so the panel
-    // centers above the keyboard already; making room for the keyboard as well lifted it that far again, its title and
-    // focused field under the status bar.
-    #[cfg(not(target_os = "android"))]
-    let scrim = scrim.pb_keyboard();
+    // Centered in the room above the keyboard while it is up.
+    let scrim = view().flex_1().items_center().justify_center().px(px(27.0)).pt_safe_area().pb_keyboard();
     // A modal of its own: over the page and over a sheet that is open on it. The back key asks to close it.
     nsh_base::dialog().animation(nsh_core::ModalAnimation::Fade).on_cancel(move |_: &()| dismiss()).child(
         scrim.bg(move || tok("scrim")).on_press(move |_: &()| dismiss()).child(
@@ -1549,10 +1545,6 @@ pub fn bottom_sheet(
         // the keyboard down as it starts), so the fields under the keyboard could not be reached.
         .close_on_swipe(move || keyboard_height() <= px(0.0))
         .backdrop_style(|s| s.bg(move || tok("scrim")))
-        // Android: the sheet's window is resized to end at the keyboard's top (NSH's modal host asks the system for
-        // that), so the panel is above the keyboard already; NSH lifting it by the keyboard's height as well put it
-        // that far above, off the top of the screen.
-        .popup_style(|s| if cfg!(target_os = "android") { s.bottom(px(0.0)) } else { s })
         .child(
             view()
                 // A wide window: a column of a readable width in the middle, as a tablet's form sheet.

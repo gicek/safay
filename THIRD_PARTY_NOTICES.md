@@ -19,9 +19,9 @@ Versions below are exact pins. Cargo.lock records the full production build grap
 
 | Dependency | Version | License | Purpose / removal boundary |
 |---|---|---|---|
-| nsh-core, nsh-base, nsh-platform-macos/windows/linux | main @ Cargo.lock commit (crate version 0.5.0) | Apache-2.0 | Native UI, components and desktop embedding; Git source https://github.com/longbridge/nsh |
-| nsh-engine, nsh-testing | main @ Cargo.lock commit (crate version 0.5.0) | Apache-2.0 | Headless tests; not application data storage |
-| nsh-updater | main @ Cargo.lock commit (crate version 0.5.0) | Apache-2.0 | App self-update: signed manifests, verified downloads, replacing the app; replace the update service |
+| nsh-core, nsh-base, nsh-platform-macos/windows/linux | main @ Cargo.lock commit (crate version 0.7.1) | Apache-2.0 | Native UI, components and desktop embedding; Git source https://github.com/longbridge/nsh |
+| nsh-engine, nsh-testing | main @ Cargo.lock commit (crate version 0.7.1) | Apache-2.0 | Headless tests; not application data storage |
+| nsh-updater | main @ Cargo.lock commit (crate version 0.7.1) | Apache-2.0 | App self-update: signed manifests, verified downloads, replacing the app; replace the update service |
 | image | 0.25.10 | MIT OR Apache-2.0 | Bounded QR processing; site icon decoding (PNG, ICO, JPEG, GIF, WebP) and PNG re-encoding |
 | qrcode | 0.14.1 | MIT OR Apache-2.0 | Generate a single-account QR; replace QR generation |
 | rqrr | 0.11.0 | MIT | Decode local QR images; replace QR recognition |
@@ -236,14 +236,14 @@ This includes test tools; the production graph is narrower. NSH-generated test r
 | nix | 0.31.3 | MIT | [crates.io](https://crates.io/crates/nix/0.31.3) |
 | nohash-hasher | 0.2.0 | Apache-2.0 OR MIT | [crates.io](https://crates.io/crates/nohash-hasher/0.2.0) |
 | normpath | 1.5.2 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/normpath/1.5.2) |
-| nsh-base | 0.5.0 (main) | Apache-2.0 | [GitHub](https://github.com/longbridge/nsh) |
-| nsh-core | 0.5.0 (main) | Apache-2.0 | [GitHub](https://github.com/longbridge/nsh) |
-| nsh-engine | 0.5.0 (main) | Apache-2.0 | [GitHub](https://github.com/longbridge/nsh) |
-| nsh-macros | 0.5.0 (main) | Apache-2.0 | [GitHub](https://github.com/longbridge/nsh) |
-| nsh-platform-apple | 0.5.0 (main) | Apache-2.0 | [GitHub](https://github.com/longbridge/nsh) |
-| nsh-platform-macos | 0.5.0 (main) | Apache-2.0 | [GitHub](https://github.com/longbridge/nsh) |
-| nsh-testing | 0.5.0 (main) | Apache-2.0 | [GitHub](https://github.com/longbridge/nsh) |
-| nsh-updater | 0.5.0 (main) | Apache-2.0 | [GitHub](https://github.com/longbridge/nsh) |
+| nsh-base | 0.7.1 (main) | Apache-2.0 | [GitHub](https://github.com/longbridge/nsh) |
+| nsh-core | 0.7.1 (main) | Apache-2.0 | [GitHub](https://github.com/longbridge/nsh) |
+| nsh-engine | 0.7.1 (main) | Apache-2.0 | [GitHub](https://github.com/longbridge/nsh) |
+| nsh-macros | 0.7.1 (main) | Apache-2.0 | [GitHub](https://github.com/longbridge/nsh) |
+| nsh-platform-apple | 0.7.1 (main) | Apache-2.0 | [GitHub](https://github.com/longbridge/nsh) |
+| nsh-platform-macos | 0.7.1 (main) | Apache-2.0 | [GitHub](https://github.com/longbridge/nsh) |
+| nsh-testing | 0.7.1 (main) | Apache-2.0 | [GitHub](https://github.com/longbridge/nsh) |
+| nsh-updater | 0.7.1 (main) | Apache-2.0 | [GitHub](https://github.com/longbridge/nsh) |
 | num-conv | 0.2.2 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/num-conv/0.2.2) |
 | num-traits | 0.2.19 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/num-traits/0.2.19) |
 | num_threads | 0.1.8 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/num_threads/0.1.8) |
@@ -361,7 +361,7 @@ This includes test tools; the production graph is narrower. NSH-generated test r
 | syn | 2.0.119 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/syn/2.0.119) |
 | syn | 3.0.6 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/syn/3.0.6) |
 | synstructure | 0.14.0 | MIT | [crates.io](https://crates.io/crates/synstructure/0.14.0) |
-| taffy | 0.15.1 | MIT | [crates.io](https://crates.io/crates/taffy/0.15.1) |
+| taffy | 0.16.0 | MIT | [crates.io](https://crates.io/crates/taffy/0.16.0) |
 | tar | 0.4.46 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/tar/0.4.46) |
 | tempfile | 3.27.0 | MIT OR Apache-2.0 | [crates.io](https://crates.io/crates/tempfile/3.27.0) |
 | tendril | 0.4.3 | MIT/Apache-2.0 | [crates.io](https://crates.io/crates/tendril/0.4.3) |
