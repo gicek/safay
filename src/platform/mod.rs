@@ -1,8 +1,9 @@
 //! OS services. Tests supply in-memory services and never call these paths.
 //!
 //! File names say where a module is built. A file without a suffix is built on every system (it may hold a few
-//! branches of its own). A file ending in `_macos`, `_linux` or `_windows` is built on that system only, and the
-//! implementations of one feature share its name (`camera_macos.rs`, `camera_linux.rs`). `macos.rs`, `linux.rs` and
+//! branches of its own). A file ending in `_macos`, `_ios`, `_linux`, `_windows` or `_android` is built on that system
+//! only, one ending in `_apple` on macOS and iOS, and the implementations of one feature share its name
+//! (`camera_macos.rs`, `camera_linux.rs`). `macos.rs`, `linux.rs` and
 //! `windows.rs` hold each system's remaining integration. Module names carry no suffix, so callers read
 //! `platform::camera` everywhere.
 
@@ -30,6 +31,8 @@ pub mod updates;
 // Each system's own integration.
 #[cfg(target_os = "android")]
 pub mod android;
+#[cfg(target_os = "ios")]
+pub mod ios;
 #[cfg(target_os = "linux")]
 pub mod linux;
 #[cfg(target_os = "macos")]
@@ -44,8 +47,8 @@ pub mod windows;
 #[cfg(target_os = "macos")]
 #[path = "automation_macos.rs"]
 pub mod automation;
-#[cfg(target_os = "macos")]
-#[path = "biometric_macos.rs"]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[path = "biometric_apple.rs"]
 pub mod biometric;
 #[cfg(target_os = "android")]
 #[path = "biometric_android.rs"]
@@ -77,6 +80,10 @@ pub mod camera;
 // And on Android, through Camera2 (android/java) and JNI.
 #[cfg(target_os = "android")]
 #[path = "camera_android.rs"]
+pub mod camera;
+// And on iOS, through AVFoundation's preview layer and QR reader.
+#[cfg(target_os = "ios")]
+#[path = "camera_ios.rs"]
 pub mod camera;
 /// "Select on Screen" on macOS: Safay's own selection over a picture of each display.
 #[cfg(target_os = "macos")]
@@ -165,16 +172,16 @@ pub mod supports {
     pub const GLOBAL_HOTKEYS: bool = cfg!(any(target_os = "macos", target_os = "linux"));
     /// Launch at login and background-only launch.
     pub const LOGIN_ITEM: bool = cfg!(any(target_os = "macos", target_os = "linux"));
-    /// Hardware-protected key release (Touch ID; Windows Hello later).
-    pub const BIOMETRIC: bool = cfg!(any(target_os = "macos", target_os = "android"));
+    /// Hardware-protected key release (Touch ID, Face ID, Android's biometrics; Windows Hello later).
+    pub const BIOMETRIC: bool = cfg!(any(target_os = "macos", target_os = "ios", target_os = "android"));
     /// Settings in a window of its own (elsewhere a dialog over the main window).
     pub const SETTINGS_WINDOW: bool = cfg!(target_os = "macos");
     /// Selecting a QR code on screen (macOS: Safay's selection over a picture of each display, Screen Recording
     /// permission; Linux: the desktop portal's interactive screenshot).
     pub const SCREEN_CAPTURE: bool = cfg!(any(target_os = "macos", target_os = "linux"));
     /// Scanning with the camera (macOS: AVFoundation, needs the packaged app's camera usage description; Linux: the
-    /// desktop portal's Camera and PipeWire; Android: Camera2, with the camera permission).
-    pub const CAMERA: bool = cfg!(any(target_os = "macos", target_os = "linux", target_os = "android"));
+    /// desktop portal's Camera and PipeWire; Android: Camera2, with the camera permission; iOS: AVFoundation).
+    pub const CAMERA: bool = cfg!(any(target_os = "macos", target_os = "linux", target_os = "android", target_os = "ios"));
     /// iCloud backup is listed among the locations: macOS has it (in a signed package); Windows lists it as unavailable;
     /// Linux, which never has it, does not list it.
     pub const ICLOUD: bool = cfg!(any(target_os = "macos", target_os = "windows"));
@@ -396,8 +403,10 @@ pub fn device_name() -> String {
         let name = std::env::var("COMPUTERNAME").ok();
         #[cfg(target_os = "linux")]
         let name = std::fs::read_to_string("/etc/hostname").ok();
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        let name = Some(if cfg!(target_os = "android") { "Android" } else { "iPhone" }.to_owned());
+        #[cfg(target_os = "android")]
+        let name = Some("Android".to_owned());
+        #[cfg(target_os = "ios")]
+        let name = Some(ios::device_model());
         name.map(|n| n.trim().to_owned()).filter(|n| !n.is_empty() && n.len() <= 120).unwrap_or_else(|| "Safay".to_owned())
     })
     .clone()
@@ -407,11 +416,8 @@ pub fn device_name() -> String {
 /// preview never touches the keychain).
 pub fn install_network(preview: bool) {
     use safay_app::cloud::{Credentials, Services};
-    let credentials: std::sync::Arc<dyn Credentials> = if preview || cfg!(target_os = "ios") {
-        std::sync::Arc::new(MemoryCredentials::default())
-    } else {
-        std::sync::Arc::new(credentials::Keychain)
-    };
+    let credentials: std::sync::Arc<dyn Credentials> =
+        if preview { std::sync::Arc::new(MemoryCredentials::default()) } else { std::sync::Arc::new(credentials::Keychain) };
     safay_app::cloud::install(Services {
         http: std::sync::Arc::new(http::Executor::storage()),
         credentials,

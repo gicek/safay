@@ -1,30 +1,32 @@
 # Platforms
 
 macOS is the primary platform. Android has a phone interface of its own (`src/mobile`) over the same core and is
-supported from Android 12. Windows and Linux share every page and the whole core, but CI does not build them yet.
+supported from Android 12. iOS and iPadOS share that interface in the system's look; they run in the simulator and have
+not been released or tried on a device. Windows and Linux share every page and the whole core, but CI does not build
+them yet.
 Windows has not been run end to end; Linux has, on one system (see [Linux details](#linux-details)). The parts below
 marked *coded* are written and untested on a real system. The interface shows a capability only where
 `platform::supports` (in `src/platform/mod.rs`) says the platform has it.
 
 ## Capabilities
 
-| Capability | macOS | Windows | Linux | Android |
-|---|---|---|---|---|
-| Vault, accounts, categories, codes, import and export | Yes | Coded | Coded | Yes (exports go to the share sheet) |
-| Folder backup | Yes | Coded | Coded | — |
-| WebDAV, Nextcloud and Synology backup | Yes | Coded (Credential Manager) | Yes (the Secret Service: GNOME Keyring, KWallet) | Yes |
-| Dropbox, OneDrive, Google Drive | Yes | Coded (sign-in in the browser) | Coded (sign-in in the browser) | Yes (sign-in in a Custom Tab) |
-| iCloud | Yes | — | — | — |
-| Touch ID / hardware-protected unlock | Touch ID | Planned: Windows Hello key release | Not planned (no common hardware key API) | Strong biometrics (a Keystore key) |
-| Lock on sleep, screen lock, user switch | Yes | Coded (`WM_WTSSESSION_CHANGE`, power broadcasts) | Coded (logind, screensaver) | Yes (screen off) |
-| Auto-lock on app input | Yes | Partial (input inside the page only) | Partial | Yes (also in the background) |
-| Secret clipboard | Yes | Coded (excluded from history and cloud clipboard) | Coded (password-manager hint, no PRIMARY) | Yes (marked sensitive, expires) |
-| Menu bar / tray panel | Yes | Not yet wired (NSH supports it) | Yes (StatusNotifierItem) | — |
-| Global shortcuts | Yes | Not yet wired (NSH supports them) | Yes (the GlobalShortcuts portal) | — |
-| Launch at login, background launch | Yes | Not yet | Yes (XDG autostart; "Start in Tray") | — |
-| Select a QR code on screen; camera | Yes | Not yet | Yes (the Screenshot and Camera portals) | Camera, and a photo from the gallery |
-| Launchers (Alfred, Raycast, Tinycast) | Yes | — | — | — |
-| App updates | Yes (signed packages with an update source) | Coded (the app's folder) | Yes (the app's folder) | Google Play, or a newer APK |
+| Capability | macOS | Windows | Linux | Android | iOS |
+|---|---|---|---|---|---|
+| Vault, accounts, categories, codes, import and export | Yes | Coded | Coded | Yes (exports go to the share sheet) | Yes (simulator; exports go to the share sheet) |
+| Folder backup | Yes | Coded | Coded | — | — |
+| WebDAV, Nextcloud and Synology backup | Yes | Coded (Credential Manager) | Yes (the Secret Service: GNOME Keyring, KWallet) | Yes | Coded (the Keychain) |
+| Dropbox, OneDrive, Google Drive | Yes | Coded (sign-in in the browser) | Coded (sign-in in the browser) | Yes (sign-in in a Custom Tab) | Coded (the system sign-in session) |
+| iCloud | Yes | — | — | — | Not yet |
+| Touch ID / hardware-protected unlock | Touch ID | Planned: Windows Hello key release | Not planned (no common hardware key API) | Strong biometrics (a Keystore key) | Coded: Face ID or Touch ID (a Secure Enclave key) |
+| Lock on sleep, screen lock, user switch | Yes | Coded (`WM_WTSSESSION_CHANGE`, power broadcasts) | Coded (logind, screensaver) | Yes (screen off) | Coded (device lock) |
+| Auto-lock on app input | Yes | Partial (input inside the page only) | Partial | Yes (also in the background) | Yes |
+| Secret clipboard | Yes | Coded (excluded from history and cloud clipboard) | Coded (password-manager hint, no PRIMARY) | Yes (marked sensitive, expires) | Coded (this device only, expires) |
+| Menu bar / tray panel | Yes | Not yet wired (NSH supports it) | Yes (StatusNotifierItem) | — | — |
+| Global shortcuts | Yes | Not yet wired (NSH supports them) | Yes (the GlobalShortcuts portal) | — | — |
+| Launch at login, background launch | Yes | Not yet | Yes (XDG autostart; "Start in Tray") | — | — |
+| Select a QR code on screen; camera | Yes | Not yet | Yes (the Screenshot and Camera portals) | Camera, and a photo from the gallery | Coded: camera; a photo from the library |
+| Launchers (Alfred, Raycast, Tinycast) | Yes | — | — | — | — |
+| App updates | Yes (signed packages with an update source) | Coded (the app's folder) | Yes (the app's folder) | Google Play, or a newer APK | The App Store (not yet) |
 
 On Windows and Linux, Settings opens as a dialog over the main window; macOS uses its own window.
 
@@ -53,6 +55,21 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
   screenshots and the recent apps' pictures.
 - Exports open the share sheet, where you choose Files, a drive or another app. Dropbox, OneDrive and Google Drive sign
   in in a Custom Tab.
+- A window 700 dp wide or more (a tablet, a foldable open) shows the categories in a sidebar and the accounts as cards.
+
+## iOS and iPadOS details
+
+- Built for the simulator (`make ios-simulator`) and checked there on iPhone 18 Pro and iPad Pro 11-inch (iOS 27.2):
+  every page of `previews/mobile.test.tsx`, light and dark. Face ID and Touch ID, the camera, the clipboard's expiry, the
+  cover in the background and cloud sign-ins are coded and untried on a device; iCloud backup is not there yet.
+- The interface follows the system: its navigation bar, swipe back, menus, sheets, switches and segmented controls, and
+  the alert for a category's name, are UIKit's. Dialogs with password fields are drawn in the look of an iOS alert,
+  since the system's alert has no secure field.
+- iPhone: portrait only. iPad: every orientation; a window 700 pt wide or more shows the categories in a sidebar and the
+  accounts as cards; a narrower one (Split View, Slide Over) shows the phone's layout.
+- Safay locks when the device locks with a passcode, and after the auto-lock time. While unlocked, a blurred cover hides
+  it in the app switcher. A copied code stays on this device (never Universal Clipboard) and expires.
+- The app icon is `assets/ios/icon.png`, edge to edge without transparency (`scripts/mobile_icons.py`).
 
 ## Linux details
 
@@ -92,6 +109,8 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
 ## Known issues
 
 - Android 16 and later: Back while the keyboard shows closes the page along with the keyboard.
+- iOS: the system's sidebar of a split view is not used on iPad (NSH's `SplitView` ends the app there); Safay draws its
+  own. Switches are on in the accent color rather than the system's green.
 - Opening the menu bar panel with its shortcut before the menu bar icon has ever been clicked places it at the top right
   of the display the pointer is on, not under the icon: NSH reports the icon's position only on clicks.
 - The menu bar panel and the desktop notice use flat colours rather than a blur material: NSH's window material has no

@@ -20,7 +20,7 @@ use safay_app::controller::Controller;
 use std::sync::Arc;
 
 /// A page over the list.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Page {
     /// "Scan QR Code": the camera.
     Scan,
@@ -69,6 +69,8 @@ pub struct Nav {
     pub restoring: Signal<bool>,
     /// The pages under the one showing, the list excepted.
     pub stack: Signal<Vec<Page>>,
+    /// iOS: the list is being reordered: its rows show their drag handles and press nothing else.
+    pub reordering: Signal<bool>,
 }
 impl Nav {
     pub fn push(self, page: Page) {
@@ -79,6 +81,28 @@ impl Nav {
             self.stack.update(|st| st.push(under));
         }
         self.page.set(Some(page));
+    }
+    /// The back the user asks for with a page's back button. iOS's navigation stack animates it.
+    pub fn pop(self) {
+        self.back();
+    }
+    /// The pages over the list, bottom to top.
+    fn routes(self) -> Vec<Page> {
+        let mut routes = self.stack.get();
+        routes.extend(self.page.get());
+        routes
+    }
+    /// Keeps the first `depth` pages over the list: the system's back (its button, the swipe) popped the rest.
+    fn truncate(self, depth: usize) {
+        let mut routes = self.routes();
+        if routes.len() <= depth {
+            return;
+        }
+        dismiss_keyboard();
+        routes.truncate(depth);
+        let page = routes.pop();
+        self.stack.set(routes);
+        self.page.set(page);
     }
     /// Closes the search field: its text goes, and the keyboard with it.
     pub fn close_search(self) {
@@ -118,7 +142,9 @@ impl Nav {
 }
 
 pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
-    set_tokens(nsh_base::Theme::from_json(include_str!("../../theme-mobile.json")).expect("bundled theme").into_tokens());
+    // iOS takes the system's colors; Android (and a desktop showing this interface) Safay's Material ones.
+    let palette = if ui::IOS { include_str!("../../theme-ios.json") } else { include_str!("../../theme-mobile.json") };
+    set_tokens(nsh_base::Theme::from_json(palette).expect("bundled theme").into_tokens());
     let s = Store::new(controller, fixture, crate::store::Surface::Main);
     effect(move || untracked(|| s.start()));
     let nav = Nav {
@@ -131,6 +157,7 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
         add_to: signal(None),
         dialog: signal(None),
         stack: signal(Vec::new()),
+        reordering: signal(false),
         choosing: signal(false),
         restoring: signal(false),
     };
@@ -148,6 +175,7 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
             nav.stack.set(Vec::new());
             nav.choosing.set(false);
             nav.restoring.set(false);
+            nav.reordering.set(false);
         }
     });
     // A backup file was chosen: one that needs no password is imported at once, another asks for its password.
@@ -207,6 +235,13 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
             crate::platform::android::set_secure(unlocked);
         }
     });
+    // iOS covers the open vault while the app is in the background: the app switcher shows no codes.
+    #[cfg(target_os = "ios")]
+    effect(move || crate::platform::ios::set_private(s.unlocked()));
+    #[cfg(debug_assertions)]
+    if fixture {
+        demo_page(s, nav);
+    }
     // Dialogs and sheets are modals of their own: the back key closes them through their `on_cancel` and never comes
     // here while one is up.
     on_back_press(move || {
@@ -241,17 +276,109 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
         .child(toast(s, move || s.unlocked() && nav.page.get().is_none()))
 }
 
-fn unlocked(s: Store, nav: Nav) -> impl IntoElement {
+fn unlocked(s: Store, nav: Nav) -> AnyElement {
+    if ui::IOS {
+        return native_stack(s, nav).into_element();
+    }
     view()
         .flex_1()
         .child(when(move || nav.page.get().is_none(), move || home::page(s, nav)))
-        .child(when(move || nav.page.get() == Some(Page::Manual), move || add::manual(s, nav)))
-        .child(when(move || nav.page.get() == Some(Page::Scan), move || scan::page(s, nav)))
-        .child(when(move || nav.page.get() == Some(Page::Categories), move || categories::page(s, nav)))
-        .child(when(move || nav.page.get() == Some(Page::Settings), move || settings::page(s, nav)))
-        .child(when(move || nav.page.get() == Some(Page::Deleted), move || settings::deleted(s, nav)))
-        .child(when(move || nav.page.get() == Some(Page::Review), move || add::review(s, nav)))
-        .child(when(move || nav.page.get() == Some(Page::Conflict), move || backup::conflict(s, nav)))
+        .child(when(move || nav.page.get().is_some(), move || readable(page(s, nav, nav.page.get_untracked().unwrap_or(Page::Settings)))))
+        .into_element()
+}
+/// A page over the list.
+fn page(s: Store, nav: Nav, page: Page) -> AnyElement {
+    match page {
+        Page::Manual => add::manual(s, nav).into_element(),
+        Page::Scan => scan::page(s, nav).into_element(),
+        Page::Categories => categories::page(s, nav).into_element(),
+        Page::Settings => settings::page(s, nav).into_element(),
+        Page::Deleted => settings::deleted(s, nav).into_element(),
+        Page::Review => add::review(s, nav).into_element(),
+        Page::Conflict => backup::conflict(s, nav).into_element(),
+    }
+}
+/// A page in a column of a readable width, centered in a wide window ([`ui::PAGE_MAX`]); the camera's page takes the
+/// whole window.
+fn readable(page: AnyElement) -> impl IntoElement {
+    view().flex_1().items_center().child(view().flex_1().w_full().max_w(px(ui::PAGE_MAX)).child(page))
+}
+/// iOS: the list and the pages over it in the system's navigation stack, which pushes and pops them as the system's
+/// own (the swipe from the edge included). A page in the system's header shows its title there, large while its
+/// content rests at the top; the others keep their own top bar.
+fn native_stack(s: Store, nav: Nav) -> impl IntoElement {
+    let routes = computed(move || nav.routes().into_iter().enumerate().collect::<Vec<_>>());
+    nsh_base::nav_stack()
+        .flex_1()
+        .child(
+            nsh_base::nav_page()
+                .key("list")
+                // A wide window draws its own sidebar and header (`home::page`).
+                .header_visible(move || !ui::is_wide())
+                // The app's name at the bar's start, beside its buttons, as plain text that stays: the title's view, as
+                // wide as the window, which the system narrows to the room the buttons leave, whatever they are (a
+                // leading item would sit on glass, as a button does).
+                .title("Safay")
+                .header_title(
+                    view().w(move || window().width).child(
+                        text("Safay")
+                            .text_size(px(28.0))
+                            .line_height(px(34.0))
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(move || theme().foreground)
+                            .number_of_lines(1),
+                    ),
+                )
+                .header_shadow_visible(false)
+                .header_right_items(move || home::header_items(s, nav))
+                .bg(move || theme().background)
+                .child(home::page(s, nav)),
+        )
+        .child(each(
+            move || routes.get(),
+            |route: &(usize, Page)| *route,
+            move |route, _| {
+                let (depth, kind) = route.get_untracked();
+                let screen = nsh_base::nav_page()
+                    // The page's own background, not the system's: grouped rows stand on it.
+                    .bg(move || theme().background)
+                    // The system's back (its button, the swipe) leaves the pages from this one up.
+                    .on_dismiss(move || nav.truncate(depth));
+                let title = match kind {
+                    Page::Settings => "Settings",
+                    Page::Manual => "Enter Setup Key",
+                    Page::Categories => "Manage Categories",
+                    Page::Deleted => "Recently Deleted",
+                    Page::Review => "Add Account",
+                    Page::Conflict => "Resolve Conflict",
+                    // The camera's page is the picture alone, with its own close button.
+                    Page::Scan => "",
+                };
+                let screen = if kind == Page::Scan {
+                    screen.header_visible(false)
+                } else {
+                    screen
+                        .title(move || s.label(title))
+                        // Settings, a place of its own, has the large title; the pages a task opens have the small one.
+                        .header_large_title(kind == Page::Settings)
+                        .header_shadow_visible(false)
+                };
+                let screen = if kind == Page::Categories {
+                    screen.header_right_items(move || {
+                        vec![
+                            nsh_core::element::header::HeaderItem::symbol("plus")
+                                .key("new-category")
+                                .label(s.label("New Category").to_string())
+                                .on_press(move || s.editing.set(Some(crate::store::CategoryEdit::default()))),
+                        ]
+                    })
+                } else {
+                    screen
+                };
+                let content = page(s, nav, kind);
+                if kind == Page::Scan { screen.child(content) } else { screen.child(readable(content)) }
+            },
+        ))
 }
 
 /// Runs `then` each time the store finishes `done` from now on, while the calling page or dialog is built.
@@ -304,4 +431,86 @@ fn toast(s: Store, lifted: impl Fn() -> bool + Copy + 'static) -> impl IntoEleme
                 )
         },
     )
+}
+
+/// Development: the demo vault opens on the page, sheet or menu `SAFAY_DEMO_PAGE` names, for screenshots of each
+/// (`settings`, `categories`, `create`, `restore`, `deleted`, `manual`, `scan`, `review`, `add`, `more`, `context`, `detail`, `qr`,
+/// `add-to`, `backup`, `qr`, `fair-password`, `auto-lock`, `language`, `change-password`, `export`, `search`, `work`).
+/// RFC 6238's public test key in Base32 ("12345678901234567890").
+#[cfg(debug_assertions)]
+fn rfc_6238_key() -> String {
+    "GEZDGNBVGY3TQOJQ".repeat(2)
+}
+#[cfg(debug_assertions)]
+fn demo_page(s: Store, nav: Nav) {
+    let Ok(page) = std::env::var("SAFAY_DEMO_PAGE") else { return };
+    // A fresh vault's onboarding: `create`, `restore`.
+    if let Some(stage) = match page.as_str() {
+        "create" => Some(crate::store::Stage::Create),
+        "restore" => Some(crate::store::Stage::Restore),
+        _ => None,
+    } {
+        effect(move || {
+            if s.ready.get() {
+                untracked(|| s.stage.set(stage));
+            }
+        });
+        return;
+    }
+    let done = stored(false);
+    effect(move || {
+        if done.get() || !s.ready.get() || !s.unlocked() || s.projection.with(|p| p.rows.is_empty()) {
+            return;
+        }
+        done.replace(true);
+        let page = page.clone();
+        untracked(move || {
+            let first = s.projection.with(|p| p.rows.first().map(|r| r.id));
+            match page.as_str() {
+                "settings" => nav.push(Page::Settings),
+                "categories" => nav.push(Page::Categories),
+                "deleted" => {
+                    nav.push(Page::Settings);
+                    nav.push(Page::Deleted)
+                }
+                "manual" => nav.push(Page::Manual),
+                "scan" => nav.push(Page::Scan),
+                "review" => s.append_scanned(&format!(
+                    "otpauth://totp/Example:alex@example.com?secret={k}\notpauth://totp/Sample:ops@example.com?secret={k}",
+                    k = rfc_6238_key()
+                )),
+                "add" => nav.adding.set(true),
+                "more" => nav.menu.set(true),
+                "context" => nav.context.set(first.map(|id| (id, Point::new(px(120.0), px(240.0))))),
+                "detail" => {
+                    if let Some(id) = first {
+                        s.open_sheet(crate::store::Sheet::Detail(id))
+                    }
+                }
+                "add-to" => nav.add_to.set(first),
+                "auto-lock" => nav.dialog.set(Some(Dialog::AutoLock)),
+                "language" => nav.dialog.set(Some(Dialog::Language)),
+                "change-password" => nav.dialog.set(Some(Dialog::ChangePassword)),
+                "export" => nav.dialog.set(Some(Dialog::Export)),
+                "search" => nav.searching.set(true),
+                // The alert a fair password asks with ("Password Isn’t Strong Enough").
+                "fair-password" => s.confirm_fair(safay_app::Zeroizing::new("correcthorse1".to_owned()), |_| {}),
+                "backup" => {
+                    nav.push(Page::Settings);
+                    nav.choosing.set(true)
+                }
+                "qr" => {
+                    if let Some(id) = first {
+                        s.reveal(crate::store::Auth::Qr(id))
+                    }
+                }
+                "work" => {
+                    let work = s.projection.with(|p| p.categories.iter().find(|c| c.name == "Work").map(|c| c.id));
+                    s.category.set(work);
+                    s.refresh();
+                }
+                _ => {}
+            }
+        });
+    });
 }

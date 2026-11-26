@@ -92,6 +92,11 @@ impl Alert {
     }
     /// NSH's `AlertDialog`; its default button is its last regular action, so a named default goes last as one.
     async fn show_nsh(self) -> Option<&'static str> {
+        // iOS: the default drawn prominent, as the system's preferred action.
+        #[cfg(target_os = "ios")]
+        if let Some(label) = self.default.and_then(|id| self.actions.iter().find(|a| a.id == id)).map(|a| a.label.to_string()) {
+            crate::platform::ios::prefer_alert_action(self.title.to_string(), label);
+        }
         let mut dialog = nsh_base::alert_dialog().title(self.title.clone());
         if let Some(description) = &self.description {
             dialog = dialog.description(description.clone());

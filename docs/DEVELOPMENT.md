@@ -115,7 +115,7 @@ Packages go to `build/` at the repository root (untracked), each system in a fol
 | `make release` | `build/dist/` | Notarized app, zip and DMG, update archive and manifest: what is published |
 
 Development packages for phones and tablets go there too. Both start in the phone interface (`src/mobile`); Android is
-supported from Android 12, and the iOS one only builds so far.
+supported from Android 12, and the iOS one runs in the simulator (not yet on a device or in a store).
 
 | Command | Output | Needs |
 |---|---|---|
@@ -125,6 +125,16 @@ supported from Android 12, and the iOS one only builds so far.
 | `python3 scripts/android_ui_test.py` | Installs the demo package and walks every page of the phone interface on a device or emulator, through its accessibility tree: onboarding, adding accounts, reordering by dragging, details, categories, search, settings and their dialogs, export, locking, an import of 150 accounts (made by `cargo run -p safay-core --example export_fixture`) whose list it scrolls and narrows by letter and erasing. It reports each failed check with a screenshot in `build/android/ui-test/`, and erases the demo package's data before and after | `adb` and the `android` command-line tool (cmdline-tools); one device online, or `--serial` |
 | `make ios-simulator` | `build/ios-simulator/debug/Safay.app` | Xcode (`DEVELOPER_DIR` when `xcode-select` names the command line tools); `rustup target add aarch64-apple-ios-sim` |
 | `make ios-simulator-run` | Builds it, then installs and starts it in the booted simulator | An iOS simulator runtime |
+| `python3 scripts/nsh.py test previews/mobile.test.tsx --target ios` | Walks every page of the phone and tablet interface over the demo vault in the simulator (`--device "iPad Pro 11-inch (M5)"` for a tablet; `--target android` on a device or emulator) and saves a picture of each in `build/screenshots/mobile/` | Same as `make ios-simulator`; the test answers system alerts itself, so they show in no picture |
+
+The phone and tablet icons come from `assets/icon.png`: `python3 scripts/mobile_icons.py` (needs Pillow) writes
+Android's adaptive layers (`assets/android/`) and the iOS icon, edge to edge (`assets/ios/icon.png`); run it again after
+the icon changes.
+
+A desktop's development build can show the phone interface: `SAFAY_MOBILE=1 SAFAY_PREVIEW_DEMO=8 cargo run -- --preview`
+(`SAFAY_MOBILE=1180x820` for a tablet's window), in iOS's look with `cargo run --features ios-look`.
+`SAFAY_DEMO_PAGE=<page>` opens the demo on one of its pages, sheets, menus or alerts (`mobile::demo_page` lists them);
+in the simulator, pass it to `nsh run --target ios previews/DemoMobile.tsx` as `SIMCTL_CHILD_SAFAY_DEMO_PAGE`.
 
 The Android package carries Java classes of its own (`android/java`, compiled by `make android` into the dex that
 `nsh.json` lists): Android's APIs that take a class of the app, such as the clipboard entry marked sensitive and the

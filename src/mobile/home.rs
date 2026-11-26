@@ -1,6 +1,7 @@
 //! The list: a top bar (the app's name, adding and the menu), the categories as chips, and the accounts as one group
 //! of rows with a letter index beside them. A press on a row copies its code, a long press opens its menu and picks it
-//! up to drag; the button at the bottom opens the search.
+//! up to drag; the button at the bottom opens the search. A wide window ([`ui::is_wide`]) lists the categories in a
+//! sidebar instead, and the accounts as cards in columns.
 use super::{Nav, Page, ui};
 use crate::{
     components::{CODE_FONT, badge_with_icon, tok},
@@ -29,14 +30,39 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
             });
         }
     });
+    let content = move |wide: bool| {
+        when(empty_vault, move || empty(s, nav)).otherwise(move || {
+            when(
+                move || s.projection.with(|p| p.rows.is_empty()),
+                move || view().flex_1().child(when(move || ui::IOS && !wide, move || chips(s, nav))).child(nothing(s)),
+            )
+            .otherwise(move || list(s, nav, wide))
+        })
+    };
     view()
         .flex_1()
-        .pt_safe_area()
-        .child(header(s, nav))
-        .child(when(move || !empty_vault(), move || chips(s, nav)))
         .child(
-            when(empty_vault, move || empty(s, nav)).otherwise(move || {
-                when(move || s.projection.with(|p| p.rows.is_empty()), move || nothing(s)).otherwise(move || list(s, nav))
+            when(ui::is_wide, move || {
+                view()
+                    .flex_1()
+                    .flex_row()
+                    .child(sidebar(s, nav))
+                    .child(view().flex_1().bg(ui::pane).pt_safe_area().child(header(s, nav, true)).child(content(true)))
+                    .into_element()
+            })
+            .otherwise(move || {
+                // iOS: the title and its buttons are the system's header (`header_items`), and the chips lead the
+                // list, whose scroll view the header's large title follows.
+                if ui::IOS {
+                    return view().flex_1().child(content(false)).into_element();
+                }
+                view()
+                    .flex_1()
+                    .pt_safe_area()
+                    .child(header(s, nav, false))
+                    .child(when(move || !empty_vault(), move || chips(s, nav)))
+                    .child(content(false))
+                    .into_element()
             }),
         )
         .child(when(move || !empty_vault(), move || search(s, nav)))
@@ -45,28 +71,50 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
         .child(super::menus::account(s, nav))
 }
 
-/// The bar at the top: the app's name, the add button and the menu.
-fn header(s: Store, nav: Nav) -> impl IntoElement {
+/// The bar at the top: the app's name (in a wide window the section's: "All" or the category), the add button and the
+/// menu.
+fn header(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
+    let name = move || -> SharedString {
+        if !wide {
+            return "Safay".into();
+        }
+        match s.category.get() {
+            None => s.label("All"),
+            Some(id) => s
+                .projection
+                .with(|p| p.categories.iter().find(|c| c.id == id).map(|c| SharedString::from(c.name.clone())))
+                .unwrap_or_default(),
+        }
+    };
     view()
         .flex_row()
         .items_center()
         .h(move || px(ui::BAR) * font_scale())
         .pl(px(ui::MARGIN + 4.0))
-        .pr(px(4.0))
-        .child(ui::title_large(text("Safay")).flex_1())
+        .pr(px(if ui::IOS { ui::MARGIN } else { 4.0 }))
+        // iOS: a large title beside the glass buttons.
+        .child(if ui::IOS || wide {
+            ui::display(text(name)).number_of_lines(1).flex_1().into_element()
+        } else {
+            ui::title_large(text(name)).flex_1().into_element()
+        })
         .child(ui::bar_button(move || s.label("Add Account"), || Icon::Plus).test_id("add").on_press(move || {
             dismiss_keyboard();
             nav.menu.set(false);
             nav.adding.update(|v| *v = !*v)
         }))
-        // The glyph is the row of dots, upright here.
-        .child(ui::bar_button(move || s.label("More"), || Icon::More).rotate(|| std::f32::consts::FRAC_PI_2).test_id("more").on_press(
-            move || {
-                dismiss_keyboard();
-                nav.adding.set(false);
-                nav.menu.set(true)
-            },
-        ))
+        .gap(px(if ui::IOS { 8.0 } else { 0.0 }))
+        // The glyph is the row of dots, upright here (iOS keeps it level, as the system's "More").
+        .child(
+            ui::bar_button(move || s.label("More"), || Icon::More)
+                .rotate(|| if ui::IOS { 0.0 } else { std::f32::consts::FRAC_PI_2 })
+                .test_id("more")
+                .on_press(move || {
+                    dismiss_keyboard();
+                    nav.adding.set(false);
+                    nav.menu.set(true)
+                }),
+        )
 }
 
 /// The search button at the bottom: a press opens the field to its left, the keyboard up, and the button closes it
@@ -75,7 +123,8 @@ fn search(s: Store, nav: Nav) -> impl IntoElement {
     let open = move || nav.searching.get();
     let field = element_ref();
     // The field's width when open: the row less its margins, the button and the gap between them.
-    let wide = move || window().width - px(2.0 * ui::MARGIN + ui::FAB + 8.0);
+    // In a wide window, over the account pane only.
+    let wide = move || window().width - px(2.0 * ui::MARGIN + ui::FAB + 8.0 + if ui::is_wide() { ui::SIDEBAR } else { 0.0 });
     view()
         .absolute()
         .left(px(0.0))
@@ -163,6 +212,97 @@ fn search(s: Store, nav: Nav) -> impl IntoElement {
         )
 }
 
+/// A wide window's sidebar: the app's name, "All" and each category with how many accounts it holds, and "Manage
+/// Categories". The chosen one is filled.
+fn sidebar(s: Store, nav: Nav) -> impl IntoElement {
+    view()
+        .w(px(ui::SIDEBAR))
+        .flex_shrink(0.0)
+        .bg(ui::sidebar)
+        .pt_safe_area()
+        // The hairline between it and the accounts.
+        .child(view().absolute().top(px(0.0)).bottom(px(0.0)).right(px(0.0)).w(px(0.5)).bg(move || tok("separator")))
+        .child(view().h(move || px(ui::BAR) * font_scale()).px(px(ui::MARGIN + 4.0)).justify_center().child(ui::display(text("Safay"))))
+        .child(sidebar_rows(s, nav))
+}
+/// The sidebar's rows, in a scroll view.
+fn sidebar_rows(s: Store, nav: Nav) -> impl IntoElement {
+    let select = move |id| {
+        nav.letter.set(None);
+        s.category.set(id);
+        s.refresh();
+    };
+    view().flex_1().child(
+        scroll().flex_1().child(
+            view()
+                .px(px(12.0))
+                .pt(px(8.0))
+                .pb_safe_area_plus(px(16.0))
+                .gap(px(2.0))
+                .child(
+                    side_row(
+                        Icon::Accounts,
+                        move || s.label("All"),
+                        move || Some(s.projection.with(|p| p.account_count)),
+                        move || s.category.get().is_none(),
+                    )
+                    .on_press(move || select(None)),
+                )
+                .child(when(
+                    move || s.projection.with(|p| !p.categories.is_empty()),
+                    move || ui::section_title(move || s.label("Categories")).pl(px(8.0)).pt(px(16.0)),
+                ))
+                .child(each(
+                    move || s.projection.with(|p| p.categories.clone()),
+                    |c| c.id,
+                    move |c, _| {
+                        let id = c.with_untracked(|c| c.id);
+                        side_row(
+                            Icon::Folder,
+                            move || c.with(|c| SharedString::from(c.name.clone())),
+                            move || Some(c.with(|c| c.count)),
+                            move || s.category.get() == Some(id),
+                        )
+                        .on_press(move || select(Some(id)))
+                    },
+                ))
+                .child(
+                    side_row(Icon::Sliders, move || s.label("Manage Categories"), || None, || false)
+                        .test_id("manage")
+                        .mt(px(8.0))
+                        .on_press(move || nav.push(Page::Categories)),
+                ),
+        ),
+    )
+}
+/// A row of the sidebar: its glyph, its name and how many accounts it holds.
+fn side_row(
+    glyph: Icon,
+    name: impl Fn() -> SharedString + Copy + 'static,
+    count: impl Fn() -> Option<usize> + Copy + 'static,
+    selected: impl Fn() -> bool + Copy + 'static,
+) -> nsh_base::ButtonElement {
+    nsh_base::button()
+        .accessibility_label(move || Some(name()))
+        .selected(selected)
+        .min_h(move || px(ui::TOUCH) * font_scale())
+        .px(px(12.0))
+        .flex_row()
+        .items_center()
+        .gap(px(12.0))
+        .rounded(px(12.0))
+        .bg(move || if selected() { theme().primary.opacity(0.14) } else { theme().primary.opacity(0.0) })
+        .active(|st| st.bg(move || tok("pressed")))
+        .child(view().text_color(move || theme().primary).child(icon(glyph).size(px(22.0))))
+        .child(
+            ui::body_large(text(name))
+                .number_of_lines(1)
+                .flex_1()
+                .text_color(move || if selected() { theme().primary } else { theme().foreground }),
+        )
+        .child(ui::dim(ui::body(text(move || count().map(|n| SharedString::from(n.to_string())).unwrap_or_default()))))
+}
+
 fn chips(s: Store, nav: Nav) -> impl IntoElement {
     let select = move |id| {
         nav.letter.set(None);
@@ -197,8 +337,12 @@ fn chips(s: Store, nav: Nav) -> impl IntoElement {
 /// The rows, as one group. A long press on a row opens its menu and picks it up: moving the finger then drags it to
 /// another place (the menu closes), and the order is saved on release. A dragged row's place stays empty while a
 /// lifted copy of it follows the finger.
-fn list(s: Store, nav: Nav) -> impl IntoElement {
-    let r = Reorder::new(s, Kind::Accounts, |_| (ui::GROUP_GAP, 1), Pickup::LongPress);
+fn list(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
+    let r = if wide {
+        Reorder::new(s, Kind::Accounts, |_| (CARD_GAP, columns()), Pickup::LongPress)
+    } else {
+        Reorder::new(s, Kind::Accounts, |_| (ui::GROUP_GAP, 1), Pickup::LongPress)
+    };
     // The index's letters, in its order: those the shown accounts file under.
     let letters = computed(move || {
         let mut letters: Vec<char> = s.projection.with(|p| p.rows.iter().map(|row| initials::initial(&row.issuer)).collect());
@@ -236,17 +380,25 @@ fn list(s: Store, nav: Nav) -> impl IntoElement {
                 // The position is read in the bindings, not once here: a cell keeps its content as rows come and
                 // go or the list scrolls, and shows whichever row is now at its place (its data, its corners).
                 let row = computed(move || row_at(at.index()));
-                account_row(s, nav, r, row, move || at.index(), count)
+                if wide { card(s, nav, r, row) } else { account_row(s, nav, r, row, move || at.index(), count) }
             })
+            .columns(move || if wide { columns() as u32 } else { 1 })
+            // iOS: the chips scroll with the rows, under the system's header.
+            .header(if ui::IOS && !wide {
+                view().mx(px(-ui::MARGIN)).pb(px(2.0)).child(chips(s, nav)).into_element()
+            } else {
+                view().into_element()
+            })
+            .column_gap(px(CARD_GAP))
             .keys(move || match narrowed.get() {
                 Some(n) => s.projection.with(|p| n.iter().filter_map(|i| p.rows.get(*i)).map(|r| r.id.to_string()).collect::<Vec<_>>()),
                 None => r.ids().iter().map(|id| id.to_string()).collect::<Vec<_>>(),
             })
-            .estimated_item_size(move || px(ui::ROW) * font_scale())
-            .row_gap(px(ui::GROUP_GAP))
-            .content_padding_x(px(ui::MARGIN))
+            .estimated_item_size(move || px(if wide { CARD } else { ui::ROW }) * font_scale())
+            .row_gap(px(if wide { CARD_GAP } else { ui::GROUP_GAP }))
+            .content_padding_x(px(if wide { CARD_MARGIN } else { ui::MARGIN }))
             // The chips keep the room above the first row; the end keeps its own.
-            .content_padding_top(px(2.0))
+            .content_padding_top(px(if wide { 8.0 } else { 2.0 }))
             .content_padding_bottom(px(8.0))
             .footer(view().h(px(ui::FAB_CLEARANCE)))
             .on_scroll(move |e: &ScrollEvent| {
@@ -257,9 +409,16 @@ fn list(s: Store, nav: Nav) -> impl IntoElement {
             .element_ref(&r.list)
             .flex_1(),
         )
-        .child(when(move || r.pointer.get().is_some() && r.standin.with(|row| row.is_some()), move || standin(r)))
+        .child(when(move || r.pointer.get().is_some() && r.standin.with(|row| row.is_some()), move || standin(r, wide)))
         .child(when(
-            move || !nav.searching.get() && r.dragged.get().is_none() && r.count() >= INDEXED && letters.with(|l| l.len() > 1),
+            move || {
+                !wide
+                    && !nav.searching.get()
+                    && !nav.reordering.get()
+                    && r.dragged.get().is_none()
+                    && r.count() >= INDEXED
+                    && letters.with(|l| l.len() > 1)
+            },
             move || index(nav, r, letters),
         ))
 }
@@ -271,17 +430,13 @@ fn account_row(
     row: Memo<Option<Row>>,
     index: impl Fn() -> usize + Copy + 'static,
     count: impl Fn() -> usize + Copy + 'static,
-) -> impl IntoElement {
+) -> AnyElement {
     let id = move || row.with(|r| r.as_ref().map(|r| r.id));
-    let issuer = move || row.with(|r| r.as_ref().map(|r| r.issuer.clone()).unwrap_or_default());
     let copied = move || s.copied.get().is_some() && s.copied.get() == id();
     let me = element_ref();
-    let el = ui::group_corners(
-        // A view, not a button: a row takes a press and a long press.
-        view()
-            .accessible(true)
-            .role(nsh_core::AccessibilityRole::Button)
-            .label(move || s.fmt("Copy code for {}", &[&issuer()]))
+    // iOS: the hairline from under the names.
+    let el = ui::group_corners_inset(
+        pressable(s, nav, r, row)
             .min_h(move || px(ui::ROW) * font_scale())
             .px(px(16.0))
             .py(px(14.0))
@@ -293,57 +448,247 @@ fn account_row(
             .transition()
             .duration(move || if copied() { 0.0 } else { ui::EFFECTS_MS })
             .ease_out()
-            .active(|st| st.bg(move || tok("surface-high")))
+            .active(|st| st.bg(move || if ui::IOS { tok("pressed") } else { tok("surface-high") }))
             // Its place stays empty while it is dragged.
-            .opacity(move || if r.is_dragging(id()) { 0.0_f32 } else { 1.0 })
-            .on_press(move |_: &()| {
-                if let Some(id) = id() {
-                    haptic(Haptic::Notification(HapticNotification::Success));
-                    s.copy(id)
-                }
-            })
-            .on_long_press(move |e: &PressEvent| {
-                if let Some(id) = id() {
-                    haptic(Haptic::Impact(HapticImpact::Medium));
-                    dismiss_keyboard();
-                    // Narrowed to a letter, the list shows only some accounts: its order is changed in the whole list.
-                    if nav.letter.get_untracked().is_none() {
-                        r.arm(id);
-                    }
-                    nav.context.set(Some((id, e.page_position)))
-                }
-            }),
+            .opacity(move || if r.is_dragging(id()) { 0.0_f32 } else { 1.0 }),
         index,
         count,
+        16.0 + 42.0 + 14.0,
     );
-    face(r.item(el, me, id), row)
+    if !SYSTEM_MENUS {
+        return face(r.item(el, me, id), row).into_element();
+    }
+    // iOS: the system's menu on a held finger, and the drag handle while the list is reordered.
+    system_menu(s, nav, row, face_with(el.element_ref(&me), row, move || nav.reordering.get()).child(grip(nav, r, me, id)))
+}
+/// iOS draws an account's menu itself (`UIContextMenuInteraction`) and reorders the list by drag handles.
+const SYSTEM_MENUS: bool = cfg!(target_os = "ios");
+
+/// The drag handle at the end of a row or a card while the list is reordered (iOS).
+fn grip(nav: Nav, r: Reorder, me: ElementRef, id: impl Fn() -> Option<safay_app::Uuid> + Copy + 'static) -> impl IntoElement {
+    when(
+        move || nav.reordering.get(),
+        move || {
+            r.handle(
+                view()
+                    .w(px(36.0))
+                    .h(px(ui::TOUCH))
+                    .items_center()
+                    .justify_center()
+                    .text_color(move || tok("tertiary"))
+                    .test_id("grip")
+                    .accessibility_elements_hidden(true)
+                    .child(icon(Icon::Grip).size(px(22.0))),
+                me,
+                id,
+            )
+        },
+    )
+}
+
+/// An account in the system's context menu (iOS): a held finger lifts it over the blurred list with its menu: its QR
+/// code, its details, its categories, deleting it. While the list is reordered there is none.
+fn system_menu(s: Store, nav: Nav, row: Memo<Option<Row>>, trigger: View) -> AnyElement {
+    #[cfg(target_os = "ios")]
+    {
+        use nsh_base::MenuButtonItem;
+        let item = |id: &str, label: SharedString, icon: &str| {
+            let mut item = MenuButtonItem::new(SharedString::from(id.to_owned()), label);
+            item.icon = Some(SharedString::from(icon.to_owned()));
+            item
+        };
+        let items = move || {
+            let mut items = vec![
+                item("qr", s.label("Show QR Code"), "qrcode"),
+                item("details", s.label("Details"), "info.circle"),
+                item("add-to", s.label("Add to"), "folder.badge.plus"),
+            ];
+            if let Some(name) =
+                s.category.get().and_then(|c| s.projection.with(|p| p.categories.iter().find(|x| x.id == c).map(|x| x.name.clone())))
+            {
+                items.push(item("remove", s.fmt("Remove from “{}”", &[&name]), "folder.badge.minus"));
+            }
+            let mut delete = item("delete", s.label("Delete"), "trash");
+            delete.destructive = true;
+            items.push(delete);
+            items
+        };
+        nsh_base::context_menu()
+            .disabled(move || nav.reordering.get())
+            .items(items)
+            .on_select(move |choice: &SharedString| {
+                let Some(id) = row.with_untracked(|r| r.as_ref().map(|r| r.id)) else { return };
+                match choice.as_ref() {
+                    "qr" => s.reveal(crate::store::Auth::Qr(id)),
+                    "details" => s.open_sheet(crate::store::Sheet::Detail(id)),
+                    "add-to" => nav.add_to.set(Some(id)),
+                    "remove" => {
+                        if let Some(category) = s.category.get_untracked() {
+                            s.membership(category, id, false)
+                        }
+                    }
+                    "delete" => s.delete_account(id),
+                    _ => {}
+                }
+            })
+            .trigger(trigger)
+            .into_element()
+    }
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = (s, nav, row);
+        trigger.into_element()
+    }
+}
+
+/// An account's row or card as screen readers and fingers take it: a press copies its code, a long press opens its menu
+/// and picks it up to drag. A view, not a button: it takes a press and a long press.
+fn pressable(s: Store, nav: Nav, r: Reorder, row: Memo<Option<Row>>) -> View {
+    let id = move || row.with(|r| r.as_ref().map(|r| r.id));
+    let issuer = move || row.with(|r| r.as_ref().map(|r| r.issuer.clone()).unwrap_or_default());
+    view()
+        .accessible(true)
+        .role(nsh_core::AccessibilityRole::Button)
+        .label(move || s.fmt("Copy code for {}", &[&issuer()]))
+        .on_press(move |_: &()| {
+            if let Some(id) = id()
+                && !nav.reordering.get_untracked()
+            {
+                haptic(Haptic::Notification(HapticNotification::Success));
+                s.copy(id)
+            }
+        })
+        .on_long_press(move |e: &PressEvent| {
+            // iOS: the system's menu takes the held finger (`system_menu`).
+            if SYSTEM_MENUS {
+                return;
+            }
+            if let Some(id) = id() {
+                haptic(Haptic::Impact(HapticImpact::Medium));
+                dismiss_keyboard();
+                // Narrowed to a letter, the list shows only some accounts: its order is changed in the whole list.
+                if nav.letter.get_untracked().is_none() {
+                    r.arm(id);
+                }
+                nav.context.set(Some((id, e.page_position)))
+            }
+        })
+}
+
+/// The gap between the cards of a wide window, and their margin from its edges.
+const CARD_GAP: f32 = 16.0;
+const CARD_MARGIN: f32 = 20.0;
+/// A card's height at the default text size, and its narrowest.
+const CARD: f32 = 122.0;
+const CARD_MIN: f32 = 220.0;
+/// How many columns of cards the account pane of a wide window holds.
+fn columns() -> usize {
+    let width = window().width.0 - ui::SIDEBAR - 2.0 * CARD_MARGIN;
+    (((width + CARD_GAP) / (CARD_MIN * font_scale() + CARD_GAP)).floor() as usize).clamp(1, 4)
+}
+
+/// An account as a card of a wide window: its mark and names over its code and the countdown, so the code never
+/// crowds the name out.
+fn card(s: Store, nav: Nav, r: Reorder, row: Memo<Option<Row>>) -> AnyElement {
+    let id = move || row.with(|r| r.as_ref().map(|r| r.id));
+    let copied = move || s.copied.get().is_some() && s.copied.get() == id();
+    let me = element_ref();
+    let el = pressable(s, nav, r, row)
+        .rounded(px(18.0))
+        .bg(move || if copied() { tok("primary-container") } else { ui::cell() })
+        .transition()
+        .duration(move || if copied() { 0.0 } else { ui::EFFECTS_MS })
+        .ease_out()
+        .active(|st| st.opacity(0.75))
+        .opacity(move || if r.is_dragging(id()) { 0.0_f32 } else { 1.0 });
+    if !SYSTEM_MENUS {
+        return card_face(r.item(el, me, id), row).into_element();
+    }
+    let el = card_face(el.element_ref(&me), row).child(view().absolute().top(px(8.0)).right(px(4.0)).child(grip(nav, r, me, id)));
+    system_menu(s, nav, row, el)
+}
+/// What a card shows.
+fn card_face(el: View, row: Memo<Option<Row>>) -> View {
+    let issuer = move || row.with(|r| r.as_ref().map(|r| r.issuer.clone()).unwrap_or_default());
+    let urgent = move || row.with(|r| r.as_ref().is_some_and(|r| r.remaining <= 5));
+    el.min_h(move || px(CARD) * font_scale())
+        .p(px(16.0))
+        .gap(px(14.0))
+        .child(
+            view()
+                .flex_row()
+                .items_center()
+                .gap(px(12.0))
+                .child(badge_with_icon(issuer, || false, move || row.with(|r| r.as_ref().and_then(|r| r.icon.clone())), 40.0))
+                .child(
+                    view().flex_1().min_w(px(0.0)).child(ui::title(text(issuer)).number_of_lines(1)).child(
+                        ui::dim(ui::body(text(move || row.with(|r| r.as_ref().map(|r| r.username.clone()).unwrap_or_default()))))
+                            .number_of_lines(1),
+                    ),
+                ),
+        )
+        .child(
+            view()
+                .flex_row()
+                .items_center()
+                .child(
+                    text(move || row.with(|r| r.as_ref().map(|r| r.code.clone()).unwrap_or_default()))
+                        .font_family(CODE_FONT.family)
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_size(px(28.0))
+                        .letter_spacing(px(0.5))
+                        .number_of_lines(1)
+                        .flex_1()
+                        .text_color(move || if urgent() { tok("urgent") } else { theme().foreground }),
+                )
+                .child(ring(move || row.with(|r| r.as_ref().map(|r| (r.remaining, r.period))), 28.0)),
+        )
 }
 
 /// What a row shows: the account's mark, its names, its code and the countdown.
 fn face(el: View, row: Memo<Option<Row>>) -> View {
+    face_with(el, row, || false)
+}
+/// [`face`], its code and countdown left out while `reordering` holds: the names take their room.
+fn face_with(el: View, row: Memo<Option<Row>>, reordering: impl Fn() -> bool + Copy + 'static) -> View {
     let issuer = move || row.with(|r| r.as_ref().map(|r| r.issuer.clone()).unwrap_or_default());
     let urgent = move || row.with(|r| r.as_ref().is_some_and(|r| r.remaining <= 5));
+    let code = move || {
+        text(move || row.with(|r| r.as_ref().map(|r| r.code.clone()).unwrap_or_default()))
+            .font_family(CODE_FONT.family)
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_size(px(24.0))
+            .letter_spacing(px(0.5))
+            .number_of_lines(1)
+            .flex_shrink(0.0)
+            .text_color(move || if urgent() { tok("urgent") } else { theme().foreground })
+    };
     el.child(badge_with_icon(issuer, || false, move || row.with(|r| r.as_ref().and_then(|r| r.icon.clone())), 42.0))
         .child(view().flex_1().min_w(px(0.0)).child(ui::title(text(issuer)).number_of_lines(1)).child(
             ui::dim(ui::body(text(move || row.with(|r| r.as_ref().map(|r| r.username.clone()).unwrap_or_default())))).number_of_lines(1),
         ))
-        .child(
-            text(move || row.with(|r| r.as_ref().map(|r| r.code.clone()).unwrap_or_default()))
-                .font_family(CODE_FONT.family)
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_size(px(24.0))
-                .letter_spacing(px(0.5))
-                .number_of_lines(1)
-                .flex_shrink(0.0)
-                .text_color(move || if urgent() { tok("urgent") } else { theme().foreground }),
-        )
-        .child(ring(move || row.with(|r| r.as_ref().map(|r| (r.remaining, r.period))), 26.0))
+        .child(when(move || !reordering(), code))
+        .child(when(move || !reordering(), move || ring(move || row.with(|r| r.as_ref().map(|r| (r.remaining, r.period))), 26.0)))
 }
 
 /// The dragged row following the finger: the row's look, lifted by a shadow, its corners all the inner ones'.
-fn standin(r: Reorder) -> impl IntoElement {
+fn standin(r: Reorder, wide: bool) -> impl IntoElement {
     let frame = move || r.pointer.get().unwrap_or_default();
     let row = computed(move || r.standin.get());
+    if wide {
+        return card_face(
+            ui::lifted(view())
+                .rounded(px(18.0))
+                .bg(ui::cell)
+                .absolute()
+                .left(move || px(frame().0))
+                .top(move || px(frame().1))
+                .w(move || px(frame().2))
+                .h(move || px(frame().3))
+                .pointer_events(nsh_core::PointerEvents::None),
+            row,
+        );
+    }
     face(
         ui::lifted(view())
             .absolute()
@@ -642,4 +987,46 @@ fn overflow(s: Store, nav: Nav) -> impl IntoElement {
 }
 fn menu_item(s: Store, glyph: Icon, label_: &'static str, press: impl Fn() + 'static) -> impl IntoElement {
     ui::menu_item(glyph, move || s.label(label_), false).test_id(label_).on_press(press)
+}
+
+/// iOS: the buttons of the list's system header: "+" and its menu of the ways to add an account, and "More" with the
+/// list's other places. Their menus are the system's.
+pub fn header_items(s: Store, nav: Nav) -> Vec<nsh_core::element::header::HeaderItem> {
+    use nsh_core::element::{desktop::MenuItem, header::HeaderItem};
+    let item = |label: &'static str, symbol: &str| MenuItem::new(s.label(label).to_string()).symbol(symbol);
+    let mut add = Vec::new();
+    if CAMERA {
+        add.push(item("Scan QR Code", "qrcode.viewfinder").on_select(move || nav.push(Page::Scan)));
+    }
+    add.extend([
+        item("Choose from Photos", "photo.on.rectangle").on_select(move || {
+            s.scanned.set(Default::default());
+            s.choose_images()
+        }),
+        item("Enter Setup Key", "keyboard").on_select(move || super::add::open(s, nav)),
+        item("Import Backup File", "doc").on_select(move || s.choose_backup()),
+    ]);
+    // Reordering: "Done" alone ends it.
+    if nav.reordering.get() {
+        return vec![
+            // "Done" in words: the system's Done item is a check mark on iOS 26.
+            HeaderItem::new(s.label("Done").to_string()).key("done").on_press(move || nav.reordering.set(false)),
+        ];
+    }
+    let mut more = vec![
+        item("Settings", "gearshape").on_select(move || nav.push(Page::Settings)),
+        item("Manage Categories", "slider.horizontal.3").on_select(move || nav.push(Page::Categories)),
+    ];
+    if s.projection.with(|p| p.rows.len() > 1) {
+        more.push(item("Reorder", "arrow.up.arrow.down").on_select(move || {
+            nav.close_search();
+            nav.letter.set(None);
+            nav.reordering.set(true)
+        }));
+    }
+    more.push(item("Lock Now", "lock").on_select(move || s.lock()));
+    vec![
+        HeaderItem::symbol("ellipsis").key("more").label(s.label("More").to_string()).menu(more),
+        HeaderItem::symbol("plus").key("add").label(s.label("Add Account").to_string()).menu(add),
+    ]
 }

@@ -31,7 +31,7 @@ pub fn sheet(s: Store) -> impl IntoElement {
             s.sheet.set(None);
             s.detail.set(None);
         },
-        dynamic(move || shown(s).map(|id| content(s, id).into_element())),
+        move || dynamic(move || shown(s).map(|id| content(s, id).into_element())).into_element(),
     )
 }
 
@@ -54,167 +54,197 @@ fn content(s: Store, id: Uuid) -> impl IntoElement {
         dismiss_keyboard();
         s.save_detail(id);
     };
-    scroll().max_h(move || ui::sheet_room(0.0)).keyboard_dismiss_mode(KeyboardDismissMode::None).keyboard_taps(KeyboardTaps::Handled).child(
-        view()
-            .px(px(SIDE))
-            .pb(move || ui::sheet_bottom(16.0))
-            .gap(px(16.0))
-            // Names, and the control that edits them.
-            .child(
-                view()
-                    .flex_row()
-                    .items_center()
-                    .gap(px(14.0))
-                    .child(badge_with_icon(issuer, || false, move || row.with(|r| r.as_ref().and_then(|r| r.icon.clone())), 48.0))
-                    .child(
-                        view()
-                            .flex_1()
-                            .min_w(px(0.0))
-                            .child(ui::title_large(text(issuer)).number_of_lines(1))
-                            .child(ui::dim(ui::body(text(move || detail().map(|d| d.username).unwrap_or_default()))).number_of_lines(1)),
-                    )
-                    .child(
-                        when(move || editing.get(), move || ui::text_button(move || s.label("Done"), false).test_id("done").on_press(save))
+    scroll()
+        .max_h(move || ui::sheet_room(0.0))
+        .flex_grow(if cfg!(target_os = "ios") { 1.0 } else { 0.0 })
+        .keyboard_dismiss_mode(KeyboardDismissMode::None)
+        .keyboard_taps(KeyboardTaps::Handled)
+        .child(
+            view()
+                .px(px(SIDE))
+                .pb(move || ui::sheet_bottom(16.0))
+                .gap(px(16.0))
+                // Names, and the control that edits them.
+                .child(
+                    view()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(14.0))
+                        .child(badge_with_icon(issuer, || false, move || row.with(|r| r.as_ref().and_then(|r| r.icon.clone())), 48.0))
+                        .child(
+                            view().flex_1().min_w(px(0.0)).child(ui::title_large(text(issuer)).number_of_lines(1)).child(
+                                ui::dim(ui::body(text(move || detail().map(|d| d.username).unwrap_or_default()))).number_of_lines(1),
+                            ),
+                        )
+                        .child(
+                            when(
+                                move || editing.get(),
+                                move || ui::text_button(move || s.label("Done"), false).test_id("done").on_press(save),
+                            )
                             .otherwise(move || {
-                                ui::icon_button(move || s.label("Edit"), || Icon::Pencil).test_id("edit").on_press(move || {
+                                // iOS: "Edit" in words, as the system's.
+                                let edit = if ui::IOS {
+                                    ui::text_button(move || s.label("Edit"), false)
+                                } else {
+                                    ui::icon_button(move || s.label("Edit"), || Icon::Pencil)
+                                };
+                                edit.test_id("edit").on_press(move || {
                                     s.error.set(None);
                                     s.marks.update(|m| m.website_error = false);
                                     editing.set(true)
                                 })
                             }),
-                    ),
-            )
-            // The code: a press copies it.
-            .child(
-                button()
-                    .test_id("code")
-                    .items_center()
-                    .py(px(20.0))
-                    .rounded(px(32.0))
-                    .bg(move || if copied() { tok("primary-container") } else { tok("surface-high") })
-                    .transition()
-                    .duration(ui::EFFECTS_MS)
-                    .ease_out()
-                    .on_press(move || {
-                        haptic(Haptic::Notification(HapticNotification::Success));
-                        s.copy(id)
-                    })
-                    .child(
-                        text(move || row.with(|r| r.as_ref().map(|r| r.code.clone()).unwrap_or_default()))
-                            .font_family(CODE_FONT.family)
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_size(px(42.0))
-                            .number_of_lines(1)
-                            .text_color(move || if urgent() { tok("urgent") } else { theme().foreground }),
-                    )
-                    .child(
-                        view()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(8.0))
-                            .mt(px(10.0))
-                            .child(ui::dim(ui::caption(text(move || {
-                                s.fmt("Refreshes in {}s", &[&row.with(|r| r.as_ref().map(|r| r.remaining).unwrap_or_default()).to_string()])
-                            }))))
-                            .child(ui::caption(text("·")).text_color(move || tok("outline")))
-                            .child(view().size(px(16.0)).text_color(move || theme().primary).child(dynamic(move || {
-                                icon(if copied() { Icon::Check } else { Icon::Copy }).size(px(16.0)).into_element()
-                            })))
-                            .child(
-                                ui::caption(text(move || s.label(if copied() { "Copied" } else { "Copy" })))
-                                    .text_color(move || theme().primary),
-                            ),
-                    ),
-            )
-            .child(when(move || editing.get(), move || edit_fields(s, save)))
-            .child(categories(s, id, row))
-            // How it was made.
-            .child(
-                view()
-                    .child(info(s, "Algorithm", move || {
-                        detail()
-                            .map(|d| {
-                                // Steam Guard and Battle.net have fixed parameters: their name says it all.
-                                match d.otp_type {
-                                    safay_app::core::OtpType::Steam => return s.label("Steam"),
-                                    safay_app::core::OtpType::BattleNet => return s.label("Battle.net"),
-                                    safay_app::core::OtpType::Totp => {}
-                                }
-                                let algorithm = match d.algorithm {
-                                    safay_app::core::TotpAlgorithm::Sha256 => "SHA256",
-                                    safay_app::core::TotpAlgorithm::Sha512 => "SHA512",
-                                    _ => "SHA1",
-                                };
-                                s.fmt("{} · {} digits · {} sec", &[algorithm, &d.digits.to_string(), &d.period.to_string()])
-                            })
-                            .unwrap_or_default()
-                    }))
-                    .child(rule())
-                    .child(info(s, "Added via", move || {
-                        s.label(if detail().is_some_and(|d| d.imported) { "Imported" } else { "Added manually" })
-                    }))
-                    .child(rule())
-                    .child(info(s, "Date Added", move || {
-                        detail().map(|d| SharedString::from(crate::platform::local_time::date_time(d.created_at))).unwrap_or_default()
-                    })),
-            )
-            // The secret and the QR code.
-            .child(ui::label(text(move || s.label("Secret"))))
-            .child(when(revealed, move || {
-                view()
-                    .flex_row()
-                    .items_center()
-                    .pl(px(16.0))
-                    .rounded(px(16.0))
-                    .bg(move || tok("surface-high"))
-                    .child(
-                        text(move || SharedString::from(s.revealed.get().to_string()))
-                            .font_family(CODE_FONT.family)
-                            .text_size(px(15.0))
-                            .line_height(px(22.0))
-                            .flex_1()
-                            .py(px(12.0)),
-                    )
-                    .child(ui::icon_button(move || s.label("Copy"), || Icon::Copy).on_press(move || s.copy_secret()))
-            }))
-            .child(
-                view()
-                    .flex_row()
-                    .gap(px(ui::GROUP_GAP))
-                    .child(
-                        ui::tonal_button(
-                            move || if revealed() { Icon::EyeSlash } else { Icon::Key },
-                            move || s.label(if revealed() { "Hide" } else { "Show Secret" }),
-                            false,
-                        )
-                        .test_id("secret")
-                        .flex_1()
-                        .rounded_l(px(28.0))
-                        .rounded_r(px(8.0))
-                        .on_press(move || {
-                            if revealed() {
-                                s.revealed.set(Zeroizing::new(String::new()));
+                        ),
+                )
+                // The code: a press copies it.
+                .child(
+                    button()
+                        .test_id("code")
+                        .items_center()
+                        .py(px(20.0))
+                        .rounded(px(32.0))
+                        .bg(move || {
+                            if copied() {
+                                tok("primary-container")
+                            } else if ui::IOS {
+                                tok("sheet-card")
                             } else {
-                                s.reveal(Auth::Secret(id))
+                                tok("surface-high")
                             }
-                        }),
-                    )
-                    .child(
-                        ui::tonal_button(|| Icon::Qr, move || s.label("Export QR Code"), false)
-                            .test_id("qr")
+                        })
+                        .transition()
+                        .duration(ui::EFFECTS_MS)
+                        .ease_out()
+                        .on_press(move || {
+                            haptic(Haptic::Notification(HapticNotification::Success));
+                            s.copy(id)
+                        })
+                        .child(
+                            text(move || row.with(|r| r.as_ref().map(|r| r.code.clone()).unwrap_or_default()))
+                                .font_family(CODE_FONT.family)
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_size(px(42.0))
+                                .number_of_lines(1)
+                                .text_color(move || if urgent() { tok("urgent") } else { theme().foreground }),
+                        )
+                        .child(
+                            view()
+                                .flex_row()
+                                .items_center()
+                                .gap(px(8.0))
+                                .mt(px(10.0))
+                                .child(ui::dim(ui::caption(text(move || {
+                                    s.fmt(
+                                        "Refreshes in {}s",
+                                        &[&row.with(|r| r.as_ref().map(|r| r.remaining).unwrap_or_default()).to_string()],
+                                    )
+                                }))))
+                                .child(ui::caption(text("·")).text_color(move || tok("outline")))
+                                .child(view().size(px(16.0)).text_color(move || theme().primary).child(dynamic(move || {
+                                    icon(if copied() { Icon::Check } else { Icon::Copy }).size(px(16.0)).into_element()
+                                })))
+                                .child(
+                                    ui::caption(text(move || s.label(if copied() { "Copied" } else { "Copy" })))
+                                        .text_color(move || theme().primary),
+                                ),
+                        ),
+                )
+                .child(when(move || editing.get(), move || edit_fields(s, save)))
+                .child(categories(s, id, row))
+                // How it was made.
+                .child(
+                    view()
+                        // iOS: a group of its own, as the system's lists of facts.
+                        .px(px(if ui::IOS { 16.0 } else { 0.0 }))
+                        .rounded(px(if ui::IOS { 14.0 } else { 0.0 }))
+                        .bg(move || if ui::IOS { tok("sheet-card") } else { theme().card.opacity(0.0) })
+                        .child(info(s, "Algorithm", move || {
+                            detail()
+                                .map(|d| {
+                                    // Steam Guard and Battle.net have fixed parameters: their name says it all.
+                                    match d.otp_type {
+                                        safay_app::core::OtpType::Steam => return s.label("Steam"),
+                                        safay_app::core::OtpType::BattleNet => return s.label("Battle.net"),
+                                        safay_app::core::OtpType::Totp => {}
+                                    }
+                                    let algorithm = match d.algorithm {
+                                        safay_app::core::TotpAlgorithm::Sha256 => "SHA256",
+                                        safay_app::core::TotpAlgorithm::Sha512 => "SHA512",
+                                        _ => "SHA1",
+                                    };
+                                    s.fmt("{} · {} digits · {} sec", &[algorithm, &d.digits.to_string(), &d.period.to_string()])
+                                })
+                                .unwrap_or_default()
+                        }))
+                        .child(rule())
+                        .child(info(s, "Added via", move || {
+                            s.label(if detail().is_some_and(|d| d.imported) { "Imported" } else { "Added manually" })
+                        }))
+                        .child(rule())
+                        .child(info(s, "Date Added", move || {
+                            detail().map(|d| SharedString::from(crate::platform::local_time::date_time(d.created_at))).unwrap_or_default()
+                        })),
+                )
+                // The secret and the QR code.
+                .child(ui::heading(move || s.label("Secret")))
+                .child(when(revealed, move || {
+                    view()
+                        .flex_row()
+                        .items_center()
+                        .pl(px(16.0))
+                        .rounded(px(16.0))
+                        .bg(move || if ui::IOS { tok("sheet-card") } else { tok("surface-high") })
+                        .child(
+                            text(move || SharedString::from(s.revealed.get().to_string()))
+                                .font_family(CODE_FONT.family)
+                                .text_size(px(15.0))
+                                .line_height(px(22.0))
+                                .flex_1()
+                                .py(px(12.0)),
+                        )
+                        .child(ui::icon_button(move || s.label("Copy"), || Icon::Copy).on_press(move || s.copy_secret()))
+                }))
+                .child(
+                    view()
+                        .flex_row()
+                        .gap(px(if ui::IOS { 12.0 } else { ui::GROUP_GAP }))
+                        .child(
+                            ui::tonal_button(
+                                move || if revealed() { Icon::EyeSlash } else { Icon::Key },
+                                move || s.label(if revealed() { "Hide" } else { "Show Secret" }),
+                                false,
+                            )
+                            .test_id("secret")
                             .flex_1()
-                            .rounded_l(px(8.0))
-                            .rounded_r(px(28.0))
-                            .on_press(move || s.reveal(Auth::Qr(id))),
-                    ),
-            )
-            // No delete button here, where a press meant for the secret could land on it: an account is deleted from
-            // its menu in the list.
-            .child(ui::dim(ui::caption(text(move || s.label("Showing the secret or the QR code asks for your master password."))))),
-    )
+                            .rounded_l(px(if ui::IOS { 14.0 } else { 28.0 }))
+                            .rounded_r(px(if ui::IOS { 14.0 } else { 8.0 }))
+                            .on_press(move || {
+                                if revealed() {
+                                    s.revealed.set(Zeroizing::new(String::new()));
+                                } else {
+                                    s.reveal(Auth::Secret(id))
+                                }
+                            }),
+                        )
+                        .child(
+                            ui::tonal_button(|| Icon::Qr, move || s.label("Export QR Code"), false)
+                                .test_id("qr")
+                                .flex_1()
+                                .rounded_l(px(if ui::IOS { 14.0 } else { 8.0 }))
+                                .rounded_r(px(if ui::IOS { 14.0 } else { 28.0 }))
+                                .on_press(move || s.reveal(Auth::Qr(id))),
+                        ),
+                )
+                // No delete button here, where a press meant for the secret could land on it: an account is deleted from
+                // its menu in the list.
+                .child(ui::dim(ui::caption(text(move || s.label("Showing the secret or the QR code asks for your master password."))))),
+        )
 }
 
 fn rule() -> impl IntoElement {
+    if ui::IOS {
+        return view().h(px(0.5)).bg(move || tok("separator"));
+    }
     view().h(px(1.0)).bg(move || theme().border.opacity(0.7))
 }
 fn info(s: Store, name: &'static str, value: impl Fn() -> SharedString + 'static) -> impl IntoElement {
@@ -287,7 +317,7 @@ fn edit_fields(s: Store, save: impl Fn() + Copy + 'static) -> impl IntoElement {
 
 /// The account's categories as chips in a row: a press adds it to one or takes it out, at once.
 fn categories(s: Store, id: Uuid, row: Memo<Option<safay_app::session::Row>>) -> impl IntoElement {
-    view().gap(px(8.0)).child(ui::label(text(move || s.label("Categories")))).child(
+    view().gap(px(8.0)).child(ui::heading(move || s.label("Categories"))).child(
         // One row that scrolls sideways, without an indicator, out to the sheet's edges.
         scroll().horizontal().scrollbar(false).mx(px(-SIDE)).child(
             view()

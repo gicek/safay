@@ -20,31 +20,31 @@ fn auth(s: Store) -> impl IntoElement {
     };
     ui::dialog(
         move || s.label("Verify your identity"),
-        view()
-            .gap(px(8.0))
-            .child(ui::dim(ui::body(text(move || s.label("Enter your master password to continue.")))))
-            .child(ui::field(
-                s,
-                "auth-password",
-                Entry::Password,
-                move || s.label("Master Password"),
-                move || s.auth_password.with(|p| p.to_string()),
-                move |v| {
-                    s.auth_error.set(None);
-                    s.auth_password.set(Zeroizing::new(v.to_owned()))
-                },
-                submit,
-                |_| {},
-                move || s.auth_error.get().is_some(),
-                ReturnKeyType::Done,
-                None,
-            ))
-            .child(ui::field_note(move || s.auth_error.get().map(|e| s.label(crate::i18n::error_key(e))), || true)),
-        view()
-            .flex_row()
-            .gap(px(4.0))
-            .child(ui::text_button(move || s.label("Cancel"), false).on_press(move || s.cancel_auth()))
-            .child(ui::text_button(move || s.label("Continue"), false).test_id("authorize").on_press(submit)),
+        move || {
+            view()
+                .gap(px(8.0))
+                .child(ui::message(ui::body(text(move || s.label("Enter your master password to continue.")))))
+                .child(ui::field(
+                    s,
+                    "auth-password",
+                    Entry::Password,
+                    move || s.label("Master Password"),
+                    move || s.auth_password.with(|p| p.to_string()),
+                    move |v| {
+                        s.auth_error.set(None);
+                        s.auth_password.set(Zeroizing::new(v.to_owned()))
+                    },
+                    submit,
+                    |_| {},
+                    move || s.auth_error.get().is_some(),
+                    ReturnKeyType::Done,
+                    None,
+                ))
+                .child(ui::field_note(move || s.auth_error.get().map(|e| s.label(crate::i18n::error_key(e))), || true))
+        },
+        ui::dialog_actions(false)
+            .child(ui::dialog_action(move || s.label("Cancel"), ui::Act::Cancel).on_press(move || s.cancel_auth()))
+            .child(ui::dialog_action(move || s.label("Continue"), ui::Act::Default).test_id("authorize").on_press(submit)),
         move || {
             if !s.busy.get() {
                 s.cancel_auth()
@@ -57,24 +57,91 @@ fn auth(s: Store) -> impl IntoElement {
 fn qr(s: Store) -> impl IntoElement {
     ui::dialog(
         move || s.label("Export QR Code"),
-        view()
-            .items_center()
-            .gap(px(12.0))
-            .child(view().p(px(8.0)).rounded(px(12.0)).bg(white()).child(image(move || s.qr.with(|v| v.to_string())).size(px(240.0))))
-            .child(ui::title(text(move || s.detail.with(|d| d.as_ref().map(|d| SharedString::from(d.issuer.clone())).unwrap_or_default()))))
-            .child(
-                ui::dim(ui::caption(text(move || {
-                    s.label("Anyone who scans this code can generate your codes. Scan it only on devices you trust.")
+        move || {
+            view()
+                .items_center()
+                .gap(px(12.0))
+                .child(view().p(px(8.0)).rounded(px(12.0)).bg(white()).child(image(move || s.qr.with(|v| v.to_string())).size(px(240.0))))
+                .child(ui::title(text(move || {
+                    s.detail.with(|d| d.as_ref().map(|d| SharedString::from(d.issuer.clone())).unwrap_or_default())
                 })))
-                .text_center(),
-            ),
-        ui::text_button(move || s.label("Done"), false).test_id("qr-done").on_press(move || s.close_sheet()),
+                .child(
+                    ui::dim(ui::caption(text(move || {
+                        s.label("Anyone who scans this code can generate your codes. Scan it only on devices you trust.")
+                    })))
+                    .text_center(),
+                )
+        },
+        ui::dialog_actions(false)
+            .child(ui::dialog_action(move || s.label("Done"), ui::Act::Default).test_id("qr-done").on_press(move || s.close_sheet())),
         move || s.close_sheet(),
     )
 }
 
-/// A new category's name, or another name for one there is.
-fn category_name(s: Store) -> impl IntoElement {
+/// A new category's name, or another name for one there is. iOS: the system's alert with a text field; a name it
+/// refuses (one taken) asks again, saying why.
+fn category_name(s: Store) -> AnyElement {
+    if ui::IOS {
+        system_category_name(s);
+        return view().into_element();
+    }
+    drawn_category_name(s).into_element()
+}
+fn system_category_name(s: Store) {
+    let shown = stored(0_u64);
+    // A name is being saved: no alert until it is refused (an error) or the edit ends.
+    let saving = stored(false);
+    // Each time the edit asks anew (opened, or refused with an error), one alert.
+    effect(move || {
+        let Some(edit) = s.editing.get() else { return };
+        if saving.get() {
+            if edit.error.is_none() {
+                return;
+            }
+            saving.replace(false);
+        }
+        let ask = shown.get() + 1;
+        shown.replace(ask);
+        untracked(move || {
+            let renaming = edit.id.is_some();
+            let mut alert = nsh_base::alert_dialog()
+                .title(s.label(if renaming { "Rename" } else { "New Category" }))
+                .input(
+                    nsh_base::AlertDialogInput::new()
+                        .default_value(edit.name.clone())
+                        .placeholder(s.label("Category name"))
+                        .select_text_on_focus(renaming)
+                        .required(true),
+                )
+                .cancel("cancel", s.label("Cancel"))
+                .action("commit", s.label(if renaming { "Done" } else { "Create" }));
+            if let Some(error) = edit.error {
+                alert = alert.description(s.label(crate::i18n::error_key(error)));
+            }
+            let answer = alert.show();
+            s.task(async move {
+                let reply = answer.await.ok();
+                if shown.get() != ask {
+                    return;
+                }
+                match reply.and_then(|r| if r.action.as_deref() == Some("commit") { r.value } else { None }) {
+                    Some(name) => {
+                        saving.replace(true);
+                        s.editing.update(|e| {
+                            if let Some(e) = e {
+                                e.name = name.to_string();
+                                e.error = None;
+                            }
+                        });
+                        s.commit_category();
+                    }
+                    None => s.editing.set(None),
+                }
+            });
+        });
+    });
+}
+fn drawn_category_name(s: Store) -> impl IntoElement {
     let renaming = move || s.editing.with(|e| e.as_ref().is_some_and(|e| e.id.is_some()));
     let blank = move || s.editing.with(|e| e.as_ref().is_none_or(|e| e.name.trim().is_empty()));
     let submit = move || {
@@ -88,37 +155,39 @@ fn category_name(s: Store) -> impl IntoElement {
     };
     ui::dialog(
         move || s.label(if renaming() { "Rename" } else { "New Category" }),
-        view()
-            .gap(px(8.0))
-            .child(ui::field(
-                s,
-                "category-name",
-                Entry::Text,
-                move || s.label("Category name"),
-                move || s.editing.with(|e| e.as_ref().map(|e| e.name.clone()).unwrap_or_default()),
-                move |v| {
-                    s.editing.update(|e| {
-                        if let Some(e) = e {
-                            e.name = v.to_owned();
-                            e.error = None;
-                        }
-                    })
-                },
-                submit,
-                |_| {},
-                move || s.editing.with(|e| e.as_ref().is_some_and(|e| e.error.is_some())),
-                ReturnKeyType::Done,
-                None,
-            ))
-            .child(ui::field_note(
-                move || s.editing.with(|e| e.as_ref().and_then(|e| e.error)).map(|e| s.label(crate::i18n::error_key(e))),
-                || true,
-            )),
-        view()
-            .flex_row()
-            .gap(px(4.0))
-            .child(ui::text_button(move || s.label("Cancel"), false).on_press(cancel))
-            .child(ui::text_button(move || s.label(if renaming() { "Done" } else { "Create" }), false).test_id("commit").on_press(submit)),
+        move || {
+            view()
+                .gap(px(8.0))
+                .child(ui::field(
+                    s,
+                    "category-name",
+                    Entry::Text,
+                    move || s.label("Category name"),
+                    move || s.editing.with(|e| e.as_ref().map(|e| e.name.clone()).unwrap_or_default()),
+                    move |v| {
+                        s.editing.update(|e| {
+                            if let Some(e) = e {
+                                e.name = v.to_owned();
+                                e.error = None;
+                            }
+                        })
+                    },
+                    submit,
+                    |_| {},
+                    move || s.editing.with(|e| e.as_ref().is_some_and(|e| e.error.is_some())),
+                    ReturnKeyType::Done,
+                    None,
+                ))
+                .child(ui::field_note(
+                    move || s.editing.with(|e| e.as_ref().and_then(|e| e.error)).map(|e| s.label(crate::i18n::error_key(e))),
+                    || true,
+                ))
+        },
+        ui::dialog_actions(false).child(ui::dialog_action(move || s.label("Cancel"), ui::Act::Cancel).on_press(cancel)).child(
+            ui::dialog_action(move || s.label(if renaming() { "Done" } else { "Create" }), ui::Act::Default)
+                .test_id("commit")
+                .on_press(submit),
+        ),
         cancel,
     )
 }
@@ -151,30 +220,32 @@ fn options<T: Copy + PartialEq + 'static>(
     let close = move || nav.dialog.set(None);
     ui::dialog(
         move || s.label(title),
-        view()
-            .mx(px(-24.0))
-            .child(when(
-                move || message.is_some(),
-                move || ui::dim(ui::body(text(move || s.label(message.unwrap_or_default())))).px(px(24.0)).pb(px(8.0)),
-            ))
-            .children(values.into_iter().map(move |(value, name)| {
-                let on = move || current() == value;
-                let said = name.clone();
-                ui::toggle(AccessibilityRole::Radio, move || said.clone(), on)
-                    .min_h(move || px(ui::TOUCH) * font_scale())
-                    .px(px(24.0))
-                    .flex_row()
-                    .items_center()
-                    .gap(px(24.0))
-                    .active(|st| st.bg(move || tok("pressed")))
-                    .on_press(move |_: &()| {
-                        pick(value);
-                        close()
-                    })
-                    .child(ui::radio_mark(on))
-                    .child(ui::body_large(text(name)))
-            })),
-        ui::text_button(move || s.label("Cancel"), false).on_press(close),
+        move || {
+            view()
+                .mx(px(-24.0))
+                .child(when(
+                    move || message.is_some(),
+                    move || ui::message(ui::body(text(move || s.label(message.unwrap_or_default())))).px(px(24.0)).pb(px(8.0)),
+                ))
+                .children(values.into_iter().map(move |(value, name)| {
+                    let on = move || current() == value;
+                    let said = name.clone();
+                    ui::toggle(AccessibilityRole::Radio, move || said.clone(), on)
+                        .min_h(move || px(ui::TOUCH) * font_scale())
+                        .px(px(24.0))
+                        .flex_row()
+                        .items_center()
+                        .gap(px(24.0))
+                        .active(|st| st.bg(move || tok("pressed")))
+                        .on_press(move |_: &()| {
+                            pick(value);
+                            close()
+                        })
+                        .child(ui::radio_mark(on))
+                        .child(ui::body_large(text(name)))
+                }))
+        },
+        ui::dialog_actions(false).child(ui::dialog_action(move || s.label("Cancel"), ui::Act::Cancel).on_press(close)),
         close,
     )
 }
@@ -227,35 +298,38 @@ fn change_password(s: Store, nav: super::Nav) -> impl IntoElement {
     });
     ui::dialog(
         move || s.label("Change Master Password"),
-        view()
-            .gap(px(8.0))
-            .child(ui::field(
-                s,
-                "current-password",
-                Entry::Password,
-                move || s.label("Current Master Password"),
-                move || s.form.with(|f| f.password.to_string()),
-                move |v| {
-                    s.error.set(None);
-                    s.form.update(|f| f.password = Zeroizing::new(v.to_owned()))
-                },
-                || {},
-                |_| {},
-                move || s.error.get().is_some(),
-                ReturnKeyType::Next,
-                None,
-            ))
-            .child(super::onboarding::new_password_fields(s, "New Password", "Enter again", submit))
-            .child(ui::dim(ui::caption(text(move || {
-                s.label("The vault on this device is re-encrypted with the new password. If sync is on, your backup is updated too.")
-            }))))
-            .child(ui::field_note(move || s.error.get().map(|e| s.label(crate::i18n::error_key(e))), || true)),
-        view()
-            .flex_row()
-            .gap(px(4.0))
-            .child(ui::text_button(move || s.label("Cancel"), false).disabled(move || s.busy.get()).on_press(close))
+        move || {
+            view()
+                .gap(px(8.0))
+                .child(ui::field(
+                    s,
+                    "current-password",
+                    Entry::Password,
+                    move || s.label("Current Master Password"),
+                    move || s.form.with(|f| f.password.to_string()),
+                    move |v| {
+                        s.error.set(None);
+                        s.form.update(|f| f.password = Zeroizing::new(v.to_owned()))
+                    },
+                    || {},
+                    |_| {},
+                    move || s.error.get().is_some(),
+                    ReturnKeyType::Next,
+                    None,
+                ))
+                .child(super::onboarding::new_password_fields(s, "New Password", "Enter again", submit))
+                .child(ui::dim(ui::caption(text(move || {
+                    s.label("The vault on this device is re-encrypted with the new password. If sync is on, your backup is updated too.")
+                }))))
+                .child(ui::field_note(move || s.error.get().map(|e| s.label(crate::i18n::error_key(e))), || true))
+        },
+        ui::dialog_actions(true)
+            .child(ui::dialog_action(move || s.label("Cancel"), ui::Act::Cancel).disabled(move || s.busy.get()).on_press(close))
             .child(
-                ui::text_button(move || s.label("Change Password"), false).test_id("change").disabled(move || !ready()).on_press(submit),
+                ui::dialog_action(move || s.label("Change Password"), ui::Act::Default)
+                    .test_id("change")
+                    .disabled(move || !ready())
+                    .on_press(submit),
             ),
         close,
     )
@@ -293,17 +367,17 @@ fn export(s: Store, nav: super::Nav) -> impl IntoElement {
     };
     ui::dialog(
         move || s.label("Export Encrypted Backup"),
-        view()
-            .gap(px(8.0))
-            .child(ui::dim(ui::body(text(move || {
-                s.label("The backup is encrypted with this separate password. You’ll need it to import on another device.")
-            }))))
-            .child(super::onboarding::new_password_fields(s, "Export Password", "Enter again", submit)),
-        view()
-            .flex_row()
-            .gap(px(4.0))
-            .child(ui::text_button(move || s.label("Cancel"), false).on_press(close))
-            .child(ui::text_button(move || s.label("Export"), false).test_id("export-go").disabled(move || !ready()).on_press(submit)),
+        move || {
+            view()
+                .gap(px(8.0))
+                .child(ui::message(ui::body(text(move || {
+                    s.label("The backup is encrypted with this separate password. You’ll need it to import on another device.")
+                }))))
+                .child(super::onboarding::new_password_fields(s, "Export Password", "Enter again", submit))
+        },
+        ui::dialog_actions(false).child(ui::dialog_action(move || s.label("Cancel"), ui::Act::Cancel).on_press(close)).child(
+            ui::dialog_action(move || s.label("Export"), ui::Act::Default).test_id("export-go").disabled(move || !ready()).on_press(submit),
+        ),
         close,
     )
 }
@@ -326,31 +400,31 @@ fn backup_password(s: Store, nav: super::Nav) -> impl IntoElement {
     request_animation_frame(move |_| field.focus());
     ui::dialog(
         move || s.label("Backup Password"),
-        view()
-            .gap(px(12.0))
-            .child(ui::dim(ui::body(text(move || s.label("Enter the password that was used to export this backup.")))))
-            .child(ui::field(
-                s,
-                "file-password",
-                Entry::Password,
-                move || s.label("Enter password"),
-                move || s.form.with(|f| f.password.to_string()),
-                move |v| {
-                    s.error.set(None);
-                    s.form.update(|f| f.password = Zeroizing::new(v.to_owned()))
-                },
-                submit,
-                |_| {},
-                move || s.error.get().is_some(),
-                ReturnKeyType::Done,
-                Some(field),
-            ))
-            .child(ui::field_note(move || s.error.get().map(|e| s.label(crate::i18n::error_key(e))), || true)),
-        view()
-            .flex_row()
-            .gap(px(4.0))
-            .child(ui::text_button(move || s.label("Cancel"), false).on_press(close))
-            .child(ui::text_button(move || s.label("Import"), false).test_id("import-go").on_press(submit)),
+        move || {
+            view()
+                .gap(px(12.0))
+                .child(ui::message(ui::body(text(move || s.label("Enter the password that was used to export this backup.")))))
+                .child(ui::field(
+                    s,
+                    "file-password",
+                    Entry::Password,
+                    move || s.label("Enter password"),
+                    move || s.form.with(|f| f.password.to_string()),
+                    move |v| {
+                        s.error.set(None);
+                        s.form.update(|f| f.password = Zeroizing::new(v.to_owned()))
+                    },
+                    submit,
+                    |_| {},
+                    move || s.error.get().is_some(),
+                    ReturnKeyType::Done,
+                    Some(field),
+                ))
+                .child(ui::field_note(move || s.error.get().map(|e| s.label(crate::i18n::error_key(e))), || true))
+        },
+        ui::dialog_actions(false)
+            .child(ui::dialog_action(move || s.label("Cancel"), ui::Act::Cancel).on_press(close))
+            .child(ui::dialog_action(move || s.label("Import"), ui::Act::Default).test_id("import-go").on_press(submit)),
         close,
     )
 }

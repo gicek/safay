@@ -31,7 +31,7 @@ pub fn restore_page(s: Store, scaffold: impl FnOnce(AnyElement, AnyElement) -> A
             .or_else(|| s.status.get().filter(|st| st.tone == crate::store::Tone::Error).map(|st| st.text))
     };
     scaffold(
-        ui::top_bar(s, None, back).into_element(),
+        ui::top_bar(s, None, back),
         view()
             .w_full()
             .gap(px(16.0))
@@ -200,7 +200,7 @@ fn source_row(kind: LocationIcon, title: SharedString) -> nsh_base::ButtonElemen
         .active(|st| st.bg(move || tok("surface-high")))
         .child(plate(kind))
         .child(ui::body_large(text(title)).flex_1())
-        .child(view().text_color(move || theme().muted_foreground).child(icon(Icon::ChevronRight).size(px(24.0))))
+        .child(ui::chevron())
 }
 
 /// Whether first run is on its restore step.

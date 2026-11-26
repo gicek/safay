@@ -31,7 +31,14 @@ pub fn back(s: Store) -> bool {
     true
 }
 
-pub fn page(s: Store) -> impl IntoElement {
+pub fn page(s: Store) -> AnyElement {
+    if ui::IOS {
+        return native(s).into_element();
+    }
+    step(s).into_element()
+}
+/// The page of the stage shown: setting the master password, restoring, or the welcome page.
+fn step(s: Store) -> impl IntoElement {
     when(move || s.stage.get() == Stage::Create, move || create(s)).otherwise(move || {
         when(
             move || super::backup::restoring(s),
@@ -41,10 +48,40 @@ pub fn page(s: Store) -> impl IntoElement {
     })
 }
 
-/// A page of onboarding: scrolls, clear of the system bars and the keyboard, its column at most 480 pt wide.
+/// iOS: the welcome page in the system's navigation stack, and the step a choice opens pushed over it, with the
+/// system's back button and swipe. Back from a found backup chooses the location again instead of leaving, and nothing
+/// goes back while the vault is being made or restored.
+fn native(s: Store) -> impl IntoElement {
+    let steps = computed(move || if s.stage.get() == Stage::Welcome { Vec::new() } else { vec![s.stage.get()] });
+    nsh_base::nav_stack()
+        .flex_1()
+        .child(nsh_base::nav_page().key("welcome").header_visible(false).bg(move || theme().background).child(welcome(s)))
+        .child(each(
+            move || steps.get(),
+            |stage: &Stage| *stage as u8,
+            move |_, _| {
+                nsh_base::nav_page()
+                    .title("")
+                    .header_shadow_visible(false)
+                    .bg(move || theme().background)
+                    // The system's back pops only where it leaves onboarding's step; elsewhere `back` takes it.
+                    .pop_on_back(move || !s.busy.get() && !crate::pages::unlock::restore_found(s))
+                    .on_back_press(move || {
+                        if crate::pages::unlock::restore_found(s) {
+                            back(s);
+                        }
+                    })
+                    .on_dismiss(move || leave(s))
+                    .child(step(s))
+            },
+        ))
+}
+
+/// A page of onboarding: scrolls, clear of the system bars and the keyboard, its column at most 480 pt wide. iOS: under
+/// the system's header (`native`).
 fn scaffold(top: impl IntoElement, content: impl IntoElement) -> impl IntoElement {
     // The status bar's room is outside the scroll view: what scrolls up ends below the status bar, not behind it.
-    view().flex_1().pt_safe_area().child(
+    view().flex_1().pt(ui::page_top).child(
         scroll().flex_1().keyboard_dismiss_mode(KeyboardDismissMode::None).keyboard_taps(KeyboardTaps::Handled).child(
             view()
                 .pb_safe_area_plus(px(24.0))
@@ -74,7 +111,8 @@ fn welcome(s: Store) -> impl IntoElement {
             .child(
                 view()
                     .w_full()
-                    .gap(px(ui::GROUP_GAP))
+                    // iOS: two cards of their own, apart.
+                    .gap(px(if ui::IOS { 12.0 } else { ui::GROUP_GAP }))
                     .child(choice(
                         s,
                         Icon::PlusCircleFill,
@@ -120,11 +158,11 @@ fn choice(
         .items_center()
         .gap(px(16.0))
         .p(px(18.0))
-        .rounded(px(28.0))
+        .rounded(px(if ui::IOS { ui::GROUP_RADIUS } else { 28.0 }))
         .bg(move || theme().card)
-        .active(|st| st.bg(move || tok("surface-high")))
+        .active(|st| st.bg(move || if ui::IOS { tok("pressed") } else { tok("surface-high") }))
         .on_press(press)
-        .child(ui::icon_tile(glyph, 48.0, 16.0, fill, ink))
+        .child(ui::icon_tile(glyph, 48.0, if ui::IOS { 12.0 } else { 16.0 }, fill, ink))
         .child(
             view()
                 .flex_1()
@@ -133,7 +171,7 @@ fn choice(
                 .child(ui::title(text(move || s.label(title))).font_weight(FontWeight::SEMIBOLD))
                 .child(ui::dim(ui::body(text(move || s.label(detail))))),
         )
-        .child(view().text_color(move || theme().muted_foreground).child(icon(Icon::ChevronRight).size(px(24.0))))
+        .child(ui::chevron())
 }
 
 fn create(s: Store) -> impl IntoElement {

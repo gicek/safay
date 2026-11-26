@@ -299,6 +299,24 @@ impl Reorder {
             })
     }
 
+    /// A drag handle of the item `row` refers to (iOS's reorder control): a finger on it picks the item up at once,
+    /// with no long press, and the list does not scroll under it.
+    #[cfg_attr(not(any(target_os = "ios", debug_assertions)), allow(dead_code))]
+    pub fn handle<E: Styled + Interactive>(self, el: E, row: ElementRef, id: impl Fn() -> Option<Uuid> + Copy + 'static) -> E {
+        el.claim_touches(TouchClaim::on_start())
+            .keep_touches(true)
+            .on_responder_grant(move |e: &ResponderEvent| {
+                if let Some(id) = id()
+                    && self.count() > 1
+                {
+                    self.begin(id, row, (e.page.x.0, e.page.y.0), (e.page.x.0, e.page.y.0));
+                }
+            })
+            .on_responder_move(move |e: &ResponderEvent| self.moved_to((e.page.x.0, e.page.y.0)))
+            .on_responder_release(move |e: &ResponderEvent| self.release((e.page.x.0, e.page.y.0)))
+            .on_responder_terminate(move |_: &ResponderEvent| self.cancel())
+    }
+
     fn begin(self, id: Uuid, me: ElementRef, start: (f32, f32), at: (f32, f32)) {
         if self.suppressed.get() || self.dragged.get_untracked().is_some() {
             return;

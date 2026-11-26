@@ -20,6 +20,7 @@ pub enum Surface {
     Panel,
     Settings,
     /// The update window (`pages::update`).
+    #[cfg_attr(any(target_os = "android", target_os = "ios"), allow(dead_code))]
     Update,
 }
 /// A modal over the main window.
@@ -2969,14 +2970,14 @@ impl Store {
         self.biometrics.get() && self.preferences.with(|p| p.touch_id) && self.projection.with(|p| p.biometric)
     }
     pub fn check_biometrics(self) {
-        #[cfg(any(target_os = "macos", target_os = "android"))]
+        #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
         if crate::hosted() {
             self.biometrics.set(platform::biometric::available());
         }
     }
     /// Keeps a hardware-wrapped copy of the key while Touch ID is on (after unlock, creation, a password change).
     fn maybe_wrap_key(self) {
-        #[cfg(any(target_os = "macos", target_os = "android"))]
+        #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
         {
             let wanted = self.surface == Surface::Main
                 && self.biometrics.get()
@@ -3014,7 +3015,7 @@ impl Store {
         });
     }
     /// Removes the wrapped key (Touch ID turned off, or the key went stale).
-    #[cfg_attr(not(any(target_os = "macos", target_os = "android")), allow(dead_code))]
+    #[cfg_attr(not(any(target_os = "macos", target_os = "ios", target_os = "android")), allow(dead_code))]
     pub fn forget_biometric(self) {
         self.dispatch(true, |s| {
             s.set_biometric(None)?;
@@ -3025,7 +3026,7 @@ impl Store {
     /// `cancelled` when the user, the app or the system cancelled the prompt (nothing is shown then), not for
     /// "Use Password…", a failure, a lockout or a stale key (which is deleted).
     fn with_touch_id(self, reason: &'static str, then: impl FnOnce(Zeroizing<Vec<u8>>) + 'static, otherwise: impl FnOnce(bool) + 'static) {
-        #[cfg(any(target_os = "macos", target_os = "android"))]
+        #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
         {
             let controller = self.controller.get();
             let epoch = controller.epoch();
@@ -3061,7 +3062,8 @@ impl Store {
                         self.fail(Error::StaleKey);
                     }
                     Some(e) => {
-                        let android = cfg!(target_os = "android");
+                        // Phones and tablets: the wording of a device, not of a Mac.
+                        let android = cfg!(any(target_os = "android", target_os = "ios"));
                         let text = self.label(match (e, android) {
                             (F::Lockout, false) => "Touch ID is locked; use master password",
                             (F::Unavailable, false) => "This Mac doesn’t support Touch ID or it’s unavailable",
@@ -3079,7 +3081,7 @@ impl Store {
                 otherwise(false);
             });
         }
-        #[cfg(not(any(target_os = "macos", target_os = "android")))]
+        #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
         {
             let _ = (reason, then);
             otherwise(false);

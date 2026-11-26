@@ -161,10 +161,10 @@ android-run: android ## Install it on the running emulator or the connected devi
 	adb shell monkey -p $(ID).debug -c android.intent.category.LAUNCHER 1
 
 ios-simulator: nsh-ready ## Development app for the iOS simulator in build/ios-simulator/debug (needs Xcode)
-	$(NSH) package --target ios-simulator --id $(ID).debug --out build/ios-simulator/debug
+	$(NSH) package --target ios-simulator --id $(ID).debug --icon assets/ios/icon.png --out build/ios-simulator/debug
 
 ios-simulator-run: nsh-ready ## Build it, then install and start it in the booted simulator
-	$(NSH) package --target ios-simulator --id $(ID).debug --out build/ios-simulator/debug --run
+	$(NSH) package --target ios-simulator --id $(ID).debug --icon assets/ios/icon.png --out build/ios-simulator/debug --run
 
 ##@ Website (safay.gicek.com)
 

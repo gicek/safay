@@ -144,9 +144,23 @@ list to find the main window: `shell::main_ref` is its handle, and `platform::ma
 (the Dock icon setting follows that). Its close button hides it while the menu bar or tray icon keeps the app running.
 The panel, and the main window when it comes back from hiding, open on the display the pointer is on.
 
-A file's name in `src/platform/` says where it is built: without a suffix on every system, with `_macos`, `_linux`,
-`_windows` or `_android` on that system only. The implementations of one feature share its name, and the module is
-named without the suffix: `camera_macos.rs`, `camera_linux.rs` and `camera_android.rs` are all `platform::camera`.
+A file's name in `src/platform/` says where it is built: without a suffix on every system, with `_macos`, `_ios`,
+`_linux`, `_windows` or `_android` on that system only, with `_apple` on macOS and iOS. The implementations of one
+feature share its name, and the module is named without the suffix: `camera_macos.rs`, `camera_linux.rs`,
+`camera_android.rs` and `camera_ios.rs` are all `platform::camera`.
+
+### Phones and tablets
+
+Android and iOS share the phone and tablet interface (`src/mobile`): the same pages, store and controller, drawn by the
+controls of `mobile::ui`. On iOS (`ui::IOS`) those controls take the system's look and tokens (`theme-ios.json`), and
+the interface uses the system's own parts where NSH offers them: the pages are a navigation stack
+(`mobile::native_stack`, `UINavigationController`: its header, large titles, the swipe back; `Nav` follows the pops it
+reports), the list's buttons, the account's menu and the settings' choices are system menus, the account's details and
+"Add to" are system sheets, switches and segmented controls are the system's, and the category name is asked in a system
+alert. Dialogs with password fields stay drawn, in the look of the system's alerts (`ui::dialog`, `ui::compact`): the
+system's alert has no secure field. A window 700 pt wide or more (`ui::is_wide`: a tablet) lists the categories in a
+sidebar and the accounts as cards in columns, and centers the pages over it. The `ios-look` feature shows the iOS look
+in a desktop's development build (`SAFAY_MOBILE=1`, or `<width>x<height>`).
 
 ### Working around NSH issues
 
@@ -162,17 +176,21 @@ named without the suffix: `camera_macos.rs`, `camera_linux.rs` and `camera_andro
 | OAuth sign-in (macOS) | `platform::web_auth` (`ASWebAuthenticationSession`) | NSH's `open_auth_session` shows an in-app sign-in session only on iOS and Android; on macOS it opens the default browser and waits for a link of a claimed URL scheme. Linux and Windows use it (`platform::web_sign_in`) | NSH shows `ASWebAuthenticationSession` on macOS |
 | OAuth sign-in with a long callback scheme (Android) | `platform::web_sign_in_android` (a Custom Tab through `Bridge.openCustomTab`; the callback arrives through `next_url_scheme_open`) | NSH's auth session refuses callback schemes longer than `MAX_SCHEME_LEN` (64), and Google's reversed client IDs are longer | NSH accepts such schemes |
 | Saving an export (Android) | `platform::files::save_export` (written to `exports/` in Safay's no-backup directory, then the share sheet) | NSH has no save dialog on Android | NSH offers one |
+| Preferred action of an alert (iOS) | `platform::ios::prefer_alert_action`, from `src/alert.rs`: marks the alert's default action once the system shows it, and redraws its buttons | NSH marks a preferred action only in alerts with a text field | NSH marks a dialog's default button |
+| A tablet's sidebar (iOS) | `mobile::home` draws its own sidebar beside the navigation stack | `SplitView` on iOS ends the app as UIKit adds a column's navigation controller that another controller already holds (`addChildViewController` hierarchy check) | NSH's `SplitView` runs on iPadOS |
+| The list's title at the bar's start (iOS) | `mobile::native_stack`: a title view as wide as the window, which UIKit narrows to the room the buttons leave | A leading header item sits on a glass capsule on iOS 26 (no `hidesSharedBackground`); the system centers the title | NSH places a title at the bar's start, or a leading item without its background |
 | Handing a second launch to the running Safay (Linux, Windows) | `platform::linux::hand_to_running` (GApplication's command line), `platform::windows::hand_to_running` (NSH's own `WM_COPYDATA` hand-over to the window it marks — recheck on every NSH upgrade); after an update's restart, `platform::windows::wait_for_replaced` waits for the old process (`NSH_RESTART_AFTER`) instead | NSH hands a launch over, and waits for the process a restart replaces, inside its runner, after `main` has opened the vault, whose instance lock the running Safay holds | NSH offers the hand-over before the runner starts |
 
 ### Capabilities NSH does not have
 
 | Capability | Where | Platforms |
 |---|---|---|
-| Biometric unlock (key wrapping: the Secure Enclave and Touch ID on macOS; a Keystore key that needs a strong biometric on Android, `android/java`'s `Biometric`) | `platform::biometric` | macOS, Android |
-| Credential storage | `platform::credentials` (`keyring`; the Secret Service on Linux; on Android, files sealed with a hardware-backed key) | macOS, Windows, Linux, Android |
-| Secret clipboard (concealed, expiring) | `platform::clipboard` | all |
+| Biometric unlock (key wrapping: the Secure Enclave and Touch ID or Face ID on macOS and iOS, `biometric_apple.rs`; a Keystore key that needs a strong biometric on Android, `android/java`'s `Biometric`) | `platform::biometric` | macOS, iOS, Android |
+| Credential storage | `platform::credentials` (`keyring`: the Keychain on macOS and iOS, the Secret Service on Linux; on Android, files sealed with a hardware-backed key) | all |
+| Secret clipboard (concealed, expiring) | `platform::clipboard` (iOS: `platform::ios::copy_sensitive`, local only and expiring) | all |
+| Lock when the device locks; a cover over the open vault in the background (iOS) | `platform::ios` (UIKit notifications; a blurred window over the others) | iOS |
 | iCloud backup; silent pushes | `platform::icloud`; `platform::macos::enable_remote_push` (adds the push callback to NSH's app delegate class at runtime — recheck on every NSH upgrade) | macOS |
-| Camera and on-screen QR selection | macOS: `platform::camera`, `platform::screen_capture`, `scan` (the overlay). Linux: `platform::camera` (the Camera portal, PipeWire and GStreamer) and `platform::screenshot` (`screen_capture_linux.rs`: the Screenshot portal, the desktop's own selection). Android: `platform::camera` (`camera_android.rs` and `android/java`'s `Camera`: Camera2, the preview drawn into the `TextureView` of the native component `safay.camera`, the luma read with `rqrr`) | macOS, Linux, Android |
+| Camera and on-screen QR selection | macOS: `platform::camera`, `platform::screen_capture`, `scan` (the overlay). Linux: `platform::camera` (the Camera portal, PipeWire and GStreamer) and `platform::screenshot` (`screen_capture_linux.rs`: the Screenshot portal, the desktop's own selection). Android: `platform::camera` (`camera_android.rs` and `android/java`'s `Camera`: Camera2, the preview drawn into the `TextureView` of the native component `safay.camera`, the luma read with `rqrr`). iOS: `platform::camera` (`camera_ios.rs`: AVFoundation, the preview layer in the native component `safay.camera`, QR codes read by `AVCaptureMetadataOutput`) | macOS, Linux, Android, iOS |
 | QR decoding and generation | `platform::files` (`rqrr`, `qrcode`) | all |
 | SF Symbols | `platform::symbols` (rendered to template PNGs; SVG icons elsewhere) | macOS |
 | Lock on sleep, screen lock and user switch | `platform::macos::observe`, `platform::windows`, `platform::linux` | all |

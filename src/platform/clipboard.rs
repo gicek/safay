@@ -169,28 +169,32 @@ pub fn copy(
 #[cfg(target_os = "android")]
 pub fn flush() {}
 
-// iOS: the system clipboard through NSH, which only the interface's thread reaches. The vault's thread leaves the code
-// here and the interface puts it on the clipboard as it shows the copy ([`flush`]). Neither marked sensitive nor
-// expiring yet.
+// iOS: the pasteboard, which only the main thread reaches. The vault's thread leaves the code here and the interface
+// puts it on the pasteboard as it shows the copy ([`flush`]): for this device only, expiring after the setting's time.
 #[cfg(target_os = "ios")]
-static PENDING: std::sync::Mutex<Option<Zeroizing<String>>> = std::sync::Mutex::new(None);
+static PENDING: std::sync::Mutex<Option<(Zeroizing<String>, Duration)>> = std::sync::Mutex::new(None);
 #[cfg(target_os = "ios")]
 pub fn copy(
     text: Zeroizing<String>,
-    _ttl: Duration,
+    ttl: Duration,
     controller: std::sync::Arc<safay_app::controller::Controller>,
     epoch: u64,
 ) -> Result<(), Error> {
     controller.at_epoch(epoch, || {
-        *PENDING.lock().map_err(|_| Error::Storage)? = Some(text);
+        *PENDING.lock().map_err(|_| Error::Storage)? = Some((text, ttl));
         Ok(())
     })
 }
-/// Puts the code a copy left on the system clipboard. Call it on the interface's thread.
+/// Puts the code a copy left on the pasteboard. Call it on the interface's thread.
 #[cfg(target_os = "ios")]
 pub fn flush() {
-    if let Some(text) = PENDING.lock().ok().and_then(|mut pending| pending.take()) {
-        drop(nsh_core::element::set_clipboard(text.as_str()));
+    if let Some((text, ttl)) = PENDING.lock().ok().and_then(|mut pending| pending.take()) {
+        let copied = std::sync::Arc::new(std::sync::Mutex::new(Some(text)));
+        dispatch2::DispatchQueue::main().exec_async(move || {
+            if let Some(text) = copied.lock().ok().and_then(|mut t| t.take()) {
+                super::ios::copy_sensitive(&text, ttl);
+            }
+        });
     }
 }
 

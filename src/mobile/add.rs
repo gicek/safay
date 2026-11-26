@@ -47,9 +47,9 @@ pub fn manual(s: Store, nav: Nav) -> impl IntoElement {
     };
     view()
         .flex_1()
-        .pt_safe_area()
+        .pt(ui::page_top)
         .child(ui::top_bar(s, Some("Enter Setup Key"), move || {
-            nav.back();
+            nav.pop();
         }))
         .child(
             scroll().flex_1().keyboard_dismiss_mode(KeyboardDismissMode::None).keyboard_taps(KeyboardTaps::Handled).child(
@@ -176,10 +176,8 @@ pub fn review(s: Store, nav: Nav) -> impl IntoElement {
         Zeroizing::new(lines)
     };
     let valid = move || safay_app::core::otpauth::parse_lines(&usable(), &safay_app::session::placeholders()).len();
-    let leave = move || {
-        s.scanned.set(Default::default());
-        nav.back();
-    };
+    // What it held goes as the page does (`root`).
+    let leave = move || nav.pop();
     // Added: the scanned list is spent, and the list shows what came in.
     super::on_done(s, Done::Imported, move || {
         s.scanned.set(Default::default());
@@ -187,7 +185,7 @@ pub fn review(s: Store, nav: Nav) -> impl IntoElement {
     });
     view()
         .flex_1()
-        .pt_safe_area()
+        .pt(ui::page_top)
         .child(ui::top_bar(s, Some("Add Account"), leave))
         .child(scroll().flex_1().child(view().px(px(ui::MARGIN)).pt(px(8.0)).pb(px(16.0)).gap(px(ui::GROUP_GAP)).child(each(
             move || {
@@ -203,7 +201,7 @@ pub fn review(s: Store, nav: Nav) -> impl IntoElement {
             move |item, index| {
                 let ok = move || item.with(|x| x.1);
                 let count = move || items().len();
-                ui::group_corners(
+                ui::group_corners_inset(
                     view()
                         .flex_row()
                         .items_center()
@@ -214,6 +212,7 @@ pub fn review(s: Store, nav: Nav) -> impl IntoElement {
                         .bg(move || theme().card),
                     move || index.get(),
                     count,
+                    16.0 + 40.0 + 16.0,
                 )
                 .child(when(ok, move || badge_with_icon(move || item.with(|x| x.2.clone()), || false, || None, 40.0)).otherwise(|| {
                     view()

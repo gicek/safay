@@ -63,7 +63,7 @@ def main() -> None:
     manifest["rust"] = str(back / project["rust"])
     if isinstance(project.get("theme"), str):
         manifest["theme"] = str(back / project["theme"])
-    # The launcher icon: the layers of an adaptive icon (scripts/android_icon.py derives them from the app icon), not the
+    # The launcher icon: the layers of an adaptive icon (scripts/mobile_icons.py derives them from the app icon), not the
     # app icon itself, which a launcher would shrink inside its own shape.
     icon = back / "assets/android"
     manifest["icon"] = {

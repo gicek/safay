@@ -20,6 +20,10 @@ license = "MIT"
 publish = false
 rust-version = "1.97"
 
+[features]
+# Development: the phone interface in iOS's look on a desktop (with `SAFAY_MOBILE=1` in a debug build).
+ios-look = []
+
 [dependencies]
 safay-app = { path = "crates/safay-app" }
 nsh-core = { git = "https://github.com/longbridge/nsh", branch = "main" }
@@ -41,6 +45,7 @@ rqrr = "=0.11.0"
 nsh-updater = { git = "https://github.com/longbridge/nsh", branch = "main" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "=0.6.5"
 objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSAlert", "NSAppearance", "NSApplication", "NSOpenPanel", "NSSavePanel", "NSText", "NSTextView", "NSTextInputContext", "NSPopover", "NSStatusBar", "NSStatusBarButton", "NSStatusItem", "NSViewController", "NSMenu", "NSMenuItem", "NSEvent", "NSControl", "NSButton", "NSWindow", "NSRunningApplication", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSGraphicsContext", "NSGraphics", "NSFontDescriptor", "NSPanel", "NSScreen", "NSColor", "NSResponder", "NSView", "objc2-core-foundation", "objc2-quartz-core"] }
 dispatch2 = "=0.3.1"
 libc = "=0.2.189"
@@ -65,6 +70,20 @@ nsh-platform-windows = { git = "https://github.com/longbridge/nsh", branch = "ma
 
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 libc = "0.2"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+# The camera's preview as a native component (src/platform/camera_ios.rs).
+nsh-platform-ios = { git = "https://github.com/longbridge/nsh", branch = "main", default-features = false, features = ["svg"] }
+objc2 = "=0.6.5"
+block2 = "=0.6.2"
+dispatch2 = "=0.3.1"
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "block2", "NSData", "NSDate", "NSDictionary", "NSString", "NSError", "NSObject", "NSArray", "NSNotification", "NSOperation", "NSValue", "NSGeometry"] }
+objc2-ui-kit = { version = "=0.3.2", default-features = false, features = ["std", "block2", "objc2-quartz-core", "objc2-core-foundation", "UIAlertController", "UIViewController", "UIApplication", "UIBlurEffect", "UIColor", "UIDevice", "UIPasteboard", "UIResponder", "UIScene", "UISceneDefinitions", "UIView", "UIVisualEffect", "UIVisualEffectView", "UIWindow", "UIWindowScene"] }
+objc2-quartz-core = { version = "=0.3.2", default-features = false, features = ["std", "CALayer", "objc2-core-foundation"] }
+objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFCGTypes"] }
+objc2-av-foundation = { version = "=0.3.2", default-features = false, features = ["std", "block2", "dispatch2", "objc2-quartz-core", "AVAnimation", "AVCaptureDevice", "AVCaptureInput", "AVCaptureMetadataOutput", "AVCaptureOutputBase", "AVCaptureSession", "AVCaptureVideoPreviewLayer", "AVMediaFormat", "AVMetadataObject"] }
+# Cloud sign-ins in the Keychain, as on macOS.
+keyring = { version = "=3.6.3", default-features = false, features = ["apple-native"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"

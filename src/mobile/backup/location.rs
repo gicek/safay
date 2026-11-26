@@ -18,34 +18,38 @@ fn choose(s: Store, nav: Nav) -> impl IntoElement {
     };
     ui::dialog(
         move || s.label("Choose Location"),
-        view()
-            .mx(px(-24.0))
-            .child(
-                ui::dim(ui::body(text(move || s.label("Choose where to keep the encrypted backup. Only one location is used at a time."))))
+        move || {
+            view()
+                .mx(px(-24.0))
+                .child(
+                    ui::message(ui::body(text(move || {
+                        s.label("Choose where to keep the encrypted backup. Only one location is used at a time.")
+                    })))
                     .px(px(24.0))
                     .pb(px(8.0)),
-            )
-            .children(providers().into_iter().map(move |provider| {
-                button()
-                    .test_id(provider.name())
-                    .min_h(px(56.0))
-                    .px(px(24.0))
-                    .flex_row()
-                    .items_center()
-                    .gap(px(16.0))
-                    .active(|st| st.bg(move || tok("pressed")))
-                    .on_press(move || {
-                        close();
-                        open_setup(s, provider, false)
-                    })
-                    .child(plate(LocationIcon::Cloud(provider)))
-                    .child(ui::body_large(text(provider.name())).flex_1())
-                    .child(when(
-                        move || current() == Some(provider),
-                        || view().text_color(move || theme().primary).child(icon(Icon::Check).size(px(24.0))),
-                    ))
-            })),
-        ui::text_button(move || s.label("Cancel"), false).on_press(close),
+                )
+                .children(providers().into_iter().map(move |provider| {
+                    button()
+                        .test_id(provider.name())
+                        .min_h(px(56.0))
+                        .px(px(24.0))
+                        .flex_row()
+                        .items_center()
+                        .gap(px(16.0))
+                        .active(|st| st.bg(move || tok("pressed")))
+                        .on_press(move || {
+                            close();
+                            open_setup(s, provider, false)
+                        })
+                        .child(plate(LocationIcon::Cloud(provider)))
+                        .child(ui::body_large(text(provider.name())).flex_1())
+                        .child(when(
+                            move || current() == Some(provider),
+                            || view().text_color(move || theme().primary).child(icon(Icon::Check).size(px(24.0))),
+                        ))
+                }))
+        },
+        ui::dialog_actions(false).child(ui::dialog_action(move || s.label("Cancel"), ui::Act::Cancel).on_press(close)),
         close,
     )
 }
@@ -71,30 +75,37 @@ fn restore_unreadable(s: Store, nav: Nav) -> impl IntoElement {
     });
     ui::dialog(
         move || s.label("Restore from Backup"),
-        view()
-            .gap(px(8.0))
-            .child(ui::dim(ui::body(text(move || {
-                s.label("To use that backup, restore from it and unlock with its master password. This replaces the vault on this device.")
-            }))))
-            .child(ui::field(
-                s,
-                "restore-password",
-                Entry::Password,
-                move || s.label("Existing Master Password"),
-                move || s.form.with(|f| f.password.to_string()),
-                move |v| {
-                    s.status.set(None);
-                    s.form.update(|f| f.password = Zeroizing::new(v.to_owned()))
-                },
-                submit,
-                |_| {},
-                move || s.status.get().is_some(),
-                ReturnKeyType::Done,
-                None,
-            ))
-            .child(ui::field_note(move || s.status.get().map(|st| st.text), || true)),
-        view().flex_row().gap(px(4.0)).child(ui::text_button(move || s.label("Cancel"), false).on_press(close)).child(
-            ui::text_button(move || s.label("Restore"), false).test_id("restore-go").disabled(move || s.syncing.get()).on_press(submit),
+        move || {
+            view()
+                .gap(px(8.0))
+                .child(ui::message(ui::body(text(move || {
+                    s.label(
+                        "To use that backup, restore from it and unlock with its master password. This replaces the vault on this device.",
+                    )
+                }))))
+                .child(ui::field(
+                    s,
+                    "restore-password",
+                    Entry::Password,
+                    move || s.label("Existing Master Password"),
+                    move || s.form.with(|f| f.password.to_string()),
+                    move |v| {
+                        s.status.set(None);
+                        s.form.update(|f| f.password = Zeroizing::new(v.to_owned()))
+                    },
+                    submit,
+                    |_| {},
+                    move || s.status.get().is_some(),
+                    ReturnKeyType::Done,
+                    None,
+                ))
+                .child(ui::field_note(move || s.status.get().map(|st| st.text), || true))
+        },
+        ui::dialog_actions(false).child(ui::dialog_action(move || s.label("Cancel"), ui::Act::Cancel).on_press(close)).child(
+            ui::dialog_action(move || s.label("Restore"), ui::Act::Default)
+                .test_id("restore-go")
+                .disabled(move || s.syncing.get())
+                .on_press(submit),
         ),
         close,
     )

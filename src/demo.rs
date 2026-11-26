@@ -117,6 +117,18 @@ pub fn controller_with(locked: bool, total: usize) -> Arc<Controller> {
 pub fn DemoApp() -> impl IntoElement {
     shell::main_content(controller(false), true)
 }
+/// The phone and tablet interface over the demo vault, unlocked (in iOS's look with the `ios-look` feature).
+#[component]
+pub fn DemoMobileApp() -> impl IntoElement {
+    crate::mobile::root(controller(false), true)
+}
+/// The phone and tablet interface over the demo vault, locked.
+#[component]
+pub fn DemoMobileLockedApp() -> impl IntoElement {
+    let c = controller(false);
+    c.request_lock();
+    crate::mobile::root(c, true)
+}
 /// The main window over the demo vault, locked.
 #[component]
 pub fn DemoLockedApp() -> impl IntoElement {

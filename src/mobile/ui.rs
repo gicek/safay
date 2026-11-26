@@ -1,6 +1,10 @@
 //! The styled controls of the phone and tablet interface: one set of metrics (touch targets of 48 pt and more, 56 pt
 //! fields and primary buttons, grouped rows with 24 pt outer and 6 pt inner corners) drawn with the tokens of
 //! `theme-mobile.json`. Pages compose these and never style a control themselves.
+//!
+//! On iOS ([`IOS`]) the same controls take the system's own look, drawn with `theme-ios.json`: 44 pt targets, inset
+//! grouped rows divided by hairlines, square colored tiles, the system's switch and segmented control, glass buttons in
+//! the bars, menus with their glyphs at the end, and the system's type sizes.
 use crate::{
     components::{CODE_FONT, tok},
     icons::{Icon, icon},
@@ -9,30 +13,100 @@ use crate::{
 use nsh_base::{button, input, theme};
 use nsh_core::prelude::*;
 
+/// The interface takes iOS's look (`theme-ios.json` and the metrics below); the `ios-look` feature shows it on a
+/// desktop's development build.
+pub const IOS: bool = cfg!(any(target_os = "ios", feature = "ios-look"));
 /// Outer corner of a group of rows, and of a card that stands alone.
-pub const GROUP_RADIUS: f32 = 24.0;
-/// Corner between two rows of a group.
-pub const GROUP_INNER: f32 = 6.0;
+pub const GROUP_RADIUS: f32 = if IOS { 22.0 } else { 24.0 };
+/// Corner between two rows of a group (iOS: none, a hairline divides them).
+pub const GROUP_INNER: f32 = if IOS { 0.0 } else { 6.0 };
 /// Gap between the rows of a group.
-pub const GROUP_GAP: f32 = 2.0;
+pub const GROUP_GAP: f32 = if IOS { 0.0 } else { 2.0 };
 /// The page's side margin.
 pub const MARGIN: f32 = 16.0;
 /// Fields, primary buttons and the search bar.
-pub const CONTROL: f32 = 56.0;
+pub const CONTROL: f32 = if IOS { 52.0 } else { 56.0 };
 /// The smallest touch target, and a menu's rows.
-pub const TOUCH: f32 = 48.0;
+pub const TOUCH: f32 = if IOS { 44.0 } else { 48.0 };
 /// A page's top bar.
-pub const BAR: f32 = 56.0;
+pub const BAR: f32 = if IOS { 52.0 } else { 56.0 };
 /// The round button floating at a page's bottom corner.
-pub const FAB: f32 = 56.0;
+pub const FAB: f32 = if IOS { 52.0 } else { 56.0 };
 /// Room under a list for the floating button over its end: the button, its margins and some air.
 pub const FAB_CLEARANCE: f32 = 120.0;
 /// A list's rows: an account, a category.
-pub const ROW: f32 = 72.0;
+pub const ROW: f32 = if IOS { 68.0 } else { 72.0 };
+/// Where a hairline between two rows of a group starts on iOS: under the text, past a row's leading tile.
+pub const TILE_INSET: f32 = 16.0 + 30.0 + 14.0;
+/// From this window width on (a tablet, a phone's window made wide), the list shows its categories in a sidebar beside
+/// the accounts, which take columns of cards; pages over it keep a readable width ([`PAGE_MAX`]).
+pub const WIDE: f32 = 700.0;
+/// The sidebar of a wide window.
+pub const SIDEBAR: f32 = 300.0;
+/// The widest a page over the list grows in a wide window: its content stays centered.
+pub const PAGE_MAX: f32 = 720.0;
+/// The window is wide ([`WIDE`]).
+pub fn is_wide() -> bool {
+    window().width >= px(WIDE)
+}
+/// What a wide window's account pane is drawn on: iOS's plain background (cards stand out from it in the grouped gray),
+/// elsewhere the page's.
+pub fn pane() -> AdaptiveColor {
+    if IOS { AdaptiveColor::rgb(0xffffff, 0x000000) } else { theme().background }
+}
+/// An account card in a wide window, on [`pane`].
+pub fn cell() -> AdaptiveColor {
+    if IOS { AdaptiveColor::rgb(0xf2f2f7, 0x1c1c1e) } else { theme().card }
+}
+/// A wide window's sidebar.
+pub fn sidebar() -> AdaptiveColor {
+    if IOS { AdaptiveColor::rgb(0xf2f2f7, 0x1c1c1e) } else { theme().card }
+}
 /// Color and opacity changes.
 pub const EFFECTS_MS: f32 = 160.0;
 /// Shape and position changes.
 pub const SPATIAL_MS: f32 = 280.0;
+
+/// The device's biometric as the interface names it: Face ID or Touch ID on iOS, "biometrics" elsewhere.
+// Each system builds only the variants it has.
+#[allow(dead_code)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Biometric {
+    Face,
+    Touch,
+    Other,
+}
+impl Biometric {
+    pub fn get() -> Self {
+        #[cfg(target_os = "ios")]
+        {
+            static FACE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+            if *FACE.get_or_init(crate::platform::biometric::face) { Biometric::Face } else { Biometric::Touch }
+        }
+        #[cfg(not(target_os = "ios"))]
+        Biometric::Other
+    }
+    /// The glyph of its button and its settings row.
+    pub fn icon(self) -> Icon {
+        if self == Biometric::Face { Icon::FaceId } else { Icon::TouchId }
+    }
+    /// "Unlock with …": the settings row and the lock screen's button.
+    pub fn unlock(self) -> &'static str {
+        match self {
+            Biometric::Face => "Unlock with Face ID",
+            Biometric::Touch => "Unlock with Touch ID",
+            Biometric::Other => "Unlock with biometrics",
+        }
+    }
+    /// What the lock screen says unlocks it.
+    pub fn prompt(self) -> &'static str {
+        match self {
+            Biometric::Face => "Use your master password or Face ID to unlock",
+            Biometric::Touch => "Use your master password or Touch ID to unlock",
+            Biometric::Other => "Use your master password or fingerprint to unlock",
+        }
+    }
+}
 
 /// The state screen readers announce for a checked control: a switch, a radio, a checkbox. A button has no checked
 /// state, so those are views (`toggle`).
@@ -47,29 +121,59 @@ pub fn toggle(role: AccessibilityRole, name: impl Fn() -> SharedString + 'static
 
 // ---- Type scale ----------------------------------------------------------------------------------------------------
 
+// iOS: the system's sizes (Large Title, Title 1, Headline, Body, Subheadline, Footnote).
 pub fn display<E: Styled>(e: E) -> E {
+    if IOS {
+        return e.text_size(px(34.0)).line_height(px(41.0)).font_weight(FontWeight::BOLD);
+    }
     e.text_size(px(34.0)).line_height(px(42.0)).font_weight(FontWeight::BOLD)
 }
 pub fn headline<E: Styled>(e: E) -> E {
+    if IOS {
+        return e.text_size(px(28.0)).line_height(px(34.0)).font_weight(FontWeight::BOLD);
+    }
     e.text_size(px(26.0)).line_height(px(34.0)).font_weight(FontWeight::SEMIBOLD)
 }
 pub fn title_large<E: Styled>(e: E) -> E {
+    if IOS {
+        return e.text_size(px(17.0)).line_height(px(22.0)).font_weight(FontWeight::SEMIBOLD);
+    }
     e.text_size(px(22.0)).line_height(px(28.0))
 }
 pub fn title<E: Styled>(e: E) -> E {
+    if IOS {
+        return e.text_size(px(17.0)).line_height(px(22.0)).font_weight(FontWeight::SEMIBOLD);
+    }
     e.text_size(px(16.0)).line_height(px(24.0)).font_weight(FontWeight::MEDIUM)
 }
 pub fn body_large<E: Styled>(e: E) -> E {
+    if IOS {
+        return e.text_size(px(17.0)).line_height(px(22.0));
+    }
     e.text_size(px(16.0)).line_height(px(24.0))
 }
 pub fn body<E: Styled>(e: E) -> E {
+    if IOS {
+        return e.text_size(px(15.0)).line_height(px(20.0));
+    }
     e.text_size(px(14.0)).line_height(px(20.0))
 }
 pub fn caption<E: Styled>(e: E) -> E {
+    if IOS {
+        return e.text_size(px(13.0)).line_height(px(18.0));
+    }
     e.text_size(px(12.0)).line_height(px(16.0))
 }
 pub fn label<E: Styled>(e: E) -> E {
+    if IOS {
+        return e.text_size(px(15.0)).line_height(px(20.0)).font_weight(FontWeight::SEMIBOLD);
+    }
     e.text_size(px(14.0)).line_height(px(20.0)).font_weight(FontWeight::MEDIUM)
+}
+/// The text of an alert under its title: secondary, centered on iOS as the system's.
+pub fn message<E: Styled>(e: E) -> E {
+    let e = dim(e);
+    if IOS { e.text_center() } else { e }
 }
 /// Secondary text.
 pub fn dim<E: Styled>(e: E) -> E {
@@ -79,13 +183,40 @@ pub fn dim<E: Styled>(e: E) -> E {
 // ---- Surfaces ------------------------------------------------------------------------------------------------------
 
 /// The corners of row `index` among `count` rows of a group.
-pub fn group_corners<E: Styled>(e: E, index: impl Fn() -> usize + Copy + 'static, count: impl Fn() -> usize + Copy + 'static) -> E {
+/// iOS: a hairline over every row but the first, from 16 pt in ([`group_corners_inset`] for another start).
+pub fn group_corners<E: Styled + ParentElement>(
+    e: E,
+    index: impl Fn() -> usize + Copy + 'static,
+    count: impl Fn() -> usize + Copy + 'static,
+) -> E {
+    group_corners_inset(e, index, count, 16.0)
+}
+/// As [`group_corners`], the hairline starting `inset` points in: under the text of a row with a leading mark.
+pub fn group_corners_inset<E: Styled + ParentElement>(
+    e: E,
+    index: impl Fn() -> usize + Copy + 'static,
+    count: impl Fn() -> usize + Copy + 'static,
+    inset: f32,
+) -> E {
     e.rounded_t(move || px(if index() == 0 { GROUP_RADIUS } else { GROUP_INNER }))
         .rounded_b(move || px(if index() + 1 >= count() { GROUP_RADIUS } else { GROUP_INNER }))
+        .child(when(move || IOS && index() > 0, move || separator(inset)))
+}
+/// The hairline between two rows of a group on iOS, from `inset` points to the row's end. It lies over the top of the
+/// row below it and takes no room.
+pub fn separator(inset: f32) -> View {
+    view()
+        .absolute()
+        .top(px(0.0))
+        .left(px(inset))
+        .right(px(0.0))
+        .h(px(0.5))
+        .bg(move || tok("separator"))
+        .pointer_events(nsh_core::PointerEvents::None)
 }
 /// A card of a form: a field group, a switch row.
 pub fn form_card() -> View {
-    view().rounded(px(28.0)).bg(move || theme().card).p(px(16.0))
+    view().rounded(px(if IOS { GROUP_RADIUS } else { 28.0 })).bg(move || theme().card).p(px(16.0))
 }
 
 // ---- Buttons -------------------------------------------------------------------------------------------------------
@@ -120,13 +251,26 @@ pub fn primary_button(
             })
             .otherwise(move || {
                 label(text(label_))
-                    .text_size(px(16.0))
+                    .text_size(px(if IOS { 17.0 } else { 16.0 }))
                     .text_color(move || if enabled() { theme().primary_foreground } else { theme().foreground.opacity(0.38) })
             }),
         )
 }
-/// A secondary action beside or under a primary one: 48 pt, outlined.
+/// A secondary action beside or under a primary one: 48 pt, outlined (iOS: a tinted capsule, as the system's gray
+/// button).
 pub fn outlined_button(label_: impl Fn() -> SharedString + Copy + 'static) -> nsh_base::ButtonElement {
+    if IOS {
+        return button()
+            .accessibility_label(move || Some(label_()))
+            .h(move || px(TOUCH) * font_scale())
+            .px(px(20.0))
+            .items_center()
+            .justify_center()
+            .rounded_full()
+            .bg(move || theme().primary.opacity(0.12))
+            .active(|s| s.opacity(0.7))
+            .child(label(text(label_)).text_color(move || theme().primary));
+    }
     button()
         .accessibility_label(move || Some(label_()))
         .h(move || px(48.0) * font_scale())
@@ -143,7 +287,7 @@ pub fn outlined_button(label_: impl Fn() -> SharedString + Copy + 'static) -> ns
 pub fn filled_button(glyph: Option<Icon>, label_: impl Fn() -> SharedString + Copy + 'static) -> nsh_base::ButtonElement {
     button()
         .accessibility_label(move || Some(label_()))
-        .h(move || px(48.0) * font_scale())
+        .h(move || px(if IOS { 50.0 } else { 48.0 }) * font_scale())
         .px(px(24.0))
         .flex_row()
         .items_center()
@@ -161,8 +305,15 @@ pub fn icon_button(name: impl Fn() -> SharedString + 'static, glyph: impl Fn() -
     glyph_button(name, move || icon(glyph()).size(px(24.0)).into_element())
 }
 /// An action of a page's top bar: as `icon_button`, its glyph drawn heavier, as the bar's back chevron is.
+/// On iOS a glass circle, as the system's bar buttons are.
 pub fn bar_button(name: impl Fn() -> SharedString + 'static, glyph: impl Fn() -> Icon + Copy + 'static) -> nsh_base::ButtonElement {
-    glyph_button(name, move || crate::icons::icon_bold(glyph()).size(px(24.0)).into_element()).text_color(move || theme().foreground)
+    let b =
+        glyph_button(name, move || crate::icons::icon_bold(glyph()).size(px(24.0)).into_element()).text_color(move || theme().foreground);
+    if IOS { glass(b.size(px(44.0))) } else { b }
+}
+/// The look of a control floating over the page on iOS: a translucent fill, a faint rim and a soft shadow.
+pub fn glass<E: Styled>(e: E) -> E {
+    e.rounded_full().bg(move || tok("glass")).border_1().border_color(move || tok("glass-border")).shadow_md()
 }
 fn glyph_button(name: impl Fn() -> SharedString + 'static, glyph: impl Fn() -> AnyElement + 'static) -> nsh_base::ButtonElement {
     button()
@@ -186,13 +337,30 @@ pub fn themed_input(i: Input) -> Input {
 /// The look of a menu over the page: the popover color and corners, a faint outline that draws its edge on any
 /// background (light in dark appearance, where a shadow does not show), and a deep shadow.
 pub fn popover<E: Styled>(e: E) -> E {
+    if IOS {
+        return e.rounded(px(22.0)).py(px(6.0)).bg(move || tok("popover")).border_1().border_color(move || tok("elevated-rim")).shadow_xl();
+    }
     e.rounded(px(20.0)).py(px(8.0)).bg(move || tok("popover")).border_1().border_color(move || tok("elevated-rim")).shadow_xl()
 }
 
-/// A menu's row: its icon and its name, in the destructive color for an action that deletes.
+/// A menu's row: its icon and its name, in the destructive color for an action that deletes. iOS: the name first and
+/// the glyph at the end, both in the text's color.
 pub fn menu_item(glyph: Icon, name: impl Fn() -> SharedString + 'static, destructive: bool) -> nsh_base::ButtonElement {
     let name = std::rc::Rc::new(name);
     let said = name.clone();
+    if IOS {
+        let ink = move || if destructive { theme().destructive } else { theme().foreground };
+        return button()
+            .accessibility_label(move || Some(said()))
+            .min_h(move || px(TOUCH) * font_scale())
+            .px(px(16.0))
+            .flex_row()
+            .items_center()
+            .gap(px(12.0))
+            .active(|st| st.bg(move || tok("pressed")))
+            .child(body_large(text(move || name())).number_of_lines(1).flex_1().text_color(ink))
+            .child(view().text_color(ink).child(icon(glyph).size(px(22.0))));
+    }
     button()
         .accessibility_label(move || Some(said()))
         .min_h(move || px(TOUCH) * font_scale())
@@ -217,6 +385,13 @@ pub fn menu_item(glyph: Icon, name: impl Fn() -> SharedString + 'static, destruc
 /// The circle of a choice among several: filled with the primary color when chosen. The row around it is the
 /// `toggle` screen readers name.
 pub fn radio_mark(on: impl Fn() -> bool + Copy + 'static) -> View {
+    // iOS: a checkmark by the chosen one, nothing by the others.
+    if IOS {
+        return view()
+            .size(px(22.0))
+            .text_color(move || theme().primary)
+            .child(when(on, || crate::icons::icon_bold(Icon::Check).size(px(22.0))));
+    }
     view()
         .size(px(20.0))
         .rounded_full()
@@ -229,6 +404,18 @@ pub fn radio_mark(on: impl Fn() -> bool + Copy + 'static) -> View {
 
 /// The round button floating at a page's bottom corner, in the primary color: the page places it and gives it its icon.
 pub fn fab(name: impl Fn() -> SharedString + 'static) -> nsh_base::ButtonElement {
+    // iOS: a glass circle in the text's color, as the system's floating search button.
+    if IOS {
+        return glass(
+            button()
+                .accessibility_label(move || Some(name()))
+                .size(px(FAB))
+                .items_center()
+                .justify_center()
+                .text_color(move || theme().foreground)
+                .active(|st| st.scale(0.94)),
+        );
+    }
     button()
         .accessibility_label(move || Some(name()))
         .size(px(FAB))
@@ -263,6 +450,23 @@ pub enum Entry {
 /// error color while `error` holds. A press anywhere in it focuses `me`. It keeps room above itself for the half of its
 /// floated label that stands out over the outline, so whatever is above stays clear of the label.
 fn outlined(focused: Signal<bool>, error: impl Fn() -> bool + Copy + 'static, me: ElementRef) -> View {
+    // iOS: a filled box, its label inside (`floating_label`); the focus and a problem draw its edge.
+    if IOS {
+        return view()
+            .rounded(px(12.0))
+            .bg(move || tok("field"))
+            .border(px(1.0))
+            .border_color(move || {
+                if error() {
+                    theme().destructive
+                } else if focused.get() {
+                    theme().primary
+                } else {
+                    tok("field").opacity(0.0)
+                }
+            })
+            .on_press(move |_: &()| me.focus());
+    }
     view()
         .mt(move || px(8.0) * font_scale())
         .rounded(px(16.0))
@@ -294,6 +498,29 @@ fn floating_label(
     rest: impl Fn(f32) -> f32 + 'static,
 ) -> View {
     let outline = move || outline_width(focused, error);
+    // iOS: inside the box, shrinking to its top-left corner; the text below it moves down to make room
+    // (`FLOATED_TEXT`).
+    if IOS {
+        return view()
+            .absolute()
+            .left(px(16.0))
+            .right(px(16.0))
+            .top(move || px(if floated() { 7.0 * font_scale() } else { rest(1.0) }))
+            .pointer_events(nsh_core::PointerEvents::None)
+            .transition()
+            .duration(EFFECTS_MS)
+            .ease_out()
+            .child(
+                text(label_)
+                    .number_of_lines(1)
+                    .text_size(move || px(if floated() { 12.0 } else { 17.0 }))
+                    .line_height(move || px(if floated() { 16.0 } else { 22.0 }))
+                    .text_color(move || if error() { theme().destructive } else { theme().muted_foreground })
+                    .transition()
+                    .duration(EFFECTS_MS)
+                    .ease_out(),
+            );
+    }
     view()
         .absolute()
         .left(px(12.0))
@@ -333,6 +560,24 @@ fn floating_label(
         )
 }
 
+thread_local! {
+    /// Fields and notes are being built for an alert (`compact`).
+    static COMPACT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+/// Builds `content` for an alert: on iOS its fields are the system alert's (44 pt, their label as the placeholder, no
+/// control of their own) and a field's note takes room only while it says something.
+pub fn compact<R>(content: impl FnOnce() -> R) -> R {
+    if !IOS {
+        return content();
+    }
+    let was = COMPACT.replace(true);
+    let built = content();
+    COMPACT.set(was);
+    built
+}
+fn compact_now() -> bool {
+    COMPACT.get()
+}
 /// The one text field: 56 pt and outlined. Empty and without the focus, its label stands in the middle as a
 /// placeholder; with the focus or a text, the label shrinks onto the outline (`floating_label`).
 #[allow(clippy::too_many_arguments)]
@@ -349,6 +594,9 @@ pub fn field(
     return_key: ReturnKeyType,
     reference: Option<ElementRef>,
 ) -> impl IntoElement + Styled {
+    if compact_now() {
+        return alert_field(s, id, entry, label_, get, set, on_submit, on_focus_change, error, return_key, reference);
+    }
     let focused = signal(false);
     let shown = signal(entry != Entry::Password);
     let floated = move || focused.get() || !get().is_empty();
@@ -358,11 +606,11 @@ pub fn field(
     outlined(focused, error, me)
         .flex_row()
         .items_center()
-        .min_h(move || px(CONTROL) * font_scale())
+        .min_h(move || px(field_height()) * font_scale())
         .pl(px(16.0))
         .pr(px(if entry == Entry::Password { 4.0 } else { 16.0 }))
         .child(
-            view().flex_1().min_w(px(0.0)).justify_center().child(
+            view().flex_1().min_w(px(0.0)).justify_center().pt(move || px(if IOS && floated() { FLOATED_TEXT } else { 0.0 })).child(
                 themed_input(input())
                     .element_ref(&me)
                     .test_id(id)
@@ -394,7 +642,7 @@ pub fn field(
                     .auto_correct(false)
                     .auto_capitalize(nsh_core::AutoCapitalize::None)
                     .auto_fill(nsh_core::AutoFill::Off)
-                    .text_size(px(16.0))
+                    .text_size(px(if IOS { 17.0 } else { 16.0 }))
                     .text_color(move || theme().foreground)
                     .disabled(move || s.busy.get()),
             ),
@@ -411,9 +659,71 @@ pub fn field(
         ))
         // Down, its line is centered in the field.
         .child(floating_label(label_, floated, focused, error, |outline| {
+            if IOS {
+                return (field_height() * font_scale() - 2.0 * outline - 22.0 * font_scale()) / 2.0;
+            }
             (CONTROL * font_scale() - 2.0 * outline - 24.0 * font_scale()) / 2.0
         }))
 }
+/// A field of an iOS alert, as the system's: 44 pt on a gray fill, its label as the placeholder, masked when it takes a
+/// password, its edge red while `error` holds.
+#[allow(clippy::too_many_arguments)]
+fn alert_field(
+    s: Store,
+    id: &'static str,
+    entry: Entry,
+    label_: impl Fn() -> SharedString + Copy + 'static,
+    get: impl Fn() -> String + Copy + 'static,
+    set: impl Fn(&str) + 'static,
+    on_submit: impl Fn() + 'static,
+    on_focus_change: impl Fn(bool) + 'static,
+    error: impl Fn() -> bool + Copy + 'static,
+    return_key: ReturnKeyType,
+    reference: Option<ElementRef>,
+) -> View {
+    let me = reference.unwrap_or_else(element_ref);
+    let on_focus_change = std::rc::Rc::new(on_focus_change);
+    let on_blur = on_focus_change.clone();
+    view()
+        .min_h(move || px(44.0) * font_scale())
+        .px(px(12.0))
+        .justify_center()
+        .rounded(px(12.0))
+        .bg(move || tok("field"))
+        .border(px(1.0))
+        .border_color(move || if error() { theme().destructive } else { tok("field").opacity(0.0) })
+        .on_press(move |_: &()| me.focus())
+        .child(
+            themed_input(input())
+                .element_ref(&me)
+                .test_id(id)
+                .label(label_)
+                .placeholder(move || label_().to_string())
+                .masked(entry == Entry::Password)
+                .font_family(if entry == Entry::Key { CODE_FONT.family } else { "system-ui" })
+                .value(get)
+                .on_change(move |v: &str| {
+                    s.controller.get().activity();
+                    set(v);
+                })
+                .on_submit(move |_: &str| on_submit())
+                .on_focus(move |_: &()| on_focus_change(true))
+                .on_blur(move |_: &()| on_blur(false))
+                .return_key_type(return_key)
+                .auto_correct(false)
+                .auto_capitalize(nsh_core::AutoCapitalize::None)
+                .auto_fill(nsh_core::AutoFill::Off)
+                .text_size(px(17.0))
+                .text_color(move || theme().foreground)
+                .disabled(move || s.busy.get()),
+        )
+}
+/// How tall a field is at the default text size: iOS's holds its shrunken label over the text.
+fn field_height() -> f32 {
+    if IOS { 58.0 } else { CONTROL }
+}
+/// How far the text of an iOS field moves down while its label sits over it.
+const FLOATED_TEXT: f32 = 14.0;
 
 /// A password field in a capsule, with no label of its own on screen (the text above it says what it is; `label_` is for
 /// screen readers): 56 pt, outlined as `field` is, the show and hide control at its end.
@@ -491,13 +801,14 @@ pub fn text_area(
     outlined(focused, error, me)
         .min_h(px(height))
         .px(px(16.0))
-        .py(px(14.0))
+        .pt(px(if IOS { 28.0 } else { 14.0 }))
+        .pb(px(14.0))
         .child(
             themed_input(input())
                 .element_ref(&me)
                 .test_id(id)
                 .label(label_)
-                .placeholder(move || if focused.get() { placeholder().to_string() } else { String::new() })
+                .placeholder(move || if focused.get() || IOS { placeholder().to_string() } else { String::new() })
                 .multiline(true)
                 .value(get)
                 .on_change(move |v: &str| {
@@ -514,19 +825,29 @@ pub fn text_area(
                 .text_color(move || theme().foreground)
                 .disabled(move || s.busy.get()),
         )
-        // Down, its line is the first line's, under the field's top padding.
-        .child(floating_label(label_, floated, focused, error, |_| 14.0))
+        // Down, its line is the first line's, under the field's top padding. iOS: always at the top, the text under it.
+        .child(floating_label(label_, move || IOS || floated(), focused, error, |_| 14.0))
 }
 
 /// The line under a field: a problem in the error color, or nothing, in a height that is always there so the form does
 /// not move.
-pub fn field_note(
-    message: impl Fn() -> Option<SharedString> + Copy + 'static,
-    problem: impl Fn() -> bool + Copy + 'static,
-) -> impl IntoElement {
+pub fn field_note(message: impl Fn() -> Option<SharedString> + Copy + 'static, problem: impl Fn() -> bool + Copy + 'static) -> AnyElement {
+    // An alert's: only while it says something, centered.
+    if compact_now() {
+        return when(
+            move || message().is_some(),
+            move || {
+                caption(text(move || message().unwrap_or_default()))
+                    .text_center()
+                    .text_color(move || if problem() { theme().destructive } else { theme().muted_foreground })
+            },
+        )
+        .into_element();
+    }
     caption(text(move || message().unwrap_or_else(|| " ".into())))
         .px(px(16.0))
         .text_color(move || if problem() { theme().destructive } else { theme().muted_foreground })
+        .into_element()
 }
 
 // ---- Small parts ---------------------------------------------------------------------------------------------------
@@ -537,6 +858,25 @@ pub fn chip(
     selected: impl Fn() -> bool + Copy + 'static,
     glyph: Option<Icon>,
 ) -> nsh_base::ButtonElement {
+    // iOS: a capsule, filled with the accent when selected and with the system's gray otherwise.
+    if IOS {
+        return button()
+            .accessibility_label(move || Some(label_()))
+            .selected(selected)
+            .h(move || px(34.0) * font_scale())
+            .pl(px(if glyph.is_some() { 10.0 } else { 14.0 }))
+            .pr(px(14.0))
+            .flex_row()
+            .items_center()
+            .gap(px(6.0))
+            .flex_shrink(0.0)
+            .rounded_full()
+            .bg(move || if selected() { theme().primary } else { tok("input") })
+            .text_color(move || if selected() { theme().primary_foreground } else { theme().foreground })
+            .active(|s| s.opacity(0.7))
+            .child(when(move || glyph.is_some(), move || icon(glyph.unwrap_or(Icon::Sliders)).size(px(18.0))))
+            .child(label(text(label_)).number_of_lines(1));
+    }
     button()
         .accessibility_label(move || Some(label_()))
         .selected(selected)
@@ -579,26 +919,59 @@ pub fn icon_tile(glyph: Icon, size: f32, radius: f32, fill: &'static str, ink: &
 }
 
 /// The bar at a page's top: a back button, an optional centered title.
-pub fn top_bar(s: Store, title_: Option<&'static str>, back: impl Fn() + 'static) -> impl IntoElement {
+/// The room a page keeps at its top: the status bar's, or none on iOS, where the system's header is over it
+/// (`mobile::native_stack`).
+pub fn page_top() -> Points {
+    if IOS { px(0.0) } else { safe_area().top }
+}
+/// iOS: nothing, the system's header shows the title and goes back (`mobile::native_stack`).
+pub fn top_bar(s: Store, title_: Option<&'static str>, back: impl Fn() + 'static) -> AnyElement {
+    if IOS {
+        // No view at all: the system's header tracks the page's first subview as its scroll view, for the large title
+        // to collapse as the content scrolls.
+        let _ = (s, title_, back);
+        return when(|| false, view).into_element();
+    }
+    own_top_bar(s, title_, back)
+}
+/// The bar of a page: a back button, an optional centered title.
+fn own_top_bar(s: Store, title_: Option<&'static str>, back: impl Fn() + 'static) -> AnyElement {
+    let back_button = icon_button(move || s.label("Back"), || Icon::ChevronLeft).text_color(move || theme().foreground).on_press(back);
     view()
         .flex_row()
         .items_center()
         .h(move || px(BAR) * font_scale())
         .px(px(4.0))
-        .child(icon_button(move || s.label("Back"), || Icon::ChevronLeft).text_color(move || theme().foreground).on_press(back))
+        .child(back_button)
         .child(when(
             move || title_.is_some(),
             move || title_large(text(move || s.label(title_.unwrap_or_default()))).number_of_lines(1).flex_1().text_center(),
         ))
         // The title stays centered: as wide as the back button.
         .child(when(move || title_.is_some(), || view().w(px(TOUCH))))
+        .into_element()
 }
 
 // ---- Rows, groups and choices --------------------------------------------------------------------------------------
 
 /// The title over a group of rows.
 pub fn section_title(text_: impl Fn() -> SharedString + 'static) -> impl IntoElement + Styled {
+    // iOS: the system's group header, in capitals over the group's text.
+    if IOS {
+        return caption(text(move || SharedString::from(text_().to_uppercase())))
+            .text_color(move || theme().muted_foreground)
+            .pl(px(16.0))
+            .pt(px(24.0))
+            .pb(px(7.0));
+    }
     label(text(text_)).text_color(move || theme().primary).pl(px(16.0)).pt(px(24.0)).pb(px(8.0))
+}
+/// The name over a part of a sheet ("Categories", "Secret"): iOS's group header there, elsewhere a label.
+pub fn heading(text_: impl Fn() -> SharedString + 'static) -> impl IntoElement + Styled {
+    if IOS {
+        return caption(text(move || SharedString::from(text_().to_uppercase()))).text_color(move || theme().muted_foreground).pl(px(16.0));
+    }
+    label(text(text_))
 }
 /// The line of detail under a row's title.
 pub type Detail = std::rc::Rc<dyn Fn() -> SharedString>;
@@ -614,7 +987,7 @@ pub fn row(
     button()
         .accessibility_label(move || Some(said()))
         .bg(move || theme().card)
-        .active(|s| s.bg(move || tok("surface-high")))
+        .active(|s| s.bg(move || if IOS { tok("pressed") } else { tok("surface-high") }))
         .child(row_body(leading, title_, detail, trailing))
 }
 /// A row that turns something on or off, with a switch at its end; screen readers announce it as a switch, on or off.
@@ -624,10 +997,12 @@ pub fn switch_row(
     detail: Detail,
     on: impl Fn() -> bool + Copy + 'static,
 ) -> View {
-    toggle(AccessibilityRole::Switch, row_label(title_, Some(detail.clone())), on)
+    // iOS: the detail is the group's footer (`footer`), not in the row.
+    let detail = if IOS { None } else { Some(detail) };
+    toggle(AccessibilityRole::Switch, row_label(title_, detail.clone()), on)
         .bg(move || theme().card)
-        .active(|s| s.bg(move || tok("surface-high")))
-        .child(row_body(leading, title_, Some(detail), switch(on)))
+        .active(|s| s.bg(move || if IOS { tok("pressed") } else { tok("surface-high") }))
+        .child(row_body(leading, title_, detail, switch(on)))
 }
 fn row_label(title_: impl Fn() -> SharedString + Copy + 'static, detail: Option<Detail>) -> impl Fn() -> SharedString + 'static {
     move || match &detail {
@@ -642,13 +1017,14 @@ fn row_body(
     trailing: impl IntoElement,
 ) -> View {
     let tall = detail.is_some();
+    let (high, low) = if IOS { (60.0, 48.0) } else { (72.0, 56.0) };
     view()
-        .min_h(move || px(if tall { 72.0 } else { 56.0 }) * font_scale())
+        .min_h(move || px(if tall { high } else { low }) * font_scale())
         .px(px(16.0))
-        .py(px(10.0))
+        .py(px(if IOS { 8.0 } else { 10.0 }))
         .flex_row()
         .items_center()
-        .gap(px(16.0))
+        .gap(px(if IOS { 14.0 } else { 16.0 }))
         .child(leading)
         .child(
             view()
@@ -661,6 +1037,18 @@ fn row_body(
 }
 /// A round tile around a glyph: the leading mark of a settings row.
 pub fn round_tile(glyph: Icon, destructive: bool) -> impl IntoElement {
+    // iOS: a square tile in a color of its own, the glyph white, as the system's settings draw theirs.
+    if IOS {
+        return view()
+            .size(px(30.0))
+            .flex_shrink(0.0)
+            .items_center()
+            .justify_center()
+            .rounded(px(7.0))
+            .bg(move || if destructive { theme().destructive } else { tile_color(glyph) })
+            .text_color(|| AdaptiveColor::rgb(0xffffff, 0xffffff))
+            .child(crate::icons::icon_bold(glyph).size(px(19.0)));
+    }
     view()
         .size(px(40.0))
         .flex_shrink(0.0)
@@ -671,7 +1059,18 @@ pub fn round_tile(glyph: Icon, destructive: bool) -> impl IntoElement {
         .text_color(move || if destructive { tok("destructive-container-foreground") } else { theme().foreground })
         .child(icon(glyph).size(px(22.0)))
 }
-/// Rows as one group: 24 pt outer corners, 6 pt between rows.
+/// The tile color of a settings row's glyph on iOS, by what the row is about.
+fn tile_color(glyph: Icon) -> AdaptiveColor {
+    match glyph {
+        Icon::TouchId | Icon::FaceId => AdaptiveColor::rgb(0x34c759, 0x30d158),
+        Icon::Lock | Icon::Eye | Icon::ExportImport | Icon::Download | Icon::Cloud => AdaptiveColor::rgb(0x007aff, 0x0a84ff),
+        Icon::Photo => AdaptiveColor::rgb(0xff9500, 0xff9f0a),
+        Icon::Key => AdaptiveColor::rgb(0xff9500, 0xff9f0a),
+        _ => AdaptiveColor::rgb(0x8e8e93, 0x8e8e93),
+    }
+}
+/// Rows as one group: 24 pt outer corners, 6 pt between rows. iOS: one rounded group, hairlines between its rows from
+/// under their text.
 pub fn group(rows: Vec<AnyElement>) -> impl IntoElement + Styled {
     let count = rows.len();
     view().gap(px(GROUP_GAP)).children(rows.into_iter().enumerate().map(move |(index, row)| {
@@ -680,10 +1079,146 @@ pub fn group(rows: Vec<AnyElement>) -> impl IntoElement + Styled {
             .rounded_t(px(if index == 0 { GROUP_RADIUS } else { GROUP_INNER }))
             .rounded_b(px(if index + 1 == count { GROUP_RADIUS } else { GROUP_INNER }))
             .child(row)
+            .child(when(move || IOS && index > 0, || separator(TILE_INSET)))
     }))
 }
-/// A switch: 52 by 32 pt.
+/// The small text under a group of rows on iOS (its footer): what a row's setting means. Elsewhere rows carry it
+/// themselves.
+pub fn footer(text_: impl Fn() -> SharedString + 'static) -> impl IntoElement + Styled {
+    dim(caption(text(text_))).px(px(16.0)).pt(px(7.0))
+}
+/// A row that shows a value at its end, in secondary text (iOS), or under its title elsewhere; `trailing` after it.
+pub fn value_row(
+    leading: impl IntoElement,
+    title_: impl Fn() -> SharedString + Copy + 'static,
+    value: impl Fn() -> SharedString + 'static,
+    trailing: impl IntoElement,
+) -> nsh_base::ButtonElement {
+    if !IOS {
+        return row(leading, title_, Some(std::rc::Rc::new(value)), trailing);
+    }
+    let value = std::rc::Rc::new(value);
+    let said = value.clone();
+    button()
+        .accessibility_label(move || Some(SharedString::from(format!("{}, {}", title_(), said()))))
+        .bg(move || theme().card)
+        .active(|s| s.bg(move || tok("pressed")))
+        .child(value_body(leading, title_, move || value(), trailing))
+}
+fn value_body(
+    leading: impl IntoElement,
+    title_: impl Fn() -> SharedString + Copy + 'static,
+    value: impl Fn() -> SharedString + 'static,
+    trailing: impl IntoElement,
+) -> View {
+    view()
+        .min_h(move || px(48.0) * font_scale())
+        .px(px(16.0))
+        .py(px(8.0))
+        .flex_row()
+        .items_center()
+        .gap(px(14.0))
+        .child(leading)
+        .child(body_large(text(title_)).flex_1().min_w(px(0.0)))
+        .child(dim(body_large(text(value))).number_of_lines(1).flex_shrink(0.0))
+        .child(trailing)
+}
+/// A setting chosen among a few: its value at its end. iOS: a press opens the system's pull-down menu
+/// (`UIMenu`) of the choices, the current one checked; elsewhere the row's `on_press` (a dialog) chooses.
+#[allow(clippy::too_many_arguments)]
+pub fn picker_row<T: Copy + PartialEq + 'static>(
+    leading: impl IntoElement,
+    title_: impl Fn() -> SharedString + Copy + 'static,
+    value: impl Fn() -> SharedString + 'static,
+    options: impl Fn() -> Vec<(T, SharedString)> + 'static,
+    get: impl Fn() -> T + Copy + 'static,
+    set: impl Fn(T) + 'static,
+    on_press: impl Fn() + 'static,
+) -> AnyElement {
+    #[cfg(target_os = "ios")]
+    {
+        let _ = on_press;
+        let options = std::rc::Rc::new(options);
+        let chosen = options.clone();
+        return nsh_base::menu_button()
+            .accessibility_label(move || Some(title_()))
+            .items(move || {
+                let current = get();
+                let items = options()
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, (v, label))| {
+                        let mut item = nsh_base::MenuButtonItem::new(SharedString::from(i.to_string()), label);
+                        item.checked = Some(v == current);
+                        item
+                    })
+                    .collect::<Vec<_>>();
+                vec![nsh_base::MenuButtonItem::section("", items).single_selection(true)]
+            })
+            .on_select(move |id: &SharedString| {
+                if let Some((v, _)) = id.parse::<usize>().ok().and_then(|i| chosen().get(i).cloned()) {
+                    set(v)
+                }
+            })
+            .bg(move || theme().card)
+            .child(value_body(
+                leading,
+                title_,
+                value,
+                view().text_color(move || tok("tertiary")).child(crate::icons::icon_bold(Icon::ChevronUpDown).size(px(16.0))),
+            ))
+            .into_element();
+    }
+    #[allow(unreachable_code)]
+    {
+        let _ = (options, get, set);
+        row(leading, title_, Some(std::rc::Rc::new(value)), chevron()).on_press(on_press).into_element()
+    }
+}
+/// The mark at a row's end that says it opens a page.
+pub fn chevron() -> impl IntoElement {
+    if IOS {
+        return view().text_color(move || tok("tertiary")).child(crate::icons::icon_bold(Icon::ChevronRight).size(px(18.0)));
+    }
+    view().text_color(move || theme().muted_foreground).child(icon(Icon::ChevronRight).size(px(24.0)))
+}
+/// A switch: 52 by 32 pt. iOS: the system's `UISwitch` (Liquid Glass from iOS 26), which the row around it flips: it
+/// takes no touches of its own.
+// iOS returns the system's at the top; the rest is for the other systems.
+#[cfg_attr(target_os = "ios", allow(unreachable_code))]
 pub fn switch(on: impl Fn() -> bool + Copy + 'static) -> impl IntoElement {
+    #[cfg(target_os = "ios")]
+    return view()
+        .flex_shrink(0.0)
+        .pointer_events(nsh_core::PointerEvents::None)
+        // The row is the switch screen readers hear (`switch_row`).
+        .accessibility_elements_hidden(true)
+        .child(nsh_core::mobile::switch().checked(on))
+        .into_element();
+    if IOS {
+        return view()
+            .w(px(51.0))
+            .h(px(31.0))
+            .flex_shrink(0.0)
+            .rounded_full()
+            .justify_center()
+            .bg(move || if on() { tok("switch-on") } else { tok("switch-off") })
+            .transition()
+            .duration(EFFECTS_MS)
+            .ease_out()
+            .child(
+                view()
+                    .size(px(27.0))
+                    .ml(move || px(if on() { 22.0 } else { 2.0 }))
+                    .rounded_full()
+                    .bg(|| AdaptiveColor::rgb(0xffffff, 0xffffff))
+                    .shadow_sm()
+                    .transition()
+                    .duration(EFFECTS_MS)
+                    .ease_out(),
+            )
+            .into_element();
+    }
     view()
         .w(px(52.0))
         .h(px(32.0))
@@ -706,40 +1241,99 @@ pub fn switch(on: impl Fn() -> bool + Copy + 'static) -> impl IntoElement {
                 .duration(EFFECTS_MS)
                 .ease_out(),
         )
+        .into_element()
 }
 /// One of a few choices, side by side: 48 pt segments, 20 pt corners at the ends and 6 pt between.
+#[cfg_attr(target_os = "ios", allow(unreachable_code))]
 pub fn choice<T: Copy + PartialEq + 'static>(
     options: Vec<(T, Box<dyn Fn() -> SharedString>)>,
     get: impl Fn() -> T + Copy + 'static,
     set: impl Fn(T) + Copy + 'static,
 ) -> impl IntoElement {
+    // iOS: the system's `UISegmentedControl`.
+    #[cfg(target_os = "ios")]
+    {
+        let values: Vec<T> = options.iter().map(|(v, _)| *v).collect();
+        let names: Vec<Box<dyn Fn() -> SharedString>> = options.into_iter().map(|(_, n)| n).collect();
+        let chosen = values.clone();
+        return nsh_core::mobile::segmented_control()
+            .items(move || names.iter().map(|n| nsh_core::mobile::SegmentedControlItem::new(n())).collect::<Vec<_>>())
+            .selected_index(move || values.iter().position(|v| *v == get()).unwrap_or(0) as u32)
+            .on_change(move |index: &u32| {
+                if let Some(v) = chosen.get(*index as usize) {
+                    set(*v)
+                }
+            })
+            .w_full()
+            .into_element();
+    }
     let count = options.len();
-    view().flex_row().gap(px(GROUP_GAP)).children(options.into_iter().enumerate().map(move |(index, (value, name))| {
-        let on = move || get() == value;
-        let name: std::rc::Rc<dyn Fn() -> SharedString> = name.into();
-        let said = name.clone();
-        button()
-            .accessibility_label(move || Some(said()))
-            .selected(on)
-            .flex_1()
-            .min_w(px(0.0))
-            .h(move || px(48.0) * font_scale())
-            .px(px(12.0))
-            .items_center()
-            .justify_center()
-            .rounded_l(px(if index == 0 { 20.0 } else { GROUP_INNER }))
-            .rounded_r(px(if index + 1 == count { 20.0 } else { GROUP_INNER }))
-            .bg(move || if on() { theme().primary } else { theme().secondary })
-            .transition()
-            .duration(EFFECTS_MS)
-            .ease_out()
-            .on_press(move || set(value))
-            .child(
-                label(text(move || name()))
-                    .number_of_lines(1)
-                    .text_color(move || if on() { theme().primary_foreground } else { theme().foreground }),
-            )
-    }))
+    // A desktop showing iOS's look: a drawn one, the chosen segment raised on a gray track.
+    if IOS {
+        return view()
+            .flex_row()
+            .p(px(2.0))
+            .rounded(px(9.0))
+            .bg(move || tok("segment-track"))
+            .children(options.into_iter().map(move |(value, name)| {
+                let on = move || get() == value;
+                let name: std::rc::Rc<dyn Fn() -> SharedString> = name.into();
+                let said = name.clone();
+                button()
+                    .accessibility_label(move || Some(said()))
+                    .selected(on)
+                    .flex_1()
+                    .min_w(px(0.0))
+                    .h(move || px(32.0) * font_scale())
+                    .px(px(8.0))
+                    .items_center()
+                    .justify_center()
+                    .rounded(px(7.0))
+                    .bg(move || if on() { tok("segment-selected") } else { tok("segment-selected").opacity(0.0) })
+                    .transition()
+                    .duration(EFFECTS_MS)
+                    .ease_out()
+                    .on_press(move || set(value))
+                    .child(
+                        text(move || name())
+                            .text_size(px(13.0))
+                            .font_weight(FontWeight::MEDIUM)
+                            .number_of_lines(1)
+                            .text_color(move || theme().foreground),
+                    )
+            }))
+            .into_element();
+    }
+    view()
+        .flex_row()
+        .gap(px(GROUP_GAP))
+        .children(options.into_iter().enumerate().map(move |(index, (value, name))| {
+            let on = move || get() == value;
+            let name: std::rc::Rc<dyn Fn() -> SharedString> = name.into();
+            let said = name.clone();
+            button()
+                .accessibility_label(move || Some(said()))
+                .selected(on)
+                .flex_1()
+                .min_w(px(0.0))
+                .h(move || px(48.0) * font_scale())
+                .px(px(12.0))
+                .items_center()
+                .justify_center()
+                .rounded_l(px(if index == 0 { 20.0 } else { GROUP_INNER }))
+                .rounded_r(px(if index + 1 == count { 20.0 } else { GROUP_INNER }))
+                .bg(move || if on() { theme().primary } else { theme().secondary })
+                .transition()
+                .duration(EFFECTS_MS)
+                .ease_out()
+                .on_press(move || set(value))
+                .child(
+                    label(text(move || name()))
+                        .number_of_lines(1)
+                        .text_color(move || if on() { theme().primary_foreground } else { theme().foreground }),
+                )
+        }))
+        .into_element()
 }
 /// A tonal action: 56 pt, with a leading glyph.
 pub fn tonal_button(
@@ -755,11 +1349,73 @@ pub fn tonal_button(
         .items_center()
         .justify_center()
         .gap(px(8.0))
-        .bg(move || if destructive { tok("destructive-container") } else { theme().secondary })
-        .text_color(move || if destructive { tok("destructive-container-foreground") } else { theme().foreground })
-        .active(|s| s.opacity(0.85))
+        // iOS: a grouped button on a sheet, white (raised in dark) with the accent's (or the destructive) text.
+        .bg(move || {
+            if IOS {
+                tok("sheet-card")
+            } else if destructive {
+                tok("destructive-container")
+            } else {
+                theme().secondary
+            }
+        })
+        .text_color(move || {
+            if IOS {
+                if destructive { theme().destructive } else { theme().primary }
+            } else if destructive {
+                tok("destructive-container-foreground")
+            } else {
+                theme().foreground
+            }
+        })
+        .active(|s| s.opacity(if IOS { 0.6 } else { 0.85 }))
         .child(view().size(px(18.0)).child(dynamic(move || icon(glyph()).size(px(18.0)).into_element())))
         .child(label(text(label_)).number_of_lines(1))
+}
+/// What an action of a dialog does: closes it, does what it is for, or destroys something.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Act {
+    Cancel,
+    Default,
+    Destructive,
+}
+/// An action of a dialog (`dialog`): text only elsewhere; on iOS a capsule as iOS 26's alerts draw theirs, the default
+/// one filled with the accent, the others gray, sharing the row (`dialog_actions`).
+pub fn dialog_action(label_: impl Fn() -> SharedString + Copy + 'static, act: Act) -> nsh_base::ButtonElement {
+    if !IOS {
+        return text_button(label_, act == Act::Destructive);
+    }
+    button()
+        .accessibility_label(move || Some(label_()))
+        .flex_1()
+        .min_w(px(0.0))
+        .min_h(move || px(48.0) * font_scale())
+        .px(px(14.0))
+        .items_center()
+        .justify_center()
+        .rounded_full()
+        .bg(move || if act == Act::Default { theme().primary } else { tok("input") })
+        .active(|s| s.opacity(0.7))
+        .disabled_style(|s| s.opacity(0.4))
+        .child(
+            body_large(text(label_))
+                .number_of_lines(1)
+                .font_weight(if act == Act::Default { FontWeight::SEMIBOLD } else { FontWeight::MEDIUM })
+                .text_center()
+                .text_color(move || match act {
+                    Act::Default => theme().primary_foreground,
+                    Act::Cancel => theme().foreground,
+                    Act::Destructive => theme().destructive,
+                }),
+        )
+}
+/// The row of a dialog's actions: side by side, or on iOS one over another (`stacked`) where a label is long.
+pub fn dialog_actions(stacked: bool) -> View {
+    // Stacked: the default action on top, as the system's alerts order a column (the cancel one last).
+    if IOS && stacked {
+        return view().flex_col_reverse().gap(px(8.0));
+    }
+    view().flex_row().justify_end().gap(px(if IOS { 8.0 } else { 4.0 }))
 }
 /// An action of a dialog or a bar: text only, 40 pt.
 pub fn text_button(label_: impl Fn() -> SharedString + Copy + 'static, destructive: bool) -> nsh_base::ButtonElement {
@@ -771,19 +1427,26 @@ pub fn text_button(label_: impl Fn() -> SharedString + Copy + 'static, destructi
         .justify_center()
         .rounded_full()
         .active(|s| s.bg(move || tok("pressed")))
-        .child(label(text(label_)).text_color(move || if destructive { theme().destructive } else { theme().primary }))
+        .child(
+            label(text(label_))
+                .text_size(px(if IOS { 17.0 } else { 14.0 }))
+                .text_color(move || if destructive { theme().destructive } else { theme().primary }),
+        )
 }
 
 // ---- Dialogs and sheets --------------------------------------------------------------------------------------------
 
-/// A dialog over the page: a scrim and a panel with a title, its content and its actions, end-aligned. A press on the
+/// A dialog over the page: a scrim and a panel with a title, its content (built for an alert: `compact`) and its
+/// actions, end-aligned. A press on the
 /// scrim asks to close it.
-pub fn dialog(
+pub fn dialog<E: IntoElement>(
     title_: impl Fn() -> SharedString + 'static,
-    content: impl IntoElement,
+    content: impl FnOnce() -> E,
     actions: impl IntoElement,
     dismiss: impl Fn() + Copy + 'static,
 ) -> impl IntoElement {
+    // Its fields and notes are an alert's (`compact`).
+    let content = compact(content);
     let scrim = view().flex_1().items_center().justify_center().px(px(27.0)).pt_safe_area();
     // Android resizes the dialog's window to end at the keyboard's top (as it does a sheet's, below), so the panel
     // centers above the keyboard already; making room for the keyboard as well lifted it that far again, its title and
@@ -795,21 +1458,33 @@ pub fn dialog(
         scrim.bg(move || tok("scrim")).on_press(move |_: &()| dismiss()).child(
             view()
                 .w_full()
-                .max_w(px(560.0))
-                .rounded(px(28.0))
-                .bg(move || tok("surface-high"))
+                .max_w(px(if IOS { 320.0 } else { 560.0 }))
+                .rounded(px(if IOS { 34.0 } else { 28.0 }))
+                .bg(move || if IOS { tok("popover") } else { tok("surface-high") })
                 // A light rim in dark appearance, where the shadow does not show.
                 .border_1()
                 .border_color(move || tok("sheet-rim"))
                 .shadow_lg()
                 // A press inside stays inside.
                 .on_press(|_: &()| {})
-                .child(text(title_).text_size(px(22.0)).line_height(px(28.0)).px(px(24.0)).pt(px(22.0)).pb(px(12.0)))
-                .child(view().px(px(24.0)).gap(px(8.0)).child(content))
-                .child(view().flex_row().justify_end().gap(px(4.0)).px(px(12.0)).pt(px(12.0)).pb(px(12.0)).child(actions)),
+                .child(if IOS {
+                    // iOS: an alert's title, centered.
+                    title(text(title_)).text_center().px(px(20.0)).pt(px(22.0)).pb(px(8.0)).into_element()
+                } else {
+                    text(title_).text_size(px(22.0)).line_height(px(28.0)).px(px(24.0)).pt(px(22.0)).pb(px(12.0)).into_element()
+                })
+                .child(view().px(px(if IOS { 20.0 } else { 24.0 })).gap(px(8.0)).child(content))
+                .child(if IOS {
+                    // iOS 26's: the actions as capsules across the alert (`dialog_action`).
+                    view().px(px(16.0)).pt(px(12.0)).pb(px(16.0)).child(actions).into_element()
+                } else {
+                    view().flex_row().justify_end().gap(px(4.0)).px(px(12.0)).pt(px(12.0)).pb(px(12.0)).child(actions).into_element()
+                }),
         ),
     )
 }
+/// The widest a bottom sheet grows.
+pub const SHEET_MAX: f32 = 640.0;
 /// The room a bottom sheet leaves above itself, under the status bar, however tall its content and wherever the
 /// keyboard is: the scrim shows there, so a sheet still reads as one over the page, and its content scrolls instead.
 pub const SHEET_TOP: f32 = 56.0;
@@ -817,7 +1492,11 @@ pub const SHEET_TOP: f32 = 56.0;
 /// default text size): the room between `SHEET_TOP` under the status bar and the keyboard (the screen's bottom when it
 /// is down), less the handle. A scroll view needs a height of its own: without one it is as tall as its content,
 /// nothing scrolls, and a drag in it moves the sheet instead, which takes the keyboard down.
+/// iOS: the system's sheet sizes itself (`bottom_sheet`); its scroll views fill it instead (`flex_1`).
 pub fn sheet_room(chrome: f32) -> Points {
+    if cfg!(target_os = "ios") {
+        return px(100_000.0);
+    }
     let keyboard = (keyboard_height() - safe_area().bottom).max(px(0.0));
     let bottom = if keyboard > px(0.0) { px(0.0) } else { safe_area().bottom };
     (window().height - safe_area().top - px(SHEET_TOP) - keyboard - bottom - px(28.0) - px(chrome) * font_scale()).max(px(120.0))
@@ -831,8 +1510,31 @@ pub fn sheet_bottom(extra: f32) -> Points {
 pub fn bottom_sheet(
     open: impl Fn() -> bool + Copy + 'static,
     close: impl Fn() + Copy + 'static,
-    content: impl IntoElement,
-) -> impl IntoElement {
+    content: impl Fn() -> AnyElement + 'static,
+) -> AnyElement {
+    // iOS: the system's sheet (`UISheetPresentationController`): half the screen or all of it, dragged between them,
+    // over the page it leaves visible, closed by a swipe down.
+    #[cfg(target_os = "ios")]
+    {
+        let content = std::rc::Rc::new(content);
+        return when(open, move || {
+            let content = content.clone();
+            nsh_base::dialog()
+                .presentation(nsh_core::ModalPresentation::PageSheet)
+                .detents(vec![nsh_core::SheetDetent::Medium, nsh_core::SheetDetent::Large])
+                .on_cancel(move |_: &()| close())
+                .child(
+                    view()
+                        .flex_1()
+                        .bg(move || tok("sheet-surface"))
+                        .pt(px(12.0))
+                        // A column the content's scroll view fills.
+                        .child(view().flex_1().min_h(px(0.0)).child(content())),
+                )
+        })
+        .into_element();
+    }
+    #[allow(unreachable_code)]
     nsh_base::sheet()
         .open(move || Some(open()))
         .on_open_change(move |e: &nsh_base::SheetEvent| {
@@ -850,7 +1552,11 @@ pub fn bottom_sheet(
         .popup_style(|s| if cfg!(target_os = "android") { s.bottom(px(0.0)) } else { s })
         .child(
             view()
-                .rounded_t(px(28.0))
+                // A wide window: a column of a readable width in the middle, as a tablet's form sheet.
+                .w_full()
+                .max_w(px(SHEET_MAX))
+                .self_center()
+                .rounded_t(px(if IOS { 34.0 } else { 28.0 }))
                 // Lighter than the page in dark appearance, with a light rim: there a shadow does not show, and the
                 // page's own color under the scrim would make the sheet one with it.
                 .bg(move || tok("sheet-surface"))
@@ -864,12 +1570,16 @@ pub fn bottom_sheet(
                 })
                 .overflow_hidden()
                 .child(
-                    view()
-                        .items_center()
-                        .py(px(12.0))
-                        .child(view().w(px(32.0)).h(px(4.0)).rounded_full().bg(move || tok("outline").opacity(0.5))),
+                    view().items_center().py(px(12.0)).child(
+                        view()
+                            .w(px(if IOS { 36.0 } else { 32.0 }))
+                            .h(px(if IOS { 5.0 } else { 4.0 }))
+                            .rounded_full()
+                            .bg(move || tok("outline").opacity(if IOS { 0.35 } else { 0.5 })),
+                    ),
                 )
                 // The content gives way first: its scroll view takes what is left.
-                .child(view().flex_shrink(1.0).min_h(px(0.0)).child(content)),
+                .child(view().flex_shrink(1.0).min_h(px(0.0)).child(content())),
         )
+        .into_element()
 }

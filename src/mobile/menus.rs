@@ -145,49 +145,67 @@ pub fn add_to(s: Store, nav: Nav) -> impl IntoElement {
     ui::bottom_sheet(
         move || nav.add_to.get().is_some(),
         move || nav.add_to.set(None),
-        view()
-            .pb_safe_area_plus(px(8.0))
-            .child(
-                view()
-                    .flex_row()
-                    .items_center()
-                    .px(px(12.0))
-                    .child(
-                        ui::text_button(move || s.label("New Category"), false)
-                            .on_press(move || s.editing.set(Some(CategoryEdit { account: nav.add_to.get(), ..Default::default() }))),
-                    )
-                    .child(view().flex_1())
-                    .child(ui::text_button(move || s.label("Save"), false).test_id("save").on_press(save)),
-            )
-            .child(scroll().max_h(px(360.0)).child(view().py(px(8.0)).child(each(
-                move || s.projection.with(|p| p.categories.clone()),
-                |c| c.id,
-                move |c, _| {
-                    let id = c.with_untracked(|c| c.id);
-                    let on = move || staged.with(|st| st.contains(&id));
-                    ui::toggle(AccessibilityRole::Checkbox, move || c.with(|c| SharedString::from(c.name.clone())), on)
-                        .min_h(move || px(ui::TOUCH) * font_scale())
-                        .px(px(24.0))
+        move || {
+            view()
+                .pb_safe_area_plus(px(8.0))
+                .child(
+                    view()
                         .flex_row()
                         .items_center()
-                        .gap(px(16.0))
-                        .active(|st| st.bg(move || tok("pressed")))
-                        .on_press(move |_: &()| {
-                            staged.update(|st| {
-                                if !st.remove(&id) {
-                                    st.insert(id);
-                                }
-                            })
-                        })
-                        .child(view().text_color(move || theme().foreground).child(icon(Icon::Folder).size(px(24.0))))
+                        .px(px(12.0))
                         .child(
-                            ui::body_large(text(move || c.with(|c| SharedString::from(c.name.clone()))))
-                                .number_of_lines(1)
-                                .flex_1()
-                                .text_color(move || theme().foreground),
+                            ui::text_button(move || s.label("New Category"), false)
+                                .on_press(move || s.editing.set(Some(CategoryEdit { account: nav.add_to.get(), ..Default::default() }))),
                         )
-                        .child(when(on, || view().text_color(move || theme().primary).child(icon(Icon::Check).size(px(24.0)))))
-                },
-            )))),
+                        .child(view().flex_1())
+                        .child(ui::text_button(move || s.label("Save"), false).test_id("save").on_press(save)),
+                )
+                // iOS: the categories as one group of rows, as the system's checklists.
+                .child(
+                    scroll().max_h(px(360.0)).child(
+                        view()
+                            .py(px(8.0))
+                            .mx(px(if ui::IOS { ui::MARGIN } else { 0.0 }))
+                            .mb(px(if ui::IOS { 16.0 } else { 0.0 }))
+                            .rounded(px(if ui::IOS { ui::GROUP_RADIUS } else { 0.0 }))
+                            .overflow_hidden()
+                            .bg(move || if ui::IOS { tok("sheet-card") } else { theme().card.opacity(0.0) })
+                            .child(each(
+                                move || s.projection.with(|p| p.categories.clone()),
+                                |c| c.id,
+                                move |c, index| {
+                                    let id = c.with_untracked(|c| c.id);
+                                    let on = move || staged.with(|st| st.contains(&id));
+                                    ui::toggle(AccessibilityRole::Checkbox, move || c.with(|c| SharedString::from(c.name.clone())), on)
+                                        .min_h(move || px(ui::TOUCH) * font_scale())
+                                        .px(px(if ui::IOS { 16.0 } else { 24.0 }))
+                                        .flex_row()
+                                        .items_center()
+                                        .gap(px(16.0))
+                                        .active(|st| st.bg(move || tok("pressed")))
+                                        .on_press(move |_: &()| {
+                                            staged.update(|st| {
+                                                if !st.remove(&id) {
+                                                    st.insert(id);
+                                                }
+                                            })
+                                        })
+                                        .child(view().text_color(move || theme().foreground).child(icon(Icon::Folder).size(px(24.0))))
+                                        .child(
+                                            ui::body_large(text(move || c.with(|c| SharedString::from(c.name.clone()))))
+                                                .number_of_lines(1)
+                                                .flex_1()
+                                                .text_color(move || theme().foreground),
+                                        )
+                                        .child(when(on, || {
+                                            view().text_color(move || theme().primary).child(icon(Icon::Check).size(px(24.0)))
+                                        }))
+                                        .child(when(move || ui::IOS && index.get() > 0, || ui::separator(16.0 + 24.0 + 16.0)))
+                                },
+                            )),
+                    ),
+                )
+                .into_element()
+        },
     )
 }

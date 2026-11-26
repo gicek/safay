@@ -1,7 +1,7 @@
 //! Settings, as groups of rows: security, the vault's data, how the app looks, and what it is.
 use super::{Dialog, Nav, Page, ui};
 use crate::{
-    icons::{Icon, icon},
+    icons::Icon,
     store::{Auth, Store},
 };
 use nsh_base::theme;
@@ -21,90 +21,97 @@ pub fn language_name(s: Store, language: Language) -> SharedString {
     }
 }
 
-fn chevron() -> impl IntoElement {
-    view().text_color(move || theme().muted_foreground).child(icon(Icon::ChevronRight).size(px(24.0)))
-}
 fn nothing() -> impl IntoElement {
     view()
 }
 
 pub fn page(s: Store, nav: Nav) -> impl IntoElement {
     let preferences = move || s.preferences.get();
-    let mut security_rows = Vec::new();
     // Shown where the device has a strong biometric enrolled.
-    if s.biometrics.get_untracked() {
-        security_rows.push(
-            ui::switch_row(
-                ui::round_tile(Icon::TouchId, false),
-                move || s.label("Unlock with biometrics"),
-                Rc::new(move || s.label("After you change fingerprints or faces, turn it on again.")),
-                move || preferences().touch_id,
-            )
-            .test_id("biometrics")
-            .on_press(move |_: &()| s.set_touch_id(!preferences().touch_id))
-            .into_element(),
-        );
-    }
-    security_rows.extend(vec![
-        ui::row(
-            ui::round_tile(Icon::Lock, false),
-            move || s.label("Auto-Lock"),
-            Some(Rc::new(move || s.count("minutes", preferences().auto_lock_minutes as usize))),
-            chevron(),
-        )
-        .test_id("auto-lock")
-        .on_press(move || nav.dialog.set(Some(Dialog::AutoLock)))
-        .into_element(),
-        ui::row(ui::round_tile(Icon::Key, false), move || s.label("Change Master Password"), None, chevron())
-            .test_id("change-password")
-            .on_press(move || {
-                s.clear();
-                nav.dialog.set(Some(Dialog::ChangePassword))
-            })
-            .into_element(),
+    let biometric_note = move || s.label("After you change fingerprints or faces, turn it on again.");
+    let biometric = s.biometrics.get_untracked().then(|| {
         ui::switch_row(
-            ui::round_tile(Icon::Photo, false),
-            move || s.label("Show Site Icons"),
-            Rc::new(move || s.label("Each icon comes straight from the account’s website.")),
-            move || preferences().site_icons,
+            ui::round_tile(ui::Biometric::get().icon(), false),
+            move || s.label(ui::Biometric::get().unlock()),
+            Rc::new(biometric_note),
+            move || preferences().touch_id,
         )
-        .test_id("site-icons")
-        .on_press(move |_: &()| {
-            let on = !preferences().site_icons;
-            s.update_preferences(move |p| p.site_icons = on)
+        .test_id("biometrics")
+        .on_press(move |_: &()| s.set_touch_id(!preferences().touch_id))
+        .into_element()
+    });
+    let auto_lock = ui::picker_row(
+        ui::round_tile(Icon::Lock, false),
+        move || s.label("Auto-Lock"),
+        move || s.count("minutes", preferences().auto_lock_minutes as usize),
+        move || AUTO_LOCK_MINUTES.iter().map(|m| (*m, s.count("minutes", *m as usize))).collect(),
+        move || preferences().auto_lock_minutes,
+        move |m| s.update_preferences(move |p| p.auto_lock_minutes = m),
+        move || nav.dialog.set(Some(Dialog::AutoLock)),
+    );
+    let change_password = ui::row(ui::round_tile(Icon::Key, false), move || s.label("Change Master Password"), None, ui::chevron())
+        .test_id("change-password")
+        .on_press(move || {
+            s.clear();
+            nav.dialog.set(Some(Dialog::ChangePassword))
         })
-        .into_element(),
-    ]);
-    let security = ui::group(security_rows);
-    let data = ui::group(vec![
-        ui::row(ui::round_tile(Icon::ExportImport, false), move || s.label("Export Encrypted Backup"), None, chevron())
-            .test_id("export")
-            .on_press(move || nav.dialog.set(Some(Dialog::Export)))
-            .into_element(),
-        ui::row(ui::round_tile(Icon::Download, false), move || s.label("Import Backup File"), None, chevron())
-            .test_id("import")
-            .on_press(move || s.choose_backup())
-            .into_element(),
-        ui::row(
-            ui::round_tile(Icon::Trash, false),
-            move || s.label("Recently Deleted"),
-            Some(Rc::new(move || s.count("accounts_n", s.projection.with(|p| p.deleted_count)))),
-            chevron(),
+        .into_element();
+    let icons_note = move || s.label("Each icon comes straight from the account’s website.");
+    let site_icons = ui::switch_row(
+        ui::round_tile(Icon::Photo, false),
+        move || s.label("Show Site Icons"),
+        Rc::new(icons_note),
+        move || preferences().site_icons,
+    )
+    .test_id("site-icons")
+    .on_press(move |_: &()| {
+        let on = !preferences().site_icons;
+        s.update_preferences(move |p| p.site_icons = on)
+    })
+    .into_element();
+    let export = ui::row(ui::round_tile(Icon::ExportImport, false), move || s.label("Export Encrypted Backup"), None, ui::chevron())
+        .test_id("export")
+        .on_press(move || nav.dialog.set(Some(Dialog::Export)))
+        .into_element();
+    let import = ui::row(ui::round_tile(Icon::Download, false), move || s.label("Import Backup File"), None, ui::chevron())
+        .test_id("import")
+        .on_press(move || s.choose_backup())
+        .into_element();
+    let deleted = ui::value_row(
+        ui::round_tile(Icon::Trash, false),
+        move || s.label("Recently Deleted"),
+        move || s.count("accounts_n", s.projection.with(|p| p.deleted_count)),
+        ui::chevron(),
+    )
+    .test_id("deleted")
+    .on_press(move || nav.push(Page::Deleted))
+    .into_element();
+    let reset_note = move || s.label("Erases the vault and settings on this device. Your backup isn’t affected.");
+    let reset_row = if ui::IOS {
+        // iOS: an action in red, its consequence under the group.
+        ui::row(ui::round_tile(Icon::Warning, true), move || s.label("Reset App"), None, nothing())
+    } else {
+        ui::row(ui::round_tile(Icon::Warning, true), move || s.label("Reset App"), Some(Rc::new(reset_note)), nothing())
+    }
+    .test_id("reset")
+    .on_press(move || reset(s))
+    .into_element();
+    let appearance_names = move |a: Appearance| match a {
+        Appearance::System => s.label("System"),
+        Appearance::Light => s.label("Light"),
+        Appearance::Dark => s.label("Dark"),
+    };
+    let appearance = if ui::IOS {
+        ui::picker_row(
+            ui::round_tile(Icon::Eye, false),
+            move || s.label("Appearance"),
+            move || appearance_names(preferences().appearance),
+            move || [Appearance::System, Appearance::Light, Appearance::Dark].map(|a| (a, appearance_names(a))).to_vec(),
+            move || preferences().appearance,
+            move |a| s.update_preferences(move |p| p.appearance = a),
+            || {},
         )
-        .test_id("deleted")
-        .on_press(move || nav.push(Page::Deleted))
-        .into_element(),
-        ui::row(
-            ui::round_tile(Icon::Warning, true),
-            move || s.label("Reset App"),
-            Some(Rc::new(move || s.label("Erases the vault and settings on this device. Your backup isn’t affected."))),
-            nothing(),
-        )
-        .test_id("reset")
-        .on_press(move || reset(s))
-        .into_element(),
-    ]);
-    let appearance = ui::group(vec![
+    } else {
         view()
             .flex_row()
             .items_center()
@@ -122,51 +129,70 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
                 move || preferences().appearance,
                 move |a| s.update_preferences(move |p| p.appearance = a),
             )))
-            .into_element(),
-        ui::row(
-            ui::round_tile(Icon::Keyboard, false),
-            move || s.label("Language"),
-            Some(Rc::new(move || language_name(s, preferences().language))),
-            chevron(),
-        )
-        .test_id("language")
-        .on_press(move || nav.dialog.set(Some(Dialog::Language)))
-        .into_element(),
-    ]);
-    let about = ui::group(vec![
-        ui::row(
-            ui::round_tile(Icon::Info, false),
-            move || s.label("Version"),
-            Some(Rc::new(|| SharedString::from(format!("{} ({})", env!("CARGO_PKG_VERSION"), crate::BUILD)))),
-            nothing(),
-        )
-        .into_element(),
-    ]);
+            .into_element()
+    };
+    let language = ui::picker_row(
+        ui::round_tile(Icon::Keyboard, false),
+        move || s.label("Language"),
+        move || language_name(s, preferences().language),
+        move || [Language::System, Language::En, Language::Hans, Language::Hant].map(|l| (l, language_name(s, l))).to_vec(),
+        move || preferences().language,
+        move |l| s.update_preferences(move |p| p.language = l),
+        move || nav.dialog.set(Some(Dialog::Language)),
+    );
+    let version = ui::value_row(
+        ui::round_tile(Icon::Info, false),
+        move || s.label("Version"),
+        || SharedString::from(format!("{} ({})", env!("CARGO_PKG_VERSION"), crate::BUILD)),
+        nothing(),
+    )
+    .into_element();
+    // iOS: a row whose setting needs a word of explanation is a group of its own, the explanation under it in small
+    // text. Elsewhere each row carries its own detail.
+    let column = view().w_full().max_w(px(720.0)).px(px(ui::MARGIN));
+    let column = if ui::IOS {
+        let gap = || view().h(px(20.0));
+        let mut column = column.child(ui::section_title(move || s.label("Security")));
+        if let Some(biometric) = biometric {
+            column = column.child(ui::group(vec![biometric])).child(ui::footer(biometric_note)).child(gap());
+        }
+        column
+            .child(ui::group(vec![auto_lock, change_password]))
+            .child(gap())
+            .child(ui::group(vec![site_icons]))
+            .child(ui::footer(icons_note))
+            .child(super::backup::section(s, nav))
+            .child(ui::section_title(move || s.label("Data")))
+            .child(ui::group(vec![export, import, deleted]))
+            .child(gap())
+            .child(ui::group(vec![reset_row]))
+            .child(ui::footer(reset_note))
+            .child(ui::section_title(move || s.label("Appearance")))
+            .child(ui::group(vec![appearance, language]))
+            .child(ui::section_title(move || s.label("About")))
+            .child(ui::group(vec![version]))
+    } else {
+        let mut security = Vec::new();
+        security.extend(biometric);
+        security.extend([auto_lock, change_password, site_icons]);
+        column
+            .child(ui::section_title(move || s.label("Security")))
+            .child(ui::group(security))
+            .child(super::backup::section(s, nav))
+            .child(ui::section_title(move || s.label("Data")))
+            .child(ui::group(vec![export, import, deleted, reset_row]))
+            .child(ui::section_title(move || s.label("Appearance")))
+            .child(ui::group(vec![appearance, language]))
+            .child(ui::section_title(move || s.label("About")))
+            .child(ui::group(vec![version]))
+    };
+    // iOS: under the system's header (`mobile::native_stack`); its scroll view is the page's first, which the header's
+    // large title follows.
     view()
         .flex_1()
-        .pt_safe_area()
-        .child(ui::top_bar(s, Some("Settings"), move || {
-            nav.back();
-        }))
-        .child(
-            scroll().flex_1().child(
-                view().items_center().pb_safe_area_plus(px(32.0)).child(
-                    view()
-                        .w_full()
-                        .max_w(px(720.0))
-                        .px(px(ui::MARGIN))
-                        .child(ui::section_title(move || s.label("Security")))
-                        .child(security)
-                        .child(super::backup::section(s, nav))
-                        .child(ui::section_title(move || s.label("Data")))
-                        .child(data)
-                        .child(ui::section_title(move || s.label("Appearance")))
-                        .child(appearance)
-                        .child(ui::section_title(move || s.label("About")))
-                        .child(about),
-                ),
-            ),
-        )
+        .pt(ui::page_top)
+        .child(ui::top_bar(s, Some("Settings"), move || nav.pop()))
+        .child(scroll().flex_1().child(view().items_center().pb_safe_area_plus(px(32.0)).child(column)))
 }
 
 /// "Reset App": a confirmation, then the master password.
@@ -189,9 +215,9 @@ pub fn deleted(s: Store, nav: Nav) -> impl IntoElement {
     let count = move || s.projection.with(|p| p.deleted.len());
     view()
         .flex_1()
-        .pt_safe_area()
+        .pt(ui::page_top)
         .child(ui::top_bar(s, Some("Recently Deleted"), move || {
-            nav.back();
+            nav.pop();
         }))
         .child(
             scroll().flex_1().child(

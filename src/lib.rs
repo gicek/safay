@@ -31,9 +31,14 @@ mod shell;
 mod store;
 use store::{Store, Surface};
 
-/// The native components of the phone interface on Android: the camera's preview (`platform::camera::PREVIEW`).
+/// The native components of the phone interface on Android and iOS: the camera's preview
+/// (`platform::camera::PREVIEW`).
 #[nsh_core::prelude::native_components(android)]
 fn components(components: &nsh::Components) {
+    platform::camera::register(components);
+}
+#[nsh_core::prelude::native_components(ios)]
+fn components_ios(components: &nsh_platform_ios::Components) {
     platform::camera::register(components);
 }
 /// The development build number, from nsh.json.
@@ -46,7 +51,7 @@ pub fn demo_controller(total: usize) -> Arc<Controller> {
     demo::controller_with(false, total)
 }
 /// Running under the app's own launcher, not an NSH test or preview runner.
-#[cfg_attr(not(any(target_os = "macos", target_os = "android")), allow(dead_code))]
+#[cfg_attr(not(any(target_os = "macos", target_os = "ios", target_os = "android")), allow(dead_code))]
 pub(crate) fn hosted() -> bool {
     // A phone has no launcher of Safay's: NSH's runner is the app.
     cfg!(any(target_os = "android", target_os = "ios")) || CONTROLLER.get().is_some()
@@ -63,6 +68,9 @@ fn native(r: &mut Registry) {
         r.register::<FixtureApp>();
         r.register::<demo::DemoApp>();
         r.register::<demo::DemoLockedApp>();
+        r.register::<demo::DemoMobileApp>();
+        r.register::<FixtureMobileApp>();
+        r.register::<demo::DemoMobileLockedApp>();
         r.register::<demo::DemoPanelApp>();
         r.register::<demo::DemoSettingsApp>();
     }
@@ -83,14 +91,17 @@ pub fn App() -> impl IntoElement {
             }
             desktop::install(controller.clone(), *preview);
         }
-        // Debug builds: `SAFAY_MOBILE=1` shows the phone interface in the desktop's window.
+        // Debug builds: `SAFAY_MOBILE=1` shows the phone interface in the desktop's window; `SAFAY_MOBILE=<w>x<h>` at
+        // that size (a tablet's: `1180x820`).
         #[cfg(debug_assertions)]
-        if std::env::var_os("SAFAY_MOBILE").is_some() {
+        if let Ok(mobile) = std::env::var("SAFAY_MOBILE") {
             let (controller, preview) = (controller.clone(), *preview);
+            let (width, height) =
+                mobile.split_once('x').and_then(|(w, h)| Some((w.parse::<f32>().ok()?, h.parse::<f32>().ok()?))).unwrap_or((412.0, 892.0));
             return nsh_core::element::desktop::window()
                 .id("main")
                 .title("Safay")
-                .default_size(size(px(412.0), px(892.0)))
+                .default_size(size(px(width), px(height)))
                 .content(move || mobile::root(controller.clone(), preview))
                 .into_element();
         }
@@ -112,6 +123,8 @@ fn unhosted() -> AnyElement {
         let controller = Controller::new(Box::new(repo), Arc::new(safay_app::session::SystemClock::default())).ok()?;
         #[cfg(target_os = "android")]
         platform::android::start(controller.clone(), directory);
+        #[cfg(target_os = "ios")]
+        platform::ios::start(controller.clone());
         platform::install_network(false);
         Some(controller)
     });
@@ -147,6 +160,15 @@ pub fn FixtureApp() -> impl IntoElement {
         Controller::new(Box::new(safay_app::storage::MemoryRepository::default()), Arc::new(FixtureClock)).expect("memory fixture");
     // Mounted from TSX (`previews/Fresh.tsx`), which has its window already.
     shell::main_content(controller, true)
+}
+
+/// [`FixtureApp`]'s fresh vault in the phone and tablet interface: its onboarding.
+#[cfg(debug_assertions)]
+#[component]
+pub fn FixtureMobileApp() -> impl IntoElement {
+    let controller =
+        Controller::new(Box::new(safay_app::storage::MemoryRepository::default()), Arc::new(FixtureClock)).expect("memory fixture");
+    mobile::root(controller, true)
 }
 
 /// [`FixtureApp`] for a root started from Rust (the headless tests): such a root declares its window itself.
@@ -258,7 +280,8 @@ pub(crate) fn settings_window(controller: Arc<Controller>, preview: bool) -> imp
 }
 
 /// The update window's content (`desktop::open_update`), with a store of its own.
-#[cfg_attr(target_os = "windows", allow(dead_code))]
+// Phones and tablets update through their stores and have no update window.
+#[cfg_attr(any(target_os = "windows", target_os = "android", target_os = "ios"), allow(dead_code))]
 pub(crate) fn update_window(controller: Arc<Controller>, preview: bool, version: String, notes: Option<String>) -> impl IntoElement {
     let s = Store::new(controller, preview, Surface::Update);
     effect(move || untracked(|| s.start()));

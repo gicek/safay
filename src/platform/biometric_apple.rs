@@ -1,10 +1,11 @@
-//! Touch ID unlock: a P-256 key generated in the Secure Enclave with
+//! Touch ID and Face ID unlock on macOS and iOS: a P-256 key generated in the Secure Enclave with
 //! `privateKeyUsage | biometryCurrentSet` wraps the 32-byte vault key (ECIES, X9.63 SHA-256, AES-GCM). Only the enclave's
-//! key handle (usable by this Mac's enclave alone) and the ciphertext are stored. Every unwrap needs Touch ID on the spot,
-//! and adding or removing a fingerprint invalidates the handle for good. No Keychain item, so ad-hoc builds work too.
-//! What Touch ID releases is the key itself: unlocking still opens the vault with it, never trusting a "yes".
+//! key handle (usable by this device's enclave alone) and the ciphertext are stored. Every unwrap needs the biometric on
+//! the spot, and enrolling or removing a finger or face invalidates the handle for good. No Keychain item, so ad-hoc
+//! builds work too. What the biometric releases is the key itself: unlocking still opens the vault with it, never
+//! trusting a "yes".
 use base64::Engine;
-use nsh_platform_macos::objc2::{
+use objc2::{
     msg_send,
     rc::Retained,
     runtime::{AnyClass, AnyObject, Bool},
@@ -92,11 +93,20 @@ fn context() -> Option<Retained<AnyObject>> {
     let ctx: *mut AnyObject = unsafe { msg_send![class, new] };
     unsafe { retained(ctx) }
 }
-/// Touch ID is present and enrolled.
+/// Touch ID or Face ID is present and enrolled.
 pub fn available() -> bool {
     let Some(ctx) = context() else { return false };
     let ok: Bool = unsafe { msg_send![&*ctx, canEvaluatePolicy: BIOMETRICS, error: std::ptr::null_mut::<*mut NSError>()] };
     ok.as_bool()
+}
+/// Whether this device's biometric is Face ID (or Optic ID, named the same way) rather than Touch ID
+/// (`LABiometryType`, known once a policy was evaluated).
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+pub fn face() -> bool {
+    let Some(ctx) = context() else { return false };
+    let _: Bool = unsafe { msg_send![&*ctx, canEvaluatePolicy: BIOMETRICS, error: std::ptr::null_mut::<*mut NSError>()] };
+    let kind: isize = unsafe { msg_send![&*ctx, biometryType] };
+    kind == 2 || kind == 4
 }
 
 /// Wraps the vault key under a new enclave key; returns the file to store (no secret in it).
@@ -138,7 +148,7 @@ pub fn seal(vault_key: &[u8]) -> Result<Vec<u8>, Failure> {
     }
 }
 
-/// Asks for Touch ID, then unwraps the vault key with the same authentication (one prompt). Blocks: run off the UI thread.
+/// Asks for the biometric, then unwraps the vault key with the same authentication (one prompt). Blocks: run off the UI thread.
 pub fn open(file: &[u8], reason: &str, cancel_title: &str) -> Result<Zeroizing<Vec<u8>>, Failure> {
     let parsed: serde_json::Value = serde_json::from_slice(file).map_err(|_| Failure::Stale)?;
     let b64 = base64::engine::general_purpose::STANDARD;

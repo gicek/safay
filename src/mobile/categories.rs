@@ -11,13 +11,13 @@ use nsh_core::{AccessibilityActionDef, prelude::*};
 use safay_app::session::CategoryRow;
 
 pub fn page(s: Store, nav: Nav) -> impl IntoElement {
-    let r = Reorder::new(s, Kind::Categories, |_| (CATEGORY_GAP, 1), Pickup::LongPress);
+    let r = Reorder::new(s, Kind::Categories, |_| (if ui::IOS { 0.0 } else { CATEGORY_GAP }, 1), Pickup::LongPress);
     let count = move || r.count();
     view()
         .flex_1()
-        .pt_safe_area()
+        .pt(ui::page_top)
         .child(ui::top_bar(s, Some("Manage Categories"), move || {
-            nav.back();
+            nav.pop();
         }))
         .child(
             scroll().flex_1().child(
@@ -27,7 +27,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
                     .pb(px(ui::FAB_CLEARANCE))
                     .child(
                         view()
-                            .gap(px(CATEGORY_GAP))
+                            .gap(px(if ui::IOS { 0.0 } else { CATEGORY_GAP }))
                             .element_ref(&r.list)
                             .child(each(
                                 move || r.categories(),
@@ -48,14 +48,15 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
                     ),
             ),
         )
-        .child(
+        // iOS: "+" in the system's header instead (`mobile::native_stack`).
+        .child(when(|| !ui::IOS, move ||
             view().absolute().right(px(ui::MARGIN)).bottom(px(0.0)).pb_safe_area_plus(px(ui::MARGIN)).child(
                 ui::fab(move || s.label("New Category"))
                     .test_id("new-category")
                     .on_press(move || s.editing.set(Some(CategoryEdit::default())))
                     .child(icon(Icon::Plus).size(px(24.0))),
             ),
-        )
+        ))
 }
 
 /// A category's row: a press renames it, a long press picks it up to drag, its button deletes it.

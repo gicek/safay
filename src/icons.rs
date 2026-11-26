@@ -66,6 +66,10 @@ pub enum Icon {
     PlusCircle,
     PlusCircleFill,
     TouchId,
+    /// Face ID: the corners of a frame around a face.
+    FaceId,
+    /// A drag handle: three lines.
+    Grip,
     CloudDownFill,
     CloudDown,
     External,
@@ -192,6 +196,10 @@ fn shape(name: Icon) -> &'static str {
         Icon::TouchId => {
             "<path d='M6.2 8.6A7 7 0 0 1 18.4 9'/><path d='M4.5 13.2a7.6 7.6 0 0 1 .3-2.6M19.4 11.8c.1.9.1 1.8 0 2.7'/><path d='M8 18.6a9.6 9.6 0 0 1-1.1-4.6 5.1 5.1 0 0 1 10.2 0v.6'/><path d='M10.5 20a12 12 0 0 1-1.1-5.9 2.6 2.6 0 0 1 5.2 0c0 1.7.1 3.4.6 5'/><path d='M12 14.2c0 2.3.4 4.3 1.3 6'/><path d='M17 17.3c-.2 1-.3 1.9-.2 2.6'/>"
         }
+        Icon::Grip => "<path d='M4.5 8h15M4.5 12h15M4.5 16h15'/>",
+        Icon::FaceId => {
+            "<path d='M4 8.5V6.5A2.5 2.5 0 0 1 6.5 4h2M15.5 4h2A2.5 2.5 0 0 1 20 6.5v2M20 15.5v2a2.5 2.5 0 0 1-2.5 2.5h-2M8.5 20h-2A2.5 2.5 0 0 1 4 17.5v-2'/><path d='M9 9.5v1.2M15 9.5v1.2M12.3 9.5v3.6h-1M9.5 15.6a3.8 3.8 0 0 0 5 0'/>"
+        }
         Icon::PlusCircleFill => {
             "<circle cx='12' cy='12' r='10' fill='currentColor' stroke='none'/><path d='M12 7.5v9M7.5 12h9' stroke='#fff' stroke-width='2.2'/>"
         }
@@ -214,6 +222,8 @@ fn sf_name(name: Icon) -> Option<&'static str> {
     Some(match name {
         Icon::Accounts => "rectangle.grid.1x2",
         Icon::TouchId => "touchid",
+        Icon::FaceId => "faceid",
+        Icon::Grip => "line.3.horizontal",
         Icon::Folder => "folder",
         Icon::FolderPlus => "folder.badge.plus",
         Icon::ExportImport => "square.and.arrow.up.on.square",

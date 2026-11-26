@@ -57,9 +57,9 @@ pub fn conflict(s: Store, nav: Nav) -> impl IntoElement {
     let changed = move || s.review.with(|r| r.as_ref().map(|r| r.changed.clone()).unwrap_or_default());
     view()
         .flex_1()
-        .pt_safe_area()
+        .pt(ui::page_top)
         .child(ui::top_bar(s, Some("Resolve Conflict"), move || {
-            nav.back();
+            nav.pop();
         }))
         .child(
             when(

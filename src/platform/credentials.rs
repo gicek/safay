@@ -1,10 +1,10 @@
-//! Cloud sign-ins in the system credential store (macOS Keychain, Windows Credential Manager, the Secret Service on
-//! Linux: GNOME Keyring or KWallet) under this app's own service name. Only the serialized `cloudset::Connection` is
-//! stored; it never touches disk otherwise.
+//! Cloud sign-ins in the system credential store (the Keychain on macOS and iOS, Windows Credential Manager, the Secret
+//! Service on Linux: GNOME Keyring or KWallet) under this app's own service name. Only the serialized
+//! `cloudset::Connection` is stored; it never touches disk otherwise.
 use safay_app::{Zeroizing, cloud::Credentials, sync::SyncError};
 
 /// `<bundle ID>.cloud`: the release and debug builds keep separate sign-ins.
-#[cfg_attr(any(target_os = "android", target_os = "ios"), allow(dead_code))]
+#[cfg_attr(target_os = "android", allow(dead_code))]
 const SERVICE: &str = if cfg!(debug_assertions) { "com.gicek.safay.debug.cloud" } else { "com.gicek.safay.cloud" };
 
 pub struct Keychain;
@@ -36,18 +36,7 @@ impl Credentials for Keychain {
         }
     }
 }
-// iOS has no store yet (the Keychain); sign-ins are kept in memory (`install_network`).
-#[cfg(target_os = "ios")]
-impl Credentials for Keychain {
-    fn load(&self, _: &str) -> Option<Zeroizing<Vec<u8>>> {
-        None
-    }
-    fn save(&self, _: &str, _: &[u8]) -> Result<(), SyncError> {
-        Err(SyncError::Storage)
-    }
-    fn delete(&self, _: &str) {}
-}
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(not(target_os = "android"))]
 impl Credentials for Keychain {
     fn load(&self, id: &str) -> Option<Zeroizing<Vec<u8>>> {
         keyring::Entry::new(SERVICE, id).ok()?.get_secret().ok().map(Zeroizing::new)

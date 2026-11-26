@@ -32,7 +32,7 @@ pub fn setup_sheet(s: Store) -> impl IntoElement {
         .child(ui::bottom_sheet(
             move || connecting(s).is_some(),
             close,
-            dynamic(move || connecting(s).map(|p| setup(s, p, close).into_element())),
+            move || dynamic(move || connecting(s).map(|p| setup(s, p, close).into_element())).into_element(),
         ))
         .child(when(move || s.cloud_form.with(|f| f.needs_consent) && connecting(s).is_some(), move || insecure(s)))
         .child(when(move || s.cloud_form.with(|f| f.untrusted.is_some()) && connecting(s).is_some(), move || certificate(s)))
@@ -69,6 +69,7 @@ fn setup(s: Store, provider: Provider, close: impl Fn() + Copy + 'static) -> imp
         .child(
             scroll()
                 .max_h(move || ui::sheet_room(CHROME))
+                .flex_grow(if cfg!(target_os = "ios") { 1.0 } else { 0.0 })
                 .keyboard_dismiss_mode(KeyboardDismissMode::None)
                 .keyboard_taps(KeyboardTaps::Handled)
                 .child(
@@ -507,9 +508,11 @@ fn insecure(s: Store) -> impl IntoElement {
     let cancel = move || s.cloud_form.update(|f| f.needs_consent = false);
     ui::dialog(
         move || s.label("Unencrypted connection"),
-        ui::dim(ui::body(text(move || s.label("Your password is sent over HTTP in plain text. Only continue on a network you trust.")))),
-        view().flex_row().gap(px(4.0)).child(ui::text_button(move || s.label("Cancel"), false).on_press(cancel)).child(
-            ui::text_button(move || s.label("Use Unencrypted Connection"), true).on_press(move || {
+        move || {
+            ui::dim(ui::body(text(move || s.label("Your password is sent over HTTP in plain text. Only continue on a network you trust."))))
+        },
+        ui::dialog_actions(true).child(ui::dialog_action(move || s.label("Cancel"), ui::Act::Cancel).on_press(cancel)).child(
+            ui::dialog_action(move || s.label("Use Unencrypted Connection"), ui::Act::Destructive).on_press(move || {
                 s.cloud_form.update(|f| {
                     f.insecure = true;
                     f.needs_consent = false;
@@ -528,18 +531,18 @@ fn certificate(s: Store) -> impl IntoElement {
     let formatted = move || fingerprint().map(|f| formatted_fingerprint(&f, 8)).unwrap_or_default();
     ui::dialog(
         move || s.label("The server’s certificate can’t be verified"),
-        view()
-            .gap(px(8.0))
-            .child(ui::dim(ui::body(text(move || {
-                s.label("Continue only if this fingerprint matches the one your server shows. Safay will trust only this certificate.")
-            }))))
-            .child(ui::label(text(move || s.label("SHA-256 fingerprint"))))
-            .child(text(formatted).font_family(crate::components::CODE_FONT.family).text_size(px(12.0)).line_height(px(17.0))),
-        view()
-            .flex_row()
-            .gap(px(4.0))
-            .child(ui::text_button(move || s.label("Cancel"), false).on_press(move || s.decline_certificate()))
-            .child(ui::text_button(move || s.label("Trust This Certificate"), true).on_press(move || {
+        move || {
+            view()
+                .gap(px(8.0))
+                .child(ui::dim(ui::body(text(move || {
+                    s.label("Continue only if this fingerprint matches the one your server shows. Safay will trust only this certificate.")
+                }))))
+                .child(ui::label(text(move || s.label("SHA-256 fingerprint"))))
+                .child(text(formatted).font_family(crate::components::CODE_FONT.family).text_size(px(12.0)).line_height(px(17.0)))
+        },
+        ui::dialog_actions(true)
+            .child(ui::dialog_action(move || s.label("Cancel"), ui::Act::Cancel).on_press(move || s.decline_certificate()))
+            .child(ui::dialog_action(move || s.label("Trust This Certificate"), ui::Act::Destructive).on_press(move || {
                 if let (Some(provider), Some(f)) = (connecting(s), fingerprint()) {
                     s.trust_certificate(provider, f)
                 }

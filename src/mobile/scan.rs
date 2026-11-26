@@ -51,7 +51,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
             s.append_scanned(&text);
         }
     };
-    #[cfg(any(target_os = "macos", target_os = "linux", target_os = "android"))]
+    #[cfg(any(target_os = "macos", target_os = "linux", target_os = "android", target_os = "ios"))]
     {
         crate::platform::camera::start();
         cleanup(crate::platform::camera::stop);
@@ -73,7 +73,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
             }
         });
     }
-    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "android")))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "android", target_os = "ios")))]
     {
         let _ = take;
         failed.set(Some("Can’t open the camera"));
@@ -82,8 +82,8 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
         .absolute()
         .inset(px(0.0))
         .bg(|| BLACK)
-        // Android: the camera draws its preview itself, into a native view.
-        .child(if cfg!(target_os = "android") {
+        // Android and iOS: the camera draws its preview itself, into a native view.
+        .child(if cfg!(any(target_os = "android", target_os = "ios")) {
             native("safay.camera").absolute().inset(px(0.0)).into_element()
         } else {
             view().into_element()
@@ -129,11 +129,17 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
                     .items_center()
                     .h(move || px(ui::BAR) * font_scale())
                     .px(px(4.0))
-                    .child(ui::bar_button(move || s.label("Close"), || Icon::Close).text_color(|| WHITE).test_id("scan-close").on_press(
-                        move || {
-                            nav.back();
-                        },
-                    ))
+                    // iOS: a dark glass circle over the picture, as the system camera's.
+                    .child(
+                        ui::bar_button(move || s.label("Close"), || Icon::Close)
+                            .text_color(|| WHITE)
+                            .bg(|| SHADE.opacity(if ui::IOS { 0.45 } else { 0.0 }))
+                            .border_color(|| WHITE.opacity(if ui::IOS { 0.2 } else { 0.0 }))
+                            .test_id("scan-close")
+                            .on_press(move || {
+                                nav.pop();
+                            }),
+                    )
                     .child(ui::title_large(text(move || s.label("Scan QR Code"))).text_color(|| WHITE).ml(px(4.0))),
             ),
         )

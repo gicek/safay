@@ -22,6 +22,15 @@
   },
   "theme": "theme.json",
   "icon": "assets/icon.png",
+  "ios": {
+    "infoPlist": {
+      "NSCameraUsageDescription": "Safay uses the camera to scan 2FA QR codes. Images are processed on this device only.",
+      "NSFaceIDUsageDescription": "Safay uses Face ID to unlock your vault.",
+      "UISupportedInterfaceOrientations": [
+        "UIInterfaceOrientationPortrait"
+      ]
+    }
+  },
   "android": {
     "targetSdk": 36,
     "libraries": [

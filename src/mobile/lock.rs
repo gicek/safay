@@ -47,11 +47,7 @@ pub fn page(s: Store) -> impl IntoElement {
                     // What unlocks it, over a field of its own shape: the field needs no label then.
                     .child(
                         ui::dim(ui::body(text(move || {
-                            s.label(if s.touch_id_ready() {
-                                "Use your master password or fingerprint to unlock"
-                            } else {
-                                "Use your master password to unlock"
-                            })
+                            s.label(if s.touch_id_ready() { ui::Biometric::get().prompt() } else { "Use your master password to unlock" })
                         })))
                         .text_center()
                         .mb(px(12.0)),
@@ -85,13 +81,13 @@ pub fn page(s: Store) -> impl IntoElement {
                             move || {
                                 round_action(s)
                                     .test_id("biometric")
-                                    .accessibility_label(move || Some(s.label("Unlock with biometrics")))
+                                    .accessibility_label(move || Some(s.label(ui::Biometric::get().unlock())))
                                     .disabled(move || s.busy.get())
                                     .on_press(move || {
                                         dismiss_keyboard();
                                         s.unlock_touch_id()
                                     })
-                                    .child(crate::icons::icon(crate::icons::Icon::TouchId).size(px(36.0)))
+                                    .child(crate::icons::icon(ui::Biometric::get().icon()).size(px(36.0)))
                             },
                         )
                         .otherwise(move || {
