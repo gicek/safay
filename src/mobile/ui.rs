@@ -1124,9 +1124,11 @@ fn value_body(
         .child(trailing)
 }
 /// A setting chosen among a few: its value at its end. iOS: a press opens the system's pull-down menu
-/// (`UIMenu`) of the choices, the current one checked; elsewhere the row's `on_press` (a dialog) chooses.
+/// (`UIMenu`) of the choices, the current one checked; elsewhere the row's `on_press` (a dialog) chooses. `id` is the
+/// row's test ID.
 #[allow(clippy::too_many_arguments)]
 pub fn picker_row<T: Copy + PartialEq + 'static>(
+    id: &'static str,
     leading: impl IntoElement,
     title_: impl Fn() -> SharedString + Copy + 'static,
     value: impl Fn() -> SharedString + 'static,
@@ -1141,6 +1143,7 @@ pub fn picker_row<T: Copy + PartialEq + 'static>(
         let options = std::rc::Rc::new(options);
         let chosen = options.clone();
         return nsh_base::menu_button()
+            .test_id(id)
             .accessibility_label(move || Some(title_()))
             .items(move || {
                 let current = get();
@@ -1172,7 +1175,7 @@ pub fn picker_row<T: Copy + PartialEq + 'static>(
     #[allow(unreachable_code)]
     {
         let _ = (options, get, set);
-        row(leading, title_, Some(std::rc::Rc::new(value)), chevron()).on_press(on_press).into_element()
+        row(leading, title_, Some(std::rc::Rc::new(value)), chevron()).test_id(id).on_press(on_press).into_element()
     }
 }
 /// The mark at a row's end that says it opens a page.

@@ -280,10 +280,14 @@ fn unlocked(s: Store, nav: Nav) -> AnyElement {
     if ui::IOS {
         return native_stack(s, nav).into_element();
     }
-    view()
-        .flex_1()
-        .child(when(move || nav.page.get().is_none(), move || home::page(s, nav)))
-        .child(when(move || nav.page.get().is_some(), move || readable(page(s, nav, nav.page.get_untracked().unwrap_or(Page::Settings)))))
+    // One branch per page: a page pushed over another (the review over "Enter Setup Key", "Recently Deleted" over the
+    // settings) replaces it, which a single branch for "some page" would not notice.
+    let pages = [Page::Scan, Page::Manual, Page::Categories, Page::Settings, Page::Deleted, Page::Review, Page::Conflict];
+    pages
+        .into_iter()
+        .fold(view().flex_1().child(when(move || nav.page.get().is_none(), move || home::page(s, nav))), |root, p| {
+            root.child(when(move || nav.page.get() == Some(p), move || readable(page(s, nav, p))))
+        })
         .into_element()
 }
 /// A page over the list.

@@ -41,6 +41,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
         .into_element()
     });
     let auto_lock = ui::picker_row(
+        "auto-lock",
         ui::round_tile(Icon::Lock, false),
         move || s.label("Auto-Lock"),
         move || s.count("minutes", preferences().auto_lock_minutes as usize),
@@ -103,6 +104,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
     };
     let appearance = if ui::IOS {
         ui::picker_row(
+            "appearance",
             ui::round_tile(Icon::Eye, false),
             move || s.label("Appearance"),
             move || appearance_names(preferences().appearance),
@@ -132,6 +134,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
             .into_element()
     };
     let language = ui::picker_row(
+        "language",
         ui::round_tile(Icon::Keyboard, false),
         move || s.label("Language"),
         move || language_name(s, preferences().language),
