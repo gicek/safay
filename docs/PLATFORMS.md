@@ -62,8 +62,8 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
 - Built for the simulator (`make ios-simulator`) and checked there on iPhone 18 Pro and iPad Pro 11-inch (iOS 27.2):
   every page of `previews/mobile.test.tsx`, light and dark.
 - On an iPhone (iOS 27, `make ios-run`): iCloud backup with silent pushes from other devices, Google Drive sign-in,
-  Synology, and the copied-code message. Face ID and Touch ID, the clipboard's expiry and the cover in the background
-  are coded and untried on a device; the camera's preview is a known issue (below).
+  Synology, scanning a QR code with the camera, and the copied-code message. Face ID and Touch ID, the clipboard's
+  expiry and the cover in the background are coded and untried on a device.
 - Sign-ins open the system's sign-in session. A callback scheme NSH's session refuses (Google's, longer than its
   `MAX_SCHEME_LEN`) goes to `ASWebAuthenticationSession` directly (`platform::web_auth`).
 - The interface follows the system: its navigation bar, swipe back, menus, sheets, switches and segmented controls, and
@@ -113,10 +113,6 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
 ## Known issues
 
 - Android 16 and later: Back while the keyboard shows closes the page along with the keyboard.
-- iPhone: "Scan QR Code" shows a black preview on a device, though the session runs and its preview layer reports a
-  picture; "Choose from Photos" and "Enter Setup Key" add accounts meanwhile.
-- iPhone: closing a system menu (a long press on an account, "+", "More") can show the software keyboard, with NSH's
-  surface root as the first responder and no text field focused. Swipe the keyboard down or tap outside it.
 - iOS: the system's sidebar of a split view is not used on iPad (NSH's `SplitView` ends the app there); Safay draws its
   own. Switches are on in the accent color rather than the system's green.
 - Opening the menu bar panel with its shortcut before the menu bar icon has ever been clicked places it at the top right
