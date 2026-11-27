@@ -16,6 +16,7 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 - **Google Drive**: changes upload automatically, as on the other services, instead of waiting for you to approve them.
 - **Phones**: Android and iPhone each follow their own system: forms, menus and search, with password changes on a page.
+- **Add to**: ticking or unticking a category takes effect at once, and a long list scrolls inside the sheet.
 
 ## [1.5.0] - 2026-11-24
 

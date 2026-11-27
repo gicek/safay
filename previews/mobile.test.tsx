@@ -98,7 +98,7 @@ test("the list, its menus and the account's sheets", async () => {
   await app.longPress("label:Copy code for Google");
   await pick(app, "Add to");
   await shot(app, "add-to");
-  await closeSheet(app, "id:save");
+  await closeSheet(app, "id:done");
   await app.press("id:search-button");
   await app.type("id:search", "git");
   await shot(app, "search");

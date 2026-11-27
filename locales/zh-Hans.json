@@ -656,5 +656,10 @@
   "Accounts you delete wait here for 30 days.": "删除的账户会在这里保留 30 天。",
   "Tap a category to rename it, or touch and hold it to drag it to another place. Tap Edit to delete one; its accounts stay.": "轻点分类可重命名，按住可拖动到其他位置。轻点“编辑”可删除分类，其中的账户会保留。",
   "No categories yet": "还没有分类",
-  "Create one, then long-press an account and choose Add to.": "新建一个后，长按账户并选择“添加到”。"
+  "Create one, then long-press an account and choose Add to.": "新建一个后，长按账户并选择“添加到”。",
+  "Keep": "保留",
+  "Keep accounts from both sides.": "保留两边的账户。",
+  "Both copies have the same accounts and categories. Merging them changes nothing you see.": "两份副本的账户和分类完全相同，合并后你看到的内容不会变化。",
+  "Comparing with the backup": "正在与备份比对",
+  "Safay reads the backup and lists what differs. Nothing changes until you choose.": "Safay 会读取备份并列出不同之处。在你做出选择之前，不会有任何改动。"
 }

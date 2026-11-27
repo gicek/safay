@@ -47,7 +47,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
                     .flex_1()
                     .flex_row()
                     .child(sidebar(s, nav))
-                    .child(view().flex_1().bg(ui::pane).pt_safe_area().child(bar(s, nav, true)).child(content(true)))
+                    .child(view().flex_1().bg(ui::pane).pt_safe_area().child(header(s, nav, true)).child(content(true)))
                     .into_element()
             })
             .otherwise(move || {
@@ -59,74 +59,19 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
                 view()
                     .flex_1()
                     .pt_safe_area()
-                    .child(bar(s, nav, false))
-                    .child(when(move || !empty_vault() && !nav.searching.get(), move || chips(s, nav)))
+                    .child(header(s, nav, false))
+                    .child(when(move || !empty_vault(), move || chips(s, nav)))
                     .child(content(false))
                     .into_element()
             }),
         )
-        // iOS: the search button floats at the bottom, as iOS 26's search. Android: in the top bar (`bar`).
-        .child(when(move || ui::IOS && !empty_vault(), move || search(s, nav)))
+        // The search button floats at the bottom corner, in reach of the thumb, on both platforms.
+        .child(when(move || !empty_vault(), move || search(s, nav)))
         .child(add_menu(s, nav))
         .child(overflow(s, nav))
         .child(super::menus::account(s, nav))
 }
 
-/// Android: the top bar, or while searching the search bar in its place, as Material's top app bar does.
-fn bar(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
-    let field = element_ref();
-    when(move || !ui::IOS && nav.searching.get(), move || search_bar(s, nav, field)).otherwise(move || header(s, nav, wide, field))
-}
-/// Android's search bar, in the top bar's place: the back arrow closes it, the field takes the keyboard, the clear
-/// button empties it.
-fn search_bar(s: Store, nav: Nav, field: ElementRef) -> impl IntoElement {
-    // The keyboard comes up with it, once its field is in place.
-    request_animation_frame(move |_| field.focus());
-    view()
-        .flex_row()
-        .items_center()
-        .h(move || px(ui::BAR) * font_scale())
-        .px(px(4.0))
-        .child(
-            ui::icon_button(move || s.label("Close"), || Icon::Back)
-                .test_id("search-button")
-                .text_color(move || theme().foreground)
-                .on_press(move || nav.close_search()),
-        )
-        .child(
-            ui::themed_input(input())
-                .element_ref(&field)
-                .test_id("search")
-                .label(move || s.label("Search accounts or sites"))
-                .placeholder(move || s.label("Search accounts or sites").to_string())
-                .value(move || s.query.get())
-                .on_change(move |v: &str| {
-                    s.controller.get().activity();
-                    s.query.set(v.to_owned());
-                    s.refresh();
-                })
-                .return_key_type(ReturnKeyType::Search)
-                .on_submit(move |_: &str| dismiss_keyboard())
-                .auto_correct(false)
-                .auto_capitalize(nsh_core::AutoCapitalize::None)
-                .auto_fill(nsh_core::AutoFill::Off)
-                .flex_1()
-                .min_w(px(0.0))
-                .ml(px(4.0))
-                .text_size(px(18.0))
-                .text_color(move || theme().foreground),
-        )
-        .child(when(
-            move || !s.query.with(String::is_empty),
-            move || {
-                ui::icon_button(move || s.label("Clear"), || Icon::Close).text_color(move || theme().muted_foreground).on_press(move || {
-                    s.query.set(String::new());
-                    s.refresh();
-                    field.focus()
-                })
-            },
-        ))
-}
 /// Opens the search, the keyboard up with its field.
 fn open_search(nav: Nav, field: ElementRef) {
     nav.adding.set(false);
@@ -142,9 +87,8 @@ fn open_search(nav: Nav, field: ElementRef) {
 }
 
 /// The bar at the top: the app's name (in a wide window the section's: "All" or the category), the add button and the
-/// menu; on Android the search button before them.
-fn header(s: Store, nav: Nav, wide: bool, field: ElementRef) -> impl IntoElement {
-    let empty_vault = move || s.projection.with(|p| p.account_count == 0);
+/// menu.
+fn header(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
     let name = move || -> SharedString {
         if !wide {
             return "Safay".into();
@@ -169,12 +113,6 @@ fn header(s: Store, nav: Nav, wide: bool, field: ElementRef) -> impl IntoElement
         } else {
             ui::title_large(text(name)).flex_1().into_element()
         })
-        .child(when(
-            move || !ui::IOS && !empty_vault(),
-            move || {
-                ui::bar_button(move || s.label("Search"), || Icon::Search).test_id("search-open").on_press(move || open_search(nav, field))
-            },
-        ))
         .child(ui::bar_button(move || s.label("Add Account"), || Icon::Plus).test_id("add").on_press(move || {
             dismiss_keyboard();
             nav.menu.set(false);
@@ -215,20 +153,15 @@ fn search(s: Store, nav: Nav) -> impl IntoElement {
         .gap(px(8.0))
         .pointer_events(nsh_core::PointerEvents::BoxNone)
         .child(
-            view()
+            ui::floating(view())
                 .w(move || if open() { wide() } else { px(0.0) })
                 .h(px(ui::FAB))
                 .opacity(move || if open() { 1.0_f32 } else { 0.0 })
                 .overflow_hidden()
                 .flex_row()
                 .items_center()
+                // The same floating surface as the button beside it (`ui::floating`): Liquid Glass on iOS.
                 .rounded_full()
-                // White as the rows it floats over, set off from them by its outline and a deep shadow (a light
-                // outline in dark appearance, where a shadow does not show).
-                .bg(move || theme().card)
-                .border_1()
-                .border_color(move || tok("float-rim"))
-                .shadow_xl()
                 .pointer_events(move || if open() { nsh_core::PointerEvents::Auto } else { nsh_core::PointerEvents::None })
                 .transition()
                 .duration(ui::SPATIAL_MS)
@@ -468,9 +401,9 @@ fn list(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
             // The chips keep the room above the first row; the end keeps its own.
             .content_padding_top(px(if wide { 8.0 } else { 2.0 }))
             .content_padding_bottom(px(8.0))
-            // Room under the last row: iOS's floating search button; Android's navigation bar, which the list scrolls
-            // under.
-            .footer(view().h(move || if ui::IOS { px(ui::FAB_CLEARANCE) } else { safe_area().bottom + px(16.0) }))
+            // Room under the last row for the floating search button, and on Android for the navigation bar the list
+            // scrolls under.
+            .footer(view().h(move || px(ui::FAB_CLEARANCE) + if ui::IOS { px(0.0) } else { safe_area().bottom }))
             .on_scroll(move |e: &ScrollEvent| {
                 r.scrolled(e.offset.y.0);
                 s.controller.get().activity()

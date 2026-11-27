@@ -15,11 +15,20 @@ pub fn location(s: Store, nav: Nav) -> impl IntoElement {
         Some(Location::Cloud { provider, .. }) => Some(provider),
         _ => None,
     };
-    let was = s.projection.with_untracked(|p| p.sync.location.clone());
-    effect(move || {
-        let now = s.projection.with(|p| p.sync.location.clone());
-        if now.is_some() && now != was {
+    // A service's setup that ends in linking it (`Store::link` turns the setup page into the overview; leaving it turns
+    // it back into the choice) goes back to settings at once: the backup card there says how the switch goes, and an
+    // error or a backup this vault cannot open is shown there, not under this page.
+    let in_setup = stored(false);
+    effect(move || match s.backup_page.get() {
+        crate::store::BackupPage::Setup(_) => {
+            in_setup.replace(true);
+        }
+        crate::store::BackupPage::Overview if in_setup.get() => {
+            in_setup.replace(false);
             untracked(|| nav.pop());
+        }
+        _ => {
+            in_setup.replace(false);
         }
     });
     let rows: Vec<AnyElement> = providers()

@@ -105,10 +105,17 @@ fn item(s: Store, glyph: Icon, name: &'static str, destructive: bool, press: imp
     ui::menu_item(glyph, move || s.label(name), destructive).test_id(name).on_press(press)
 }
 
-/// "Add to": the categories, the account's ticked. Nothing changes until "Save".
+/// What the "Add to" sheet shows around its list on Android, at the default text size: its bar (the title over the
+/// account) and the room under the list.
+const ADD_TO_CHROME: f32 = 28.0 + 16.0 + 8.0 + 8.0 + 4.0;
+/// "Add to": the categories, the account's ticked. A tick or an untick takes effect at once; the sheet only closes.
 pub fn add_to(s: Store, nav: Nav) -> impl IntoElement {
+    // What shows ticked, and what was last sent to the store: a tick shows at once, and goes to the store as soon as it
+    // is free (a change it is still saving would drop another sent meanwhile).
     let staged = signal(BTreeSet::<Uuid>::new());
     let before = signal(BTreeSet::<Uuid>::new());
+    let account_id = stored(None::<Uuid>);
+    let pending = stored(false);
     // Opening stages what the account is in now.
     effect(move || {
         if let Some(id) = nav.add_to.get() {
@@ -116,6 +123,7 @@ pub fn add_to(s: Store, nav: Nav) -> impl IntoElement {
                 s.projection
                     .with(|p| p.rows.iter().find(|r| r.id == id).map(|r| r.categories.iter().copied().collect()).unwrap_or_default())
             });
+            account_id.replace(Some(id));
             staged.set(now.clone());
             before.set(now);
         }
@@ -133,20 +141,42 @@ pub fn add_to(s: Store, nav: Nav) -> impl IntoElement {
             }
         });
     });
-    let save = move || {
-        if let Some(id) = nav.add_to.get() {
-            let (was, now) = (before.get(), staged.get());
-            let added = now.difference(&was).map(|c| (*c, true));
-            let removed = was.difference(&now).map(|c| (*c, false));
-            s.set_memberships(id, added.chain(removed).collect());
+    let flush = move || {
+        let Some(id) = account_id.get() else { return };
+        if s.busy.get_untracked() {
+            pending.replace(true);
+            return;
         }
-        nav.add_to.set(None)
+        pending.replace(false);
+        let (was, now) = (before.get_untracked(), staged.get_untracked());
+        let added = now.difference(&was).map(|c| (*c, true));
+        let removed = was.difference(&now).map(|c| (*c, false));
+        let changes: Vec<_> = added.chain(removed).collect();
+        if !changes.is_empty() {
+            before.set(now);
+            s.set_memberships(id, changes);
+        }
     };
+    // A change made while the store was busy goes once it is free.
+    effect(move || {
+        if !s.busy.get() && pending.get() {
+            untracked(flush);
+        }
+    });
     let close = move || nav.add_to.set(None);
     let new_category = move || s.editing.set(Some(CategoryEdit { account: nav.add_to.get(), ..Default::default() }));
+    // The account, as its row says it: the service's name and the account's.
     let account = move || {
         let id = nav.add_to.get();
-        s.projection.with(|p| p.rows.iter().find(|r| Some(r.id) == id).map(|r| SharedString::from(r.issuer.clone()))).unwrap_or_default()
+        s.projection
+            .with(|p| {
+                p.rows
+                    .iter()
+                    .find(|r| Some(r.id) == id)
+                    .map(|r| if r.username.is_empty() { r.issuer.clone() } else { format!("{} · {}", r.issuer, r.username) })
+            })
+            .map(SharedString::from)
+            .unwrap_or_default()
     };
     let none = move || s.projection.with(|p| p.categories.is_empty());
     ui::bottom_sheet(
@@ -154,117 +184,133 @@ pub fn add_to(s: Store, nav: Nav) -> impl IntoElement {
         close,
         move || {
             view()
+                // iOS: the system's sheet sizes itself, at half the screen or all of it; the list fills what its bar
+                // leaves, and scrolls.
+                .flex_grow(if ui::IOS { 1.0 } else { 0.0 })
+                .min_h(px(0.0))
                 .pb_safe_area_plus(px(8.0))
                 .child(if ui::IOS {
-                    // iOS: a sheet's bar, "Cancel", the title, "Save".
+                    // iOS: the title in the middle of the sheet, "Done" in glass at the end, as the system's sheets.
                     view()
+                        .h(px(ui::TOUCH + 8.0))
+                        .px(px(16.0))
+                        .mb(px(8.0))
                         .flex_row()
                         .items_center()
-                        .px(px(8.0))
-                        .pb(px(8.0))
-                        .child(ui::text_button(move || s.label("Cancel"), false).on_press(close))
-                        .child(ui::title(text(move || s.label("Add to"))).flex_1().text_center().number_of_lines(1))
+                        .justify_end()
                         .child(
-                            ui::text_button(move || s.label("Save"), false)
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .test_id("save")
-                                .on_press(save),
+                            ui::title(text(move || s.label("Add to")))
+                                .absolute()
+                                .left(px(96.0))
+                                .right(px(96.0))
+                                .text_center()
+                                .number_of_lines(1),
                         )
+                        .child(ui::glass_text_button(move || s.label("Done")).test_id("done").on_press(close))
                         .into_element()
                 } else {
-                    // Android: the title at the start, over the account it is for; "Save" at the end.
+                    // Android: the title at the start over the account in small text, the sheet's close button at the
+                    // end, as the other sheets'.
                     view()
                         .flex_row()
                         .items_center()
                         .pl(px(24.0))
-                        .pr(px(12.0))
+                        .pr(px(8.0))
                         .pb(px(8.0))
                         .child(
                             view()
                                 .flex_1()
                                 .min_w(px(0.0))
                                 .child(ui::title_large(text(move || s.label("Add to"))).number_of_lines(1))
-                                .child(ui::dim(ui::body(text(account))).number_of_lines(1)),
+                                .child(ui::dim(ui::caption(text(account))).number_of_lines(1)),
                         )
-                        .child(ui::text_button(move || s.label("Save"), false).test_id("save").on_press(save))
+                        .child(ui::icon_button(move || s.label("Close"), || Icon::Close).test_id("close").on_press(close))
                         .into_element()
                 })
                 // iOS: which account, under the bar, as a group's header.
-                .child(when(
-                    || ui::IOS,
-                    move || ui::footer(move || s.fmt("Categories for “{}”", &[&account()])).px(px(ui::MARGIN + 16.0)).pb(px(7.0)),
-                ))
+                .child(when(|| ui::IOS, move || ui::footer(account).px(px(ui::MARGIN + 16.0)).pb(px(7.0))))
                 // iOS: the categories as one group of rows, as the system's checklists; the last row makes a new one.
+                // The list scrolls once the categories are more than the sheet holds, "New Category" at its end. Android:
+                // as tall as the room the sheet has (`sheet_room`), less its bar.
                 .child(
-                    scroll().max_h(px(360.0)).child(
-                        view()
-                            .py(px(if ui::IOS { 0.0 } else { 8.0 }))
-                            .mx(px(if ui::IOS { ui::MARGIN } else { 0.0 }))
-                            .mb(px(if ui::IOS { 16.0 } else { 0.0 }))
-                            .rounded(px(if ui::IOS { ui::GROUP_RADIUS } else { 0.0 }))
-                            .overflow_hidden()
-                            .bg(move || if ui::IOS { tok("sheet-card") } else { theme().card.opacity(0.0) })
-                            .child(each(
-                                move || s.projection.with(|p| p.categories.clone()),
-                                |c| c.id,
-                                move |c, index| {
-                                    let id = c.with_untracked(|c| c.id);
-                                    let on = move || staged.with(|st| st.contains(&id));
-                                    ui::toggle(AccessibilityRole::Checkbox, move || c.with(|c| SharedString::from(c.name.clone())), on)
-                                        .min_h(move || px(ui::TOUCH) * font_scale())
+                    scroll()
+                        .max_h(move || ui::sheet_room(ADD_TO_CHROME))
+                        .flex_grow(if ui::IOS { 1.0 } else { 0.0 })
+                        .flex_shrink(1.0)
+                        .min_h(px(0.0))
+                        .child(
+                            view()
+                                .py(px(if ui::IOS { 0.0 } else { 4.0 }))
+                                .mx(px(if ui::IOS { ui::MARGIN } else { 0.0 }))
+                                .mb(px(if ui::IOS { 16.0 } else { 0.0 }))
+                                .rounded(px(if ui::IOS { ui::GROUP_RADIUS } else { 0.0 }))
+                                .overflow_hidden()
+                                .bg(move || if ui::IOS { tok("sheet-card") } else { theme().card.opacity(0.0) })
+                                .child(each(
+                                    move || s.projection.with(|p| p.categories.clone()),
+                                    |c| c.id,
+                                    move |c, index| {
+                                        let id = c.with_untracked(|c| c.id);
+                                        let on = move || staged.with(|st| st.contains(&id));
+                                        ui::toggle(AccessibilityRole::Checkbox, move || c.with(|c| SharedString::from(c.name.clone())), on)
+                                            .min_h(move || px(if ui::IOS { ui::TOUCH } else { 56.0 }) * font_scale())
+                                            .px(px(if ui::IOS { 16.0 } else { 24.0 }))
+                                            .flex_row()
+                                            .items_center()
+                                            .gap(px(16.0))
+                                            .active(|st| st.bg(move || tok("pressed")))
+                                            .on_press(move |_: &()| {
+                                                haptic(Haptic::Selection);
+                                                staged.update(|st| {
+                                                    if !st.remove(&id) {
+                                                        st.insert(id);
+                                                    }
+                                                });
+                                                flush()
+                                            })
+                                            // Android: Material's checkbox at the start; iOS: a folder, the checkmark at the end.
+                                            .child(if ui::IOS {
+                                                view()
+                                                    .text_color(move || theme().foreground)
+                                                    .child(icon(Icon::Folder).size(px(24.0)))
+                                                    .into_element()
+                                            } else {
+                                                checkbox_mark(on).into_element()
+                                            })
+                                            .child(
+                                                ui::body_large(text(move || c.with(|c| SharedString::from(c.name.clone()))))
+                                                    .number_of_lines(1)
+                                                    .flex_1()
+                                                    .text_color(move || theme().foreground),
+                                            )
+                                            .child(when(
+                                                move || ui::IOS && on(),
+                                                || view().text_color(move || theme().primary).child(icon(Icon::Check).size(px(24.0))),
+                                            ))
+                                            .child(when(move || ui::IOS && index.get() > 0, || ui::separator(16.0 + 24.0 + 16.0)))
+                                    },
+                                ))
+                                // "New Category", a row of the list, after the categories.
+                                .child(
+                                    button()
+                                        .test_id("new-category")
+                                        .accessibility_label(move || Some(s.label("New Category")))
+                                        .min_h(move || px(if ui::IOS { ui::TOUCH } else { 56.0 }) * font_scale())
                                         .px(px(if ui::IOS { 16.0 } else { 24.0 }))
                                         .flex_row()
                                         .items_center()
                                         .gap(px(16.0))
                                         .active(|st| st.bg(move || tok("pressed")))
-                                        .on_press(move |_: &()| {
-                                            staged.update(|st| {
-                                                if !st.remove(&id) {
-                                                    st.insert(id);
-                                                }
-                                            })
-                                        })
-                                        // Android: Material's checkbox at the start; iOS: a folder, the checkmark at the end.
-                                        .child(if ui::IOS {
-                                            view()
-                                                .text_color(move || theme().foreground)
-                                                .child(icon(Icon::Folder).size(px(24.0)))
-                                                .into_element()
-                                        } else {
-                                            checkbox_mark(on).into_element()
-                                        })
+                                        .on_press(new_category)
+                                        .child(view().text_color(move || theme().primary).child(icon(Icon::FolderPlus).size(px(24.0))))
                                         .child(
-                                            ui::body_large(text(move || c.with(|c| SharedString::from(c.name.clone()))))
-                                                .number_of_lines(1)
+                                            ui::body_large(text(move || s.label("New Category")))
                                                 .flex_1()
-                                                .text_color(move || theme().foreground),
+                                                .text_color(move || theme().primary),
                                         )
-                                        .child(when(
-                                            move || ui::IOS && on(),
-                                            || view().text_color(move || theme().primary).child(icon(Icon::Check).size(px(24.0))),
-                                        ))
-                                        .child(when(move || ui::IOS && index.get() > 0, || ui::separator(16.0 + 24.0 + 16.0)))
-                                },
-                            ))
-                            // "New Category", a row of the list, after the categories.
-                            .child(
-                                button()
-                                    .test_id("new-category")
-                                    .accessibility_label(move || Some(s.label("New Category")))
-                                    .min_h(move || px(ui::TOUCH) * font_scale())
-                                    .px(px(if ui::IOS { 16.0 } else { 24.0 }))
-                                    .flex_row()
-                                    .items_center()
-                                    .gap(px(16.0))
-                                    .active(|st| st.bg(move || tok("pressed")))
-                                    .on_press(new_category)
-                                    .child(view().text_color(move || theme().primary).child(icon(Icon::FolderPlus).size(px(24.0))))
-                                    .child(
-                                        ui::body_large(text(move || s.label("New Category…"))).flex_1().text_color(move || theme().primary),
-                                    )
-                                    .child(when(move || ui::IOS && !none(), || ui::separator(16.0 + 24.0 + 16.0))),
-                            ),
-                    ),
+                                        .child(when(move || ui::IOS && !none(), || ui::separator(16.0 + 24.0 + 16.0))),
+                                ),
+                        ),
                 )
                 // No category yet: what one is for.
                 .child(when(none, move || {
@@ -277,18 +323,30 @@ pub fn add_to(s: Store, nav: Nav) -> impl IntoElement {
     )
 }
 
-/// Material's checkbox: a 18 pt box, filled with the primary color and checked when `on`.
+/// Material's checkbox: an 18 pt box with 2 pt corners, its outline the secondary text color; checked, filled with the
+/// primary color and a check mark, the change eased.
 fn checkbox_mark(on: impl Fn() -> bool + Copy + 'static) -> impl IntoElement {
     view().size(px(24.0)).items_center().justify_center().child(
         view()
             .size(px(18.0))
-            .rounded(px(2.0))
+            .rounded(px(3.0))
             .border(px(2.0))
-            .border_color(move || if on() { theme().primary } else { tok("outline") })
+            .border_color(move || if on() { theme().primary } else { theme().muted_foreground })
             .bg(move || if on() { theme().primary } else { theme().card.opacity(0.0) })
+            .transition()
+            .duration(ui::EFFECTS_MS)
+            .ease_out()
             .items_center()
             .justify_center()
             .text_color(move || theme().primary_foreground)
-            .child(when(on, || icon(Icon::Check).size(px(16.0)))),
+            .child(
+                view()
+                    .opacity(move || if on() { 1.0_f32 } else { 0.0 })
+                    .scale(move || if on() { 1.0_f32 } else { 0.6 })
+                    .transition()
+                    .duration(ui::EFFECTS_MS)
+                    .ease_out()
+                    .child(crate::icons::icon_bold(Icon::Check).size(px(16.0))),
+            ),
     )
 }

@@ -303,7 +303,7 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
             },
         ))
         // Above the add button while the list shows.
-        .child(toast(s, move || ui::IOS && s.unlocked() && nav.page.get().is_none()))
+        .child(toast(s, move || s.unlocked() && nav.page.get().is_none()))
 }
 
 fn unlocked(s: Store, nav: Nav) -> AnyElement {

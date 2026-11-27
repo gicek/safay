@@ -313,7 +313,35 @@ pub fn bar_button(name: impl Fn() -> SharedString + 'static, glyph: impl Fn() ->
 }
 /// The look of a control floating over the page on iOS: a translucent fill, a faint rim and a soft shadow.
 pub fn glass<E: Styled>(e: E) -> E {
+    // A device's build: the system's Liquid Glass (iOS 26; the system's blur before it), its own edge and shadow.
+    #[cfg(target_os = "ios")]
+    return e.rounded_full().glass_effect(nsh_core::GlassEffect::Regular);
+    // A desktop showing iOS's look: a drawing of it.
+    #[allow(unreachable_code)]
     e.rounded_full().bg(move || tok("glass")).border_1().border_color(move || tok("glass-border")).shadow_md()
+}
+/// A sheet's action in words on iOS ("Done", "Edit"): a capsule of Liquid Glass (`glass`), its label in the text's
+/// color, as the system's sheets draw theirs.
+pub fn glass_text_button(label_: impl Fn() -> SharedString + Copy + 'static) -> nsh_base::ButtonElement {
+    glass(
+        button()
+            .accessibility_label(move || Some(label_()))
+            .h(px(TOUCH))
+            .min_w(px(72.0))
+            .px(px(20.0))
+            .items_center()
+            .justify_center()
+            .active(|st| st.scale(0.94)),
+    )
+    .child(body_large(text(label_)).font_weight(FontWeight::SEMIBOLD).number_of_lines(1).text_color(move || theme().foreground))
+}
+/// What floats over a page, the search field and its button: glass on iOS (`glass`); on Android the page's card color,
+/// set off by a rim and a shadow (the button is the filled `fab`).
+pub fn floating<E: Styled>(e: E) -> E {
+    if IOS {
+        return glass(e);
+    }
+    e.rounded_full().bg(move || theme().card).border_1().border_color(move || tok("float-rim")).shadow_xl()
 }
 fn glyph_button(name: impl Fn() -> SharedString + 'static, glyph: impl Fn() -> AnyElement + 'static) -> nsh_base::ButtonElement {
     button()
@@ -1318,6 +1346,7 @@ pub fn choice<T: Copy + PartialEq + 'static>(
                 }
             })
             .w_full()
+            .test_id("segments")
             .into_element();
     }
     let count = options.len();

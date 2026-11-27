@@ -82,12 +82,24 @@ fn content(s: Store, id: Uuid) -> impl IntoElement {
                         .child(
                             when(
                                 move || editing.get(),
-                                move || ui::text_button(move || s.label("Done"), false).test_id("done").on_press(save),
+                                move || {
+                                    // iOS: "Done" in words, as the system's. Android: a check mark, as its other sheets'
+                                    // actions are icons (the pencil that started the edit, a close button).
+                                    if ui::IOS {
+                                        ui::glass_text_button(move || s.label("Done")).test_id("done").on_press(save).into_element()
+                                    } else {
+                                        ui::icon_button(move || s.label("Done"), || Icon::Check)
+                                            .text_color(move || theme().primary)
+                                            .test_id("done")
+                                            .on_press(save)
+                                            .into_element()
+                                    }
+                                },
                             )
                             .otherwise(move || {
                                 // iOS: "Edit" in words, as the system's.
                                 let edit = if ui::IOS {
-                                    ui::text_button(move || s.label("Edit"), false)
+                                    ui::glass_text_button(move || s.label("Edit"))
                                 } else {
                                     ui::icon_button(move || s.label("Edit"), || Icon::Pencil)
                                 };
@@ -97,12 +109,7 @@ fn content(s: Store, id: Uuid) -> impl IntoElement {
                                     editing.set(true)
                                 })
                             }),
-                        )
-                        // iOS: the sheet's own close button at its end, as the system's sheets have (a swipe down too).
-                        .child(when(
-                            move || ui::IOS && !editing.get(),
-                            move || ui::bar_button(move || s.label("Close"), || Icon::Close).test_id("close").on_press(move || close(s)),
-                        )),
+                        ),
                 )
                 // The code: a press copies it.
                 .child(

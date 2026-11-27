@@ -31,7 +31,7 @@ pub fn conflict(s: Store, nav: Nav) -> impl IntoElement {
                     .child(ui::body_large(text(title)))
                     .child(ui::dim(ui::caption(text(detail))).number_of_lines(1)),
             )
-            .child(ui::dim(ui::body(text(move || s.fmt("Accounts: {}", &[&count().to_string()])))))
+            .child(ui::dim(ui::body(text(move || s.count("accounts_n", count())))))
     };
     let list = move |title: &'static str, rows: Box<dyn Fn() -> Vec<(String, String)>>| {
         let rows = std::rc::Rc::new(rows);
@@ -55,6 +55,19 @@ pub fn conflict(s: Store, nav: Nav) -> impl IntoElement {
         )
     };
     let changed = move || s.review.with(|r| r.as_ref().map(|r| r.changed.clone()).unwrap_or_default());
+    // Nothing that a person would see differs (the accounts and categories are the same on both sides).
+    let same = move || {
+        s.review.with(|r| {
+            r.as_ref().is_some_and(|r| {
+                r.only_local.is_empty()
+                    && r.only_remote.is_empty()
+                    && r.changed.is_empty()
+                    && r.categories_only_local.is_empty()
+                    && r.categories_only_remote.is_empty()
+                    && r.categories_renamed.is_empty()
+            })
+        })
+    };
     view()
         .flex_1()
         .pt(ui::page_top)
@@ -68,8 +81,25 @@ pub fn conflict(s: Store, nav: Nav) -> impl IntoElement {
                     // Comparing, or what went wrong with a way to try again.
                     let failed =
                         move || s.status.get().filter(|st| st.tone == crate::store::Tone::Error && !s.syncing.get()).map(|st| st.text);
-                    view().flex_1().items_center().justify_center().px(px(32.0)).gap(px(16.0)).child(
-                        when(move || failed().is_none(), || crate::components::spinner(28.0)).otherwise(move || {
+                    view().flex_1().items_center().justify_center().px(px(32.0)).pb_safe_area_plus(px(48.0)).gap(px(16.0)).child(
+                        when(
+                            move || failed().is_none(),
+                            move || {
+                                // Reading the backup and comparing it: said, not a spinner alone on an empty page.
+                                view()
+                                    .items_center()
+                                    .gap(px(12.0))
+                                    .child(crate::components::spinner(28.0))
+                                    .child(ui::title(text(move || s.label("Comparing with the backup"))).text_center().mt(px(8.0)))
+                                    .child(
+                                        ui::dim(ui::body(text(move || {
+                                            s.label("Safay reads the backup and lists what differs. Nothing changes until you choose.")
+                                        })))
+                                        .text_center(),
+                                    )
+                            },
+                        )
+                        .otherwise(move || {
                             view()
                                 .items_center()
                                 .gap(px(16.0))
@@ -101,6 +131,21 @@ pub fn conflict(s: Store, nav: Nav) -> impl IntoElement {
                             )
                             .into_element(),
                         ]))
+                        // Nothing to compare: said, rather than an empty page between the counts and the choice.
+                        .child(when(same, move || {
+                            view()
+                                .flex_row()
+                                .gap(px(12.0))
+                                .px(px(16.0))
+                                .pt(px(16.0))
+                                .child(view().pt(px(2.0)).text_color(move || tok("success")).child(icon(Icon::CheckCircle).size(px(20.0))))
+                                .child(
+                                    ui::dim(ui::body(text(move || {
+                                        s.label("Both copies have the same accounts and categories. Merging them changes nothing you see.")
+                                    })))
+                                    .flex_1(),
+                                )
+                        }))
                         .child(list("Only on this device ({})", Box::new(move || review().map(|r| r.only_local).unwrap_or_default())))
                         .child(list("Only in the backup ({})", Box::new(move || review().map(|r| r.only_remote).unwrap_or_default())))
                         .child(when(
@@ -188,30 +233,39 @@ pub fn conflict(s: Store, nav: Nav) -> impl IntoElement {
                                 lines
                             }),
                         ))
-                        .child(ui::section_title(move || s.label("Resolve Conflict")))
+                        // Not the page's title again: what this group asks.
+                        .child(ui::section_title(move || s.label("Keep")))
                         .child(ui::group(vec![
-                            choice_row(
-                                s,
-                                0,
-                                "Merge Both",
-                                "Keep accounts from both sides. For accounts changed on both, use the version you picked above.",
-                            )
+                            choice_row(s, 0, "Merge Both", move || {
+                                // "Picked above" only where there is something above to pick.
+                                if changed().is_empty() {
+                                    "Keep accounts from both sides."
+                                } else {
+                                    "Keep accounts from both sides. For accounts changed on both, use the version you picked above."
+                                }
+                            })
                             .into_element(),
-                            choice_row(s, 1, "Keep This Device’s Copy", "Overwrite the backup with this copy.").into_element(),
-                            choice_row(s, 2, "Use the Backup’s Copy", "Replace this copy with the backup.").into_element(),
+                            choice_row(s, 1, "Keep This Device’s Copy", || "Overwrite the backup with this copy.").into_element(),
+                            choice_row(s, 2, "Use the Backup’s Copy", || "Replace this copy with the backup.").into_element(),
                         ]))
                         .child(
                             view().pt(px(16.0)).child(
                                 ui::primary_button(move || s.label("Apply"), move || review().is_some(), move || s.syncing.get())
                                     .test_id("apply")
-                                    .on_press(move || s.resolve_conflict(choice())),
+                                    // Applied in the background: settings' backup card shows it going, and how it ended. The
+                                    // page has nothing more to say, so it goes at once rather than wait on an empty
+                                    // page.
+                                    .on_press(move || {
+                                        s.resolve_conflict(choice());
+                                        nav.back();
+                                    }),
                             ),
                         ),
                 )
             }),
         )
 }
-fn choice_row(s: Store, value: u8, title: &'static str, detail: &'static str) -> impl IntoElement {
+fn choice_row(s: Store, value: u8, title: &'static str, detail: impl Fn() -> &'static str + 'static) -> impl IntoElement {
     let on = move || s.resolution.get() == value;
     ui::toggle(AccessibilityRole::Radio, move || s.label(title), on)
         .test_id(title)
@@ -221,10 +275,13 @@ fn choice_row(s: Store, value: u8, title: &'static str, detail: &'static str) ->
         .px(px(16.0))
         .py(px(12.0))
         .bg(move || theme().card)
-        .active(|st| st.bg(move || tok("surface-high")))
+        .active(|st| st.bg(move || if ui::IOS { tok("pressed") } else { tok("surface-high") }))
         .on_press(move |_: &()| s.resolution.set(value))
         .child(ui::radio_mark(on))
         .child(
-            view().flex_1().child(ui::body_large(text(move || s.label(title)))).child(ui::dim(ui::caption(text(move || s.label(detail))))),
+            view()
+                .flex_1()
+                .child(ui::body_large(text(move || s.label(title))))
+                .child(ui::dim(ui::caption(text(move || s.label(detail()))))),
         )
 }

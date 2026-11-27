@@ -656,5 +656,10 @@
   "Accounts you delete wait here for 30 days.": "刪除的帳號會在這裡保留 30 天。",
   "Tap a category to rename it, or touch and hold it to drag it to another place. Tap Edit to delete one; its accounts stay.": "輕點分類可重新命名，按住可拖曳到其他位置。輕點「編輯」可刪除分類，其中的帳號會保留。",
   "No categories yet": "還沒有分類",
-  "Create one, then long-press an account and choose Add to.": "新增一個後，長按帳號並選擇「加入到」。"
+  "Create one, then long-press an account and choose Add to.": "新增一個後，長按帳號並選擇「加入到」。",
+  "Keep": "保留",
+  "Keep accounts from both sides.": "保留兩邊的帳號。",
+  "Both copies have the same accounts and categories. Merging them changes nothing you see.": "兩份副本的帳號和分類完全相同，合併後你看到的內容不會變化。",
+  "Comparing with the backup": "正在與備份比對",
+  "Safay reads the backup and lists what differs. Nothing changes until you choose.": "Safay 會讀取備份並列出不同之處。在你做出選擇之前，不會有任何變更。"
 }

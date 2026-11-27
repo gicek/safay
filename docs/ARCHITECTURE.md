@@ -165,8 +165,11 @@ master password, an export's password, choosing the backup location) is a page. 
 (`ui::form`): on iOS the rows of one inset group, with what a field's value means (the strength meter, a mismatch) said
 under the group; on Android Material's outlined fields on the page. A choice among a few values is the system's pull-down
 menu from the value at the row's end on iOS, a dialog of radio buttons on Android. Android's page titles start at the
-leading edge, its search replaces the top bar, and its drawn dialogs take the system alerts' surface; iOS keeps its
-floating search button, deletes categories in an edit mode, and its sheets have a close button. The pages over the list
+leading edge, its drawn dialogs take the system alerts' surface, and its sheets' actions are icons; on iOS the search
+field and its button float in Liquid Glass (`ui::glass`, NSH's `glass_effect`), categories are deleted in an edit mode,
+and a sheet's actions are words in glass (`ui::glass_text_button`). Both keep the search at the bottom corner, in reach of
+the thumb. A tick in "Add to" takes effect at once; a page whose task went to the background (linking a backup location,
+resolving a conflict) goes back to settings, whose backup card shows how it ends. The pages over the list
 change as one (`Nav`: the stack and the page in one `batch`), so the native stack never sees a route in between. A
 window 700 pt wide or more (`ui::is_wide`: a tablet) lists the categories in a
 sidebar and the accounts as cards in columns, and centers the pages over it. The `ios-look` feature shows the iOS look

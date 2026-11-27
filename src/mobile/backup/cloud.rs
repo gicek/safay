@@ -64,7 +64,12 @@ fn setup(s: Store, provider: Provider, close: impl Fn() + Copy + 'static) -> imp
                     ui::title_large(text(move || s.fmt(if restore() { "Restore from {}" } else { "Connect to {}" }, &[provider.name()])))
                         .flex_1(),
                 )
-                .child(ui::icon_button(move || s.label("Close"), || Icon::Close).on_press(close)),
+                // iOS: "Cancel" in glass, as the other sheets' actions; Android: the close button.
+                .child(if ui::IOS {
+                    ui::glass_text_button(move || s.label("Cancel")).test_id("Close").on_press(close).into_element()
+                } else {
+                    ui::icon_button(move || s.label("Close"), || Icon::Close).on_press(close).into_element()
+                }),
         )
         .child(
             scroll()
