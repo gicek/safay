@@ -826,6 +826,8 @@ pub fn text_area(
     let me = element_ref();
     outlined(focused, error, me)
         .min_h(px(height))
+        // At most twice that: a long paste scrolls inside the field, and what is under it (the page's action) stays.
+        .max_h(px(height * 2.0))
         .px(px(16.0))
         .pt(px(if IOS { 28.0 } else { 14.0 }))
         .pb(px(14.0))
@@ -836,6 +838,8 @@ pub fn text_area(
                 .label(label_)
                 .placeholder(move || if focused.get() || IOS { placeholder().to_string() } else { String::new() })
                 .multiline(true)
+                .min_h(px(0.0))
+                .flex_shrink(1.0)
                 .value(get)
                 .on_change(move |v: &str| {
                     s.controller.get().activity();
