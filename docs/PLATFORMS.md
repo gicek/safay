@@ -70,7 +70,8 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
   the alert for a category's name, are UIKit's. Dialogs with password fields are drawn in the look of an iOS alert,
   since the system's alert has no secure field.
 - iPhone: portrait only. iPad: every orientation; a window 700 pt wide or more shows the categories in a sidebar and the
-  accounts as cards; a narrower one (Split View, Slide Over) shows the phone's layout.
+  accounts as cards, and sheets (an account's details, "Add to", a server's setup) open as a card in the middle of the
+  screen; a narrower one (Split View, Slide Over) shows the phone's layout and sheets.
 - Safay locks when the device locks with a passcode, and after the auto-lock time. While unlocked, a blurred cover hides
   it in the app switcher. A copied code stays on this device (never Universal Clipboard) and expires.
 - The app icon is `assets/ios/icon.png`, edge to edge without transparency (`scripts/mobile_icons.py`).

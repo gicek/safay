@@ -265,6 +265,7 @@
   "The backup here can’t be opened with this vault’s key. It belongs to another vault, or its master password was changed on another device.": "此处的备份无法用本机保险库的密钥解开：它属于另一个保险库，或另一台设备修改了主密码。",
   "{} wasn’t connected: the backup there belongs to another vault, or its master password was changed on another device. To back up this vault there, delete that backup first.": "未连接 {}：那里的备份属于另一个保险库，或另一台设备修改了主密码。要把此保险库备份到那里，请先删除那份备份。",
   "The change couldn’t be saved. Your previous vault is kept.": "无法保存更改，已保留之前的保险库。",
+  "Safay couldn’t save the sign-in on this device. Try again.": "Safay 无法在此设备上保存登录信息，请重试。",
   "The export is encrypted with this password and you’ll need it to import. Don’t lose it.": "导出文件用这个密码单独加密，导入时需要输入，请务必牢记。",
   "The file exceeds the size or image limit.": "文件超出大小或图片尺寸限制。",
   "The secret is encrypted on this device and never leaves in plaintext.": "密钥仅在本设备加密存储，不会以明文离开此设备。",

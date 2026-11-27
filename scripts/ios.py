@@ -11,6 +11,13 @@ simulator's builds are not signed with a profile, and a CloudKit container witho
 
 Output: `build/ios/debug/Safay.ipa` with the development app ID. `--run` installs it on the connected device (or the one
 `--device` names, its UDID) and launches it. Other arguments go to `nsh package`.
+
+`--simulator` packages for the simulator instead (`build/ios-simulator/debug/Safay.app`, signed ad hoc; `--run` installs
+and launches it in the booted simulator). An app with no entitlements cannot write the Keychain there
+(`errSecMissingEntitlement`), where cloud sign-ins are kept, and the simulator refuses to launch an ad-hoc app whose
+signature carries any. So the entitlements go where Xcode puts a simulator app's: sections of the executable
+(`__TEXT,__entitlements` as XML, `__ents_der` as DER from `derq`), linked in through the simulator target's RUSTFLAGS.
+The simulator checks the application identifier against no team.
 """
 from pathlib import Path
 import argparse
@@ -53,11 +60,58 @@ def connected_device() -> str:
     return real[0]
 
 
+def copy_manifest(project: dict, bundle_id: str) -> tuple[Path, dict]:
+    """The directory packaged from (`build/ios/app`) and the project's nsh.json for it: paths pointing back at the
+    project, the development app ID."""
+    app = root / "build/ios/app"
+    app.mkdir(parents=True, exist_ok=True)
+    back = Path("../../..")
+    manifest = dict(project)
+    manifest["rust"] = str(back / project["rust"])
+    if isinstance(project.get("theme"), str):
+        manifest["theme"] = str(back / project["theme"])
+    manifest["id"] = bundle_id
+    return app, manifest
+
+
+def simulator(run: bool, rest: list[str]) -> None:
+    project = json.loads((root / "nsh.json").read_text(encoding="utf-8"))
+    bundle_id = project["id"] + ".debug"
+    app, manifest = copy_manifest(project, bundle_id)
+    (app / "nsh.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    out = root / "build/ios-simulator"
+    out.mkdir(parents=True, exist_ok=True)
+    identifier = f"SIMULATOR.{bundle_id}"
+    xml, der = out / "entitlements.plist", out / "entitlements.der"
+    xml.write_bytes(plistlib.dumps({"application-identifier": identifier, "keychain-access-groups": [identifier]}))
+    subprocess.run(["derq", "query", "-f", "xml", "-i", str(xml), "-o", str(der), "--raw"], check=True)
+    sections = " ".join(f"-Clink-arg=-Wl,-sectcreate,__TEXT,{name},{path}" for name, path in (("__entitlements", xml), ("__ents_der", der)))
+    env = {**os.environ, **DEVELOPER, "CARGO_TARGET_AARCH64_APPLE_IOS_SIM_RUSTFLAGS": sections}
+    command = [
+        sys.executable,
+        str(root / "scripts/nsh.py"),
+        "package",
+        str(app),
+        "--target",
+        "ios-simulator",
+        "--icon",
+        str(root / "assets/ios/icon.png"),
+        "--out",
+        str(root / "build/ios-simulator/debug"),
+        *(["--run"] if run else []),
+        *rest,
+    ]
+    raise SystemExit(subprocess.call(command, cwd=root, env=env))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--run", action="store_true", help="install it on the connected device and launch it")
     parser.add_argument("--device", help="the device's UDID (default: the one paired device connected)")
+    parser.add_argument("--simulator", action="store_true", help="package for the simulator instead")
     args, rest = parser.parse_known_args()
+    if args.simulator:
+        return simulator(args.run, rest)
     settings = package.settings()
     identity = settings["development_identity"]
     profile_path = Path(os.path.expanduser(settings.get("ios_profile", ""))) if settings.get("ios_profile") else None
@@ -70,14 +124,7 @@ def main() -> None:
     if entitlements.get("application-identifier", "").split(".", 1)[-1] not in (bundle_id, "*"):
         raise SystemExit(f"{profile_path.name} is not for {bundle_id}")
 
-    app = root / "build/ios/app"
-    app.mkdir(parents=True, exist_ok=True)
-    back = Path("../../..")
-    manifest = dict(project)
-    manifest["rust"] = str(back / project["rust"])
-    if isinstance(project.get("theme"), str):
-        manifest["theme"] = str(back / project["theme"])
-    manifest["id"] = bundle_id
+    app, manifest = copy_manifest(project, bundle_id)
     ios = dict(project.get("ios", {}))
     if ICLOUD_CONTAINER in entitlements.get("com.apple.developer.icloud-container-identifiers", []):
         # A development profile's apps use CloudKit's Development environment; the profile lists both and grants

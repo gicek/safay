@@ -3164,6 +3164,7 @@ pub fn sync_error_key(e: safay_app::sync::SyncError) -> &'static str {
         Locked => "Unlock Safay to continue.",
         TooLarge => "The file exceeds the size or image limit.",
         Storage => "The change couldn’t be saved. Your previous vault is kept.",
+        Credentials => "Safay couldn’t save the sign-in on this device. Try again.",
         Password => "Incorrect master password",
         Network => "Can’t reach the server. Check the address and your network connection",
         Certificate => "The server’s certificate isn’t trusted",

@@ -23,12 +23,12 @@ impl Credentials for Keychain {
         super::android::unseal(&sealed)
     }
     fn save(&self, id: &str, blob: &[u8]) -> Result<(), SyncError> {
-        let path = file(id).ok_or(SyncError::Storage)?;
-        let sealed = super::android::seal(blob).ok_or(SyncError::Storage)?;
-        std::fs::create_dir_all(path.parent().ok_or(SyncError::Storage)?).map_err(|_| SyncError::Storage)?;
+        let path = file(id).ok_or(SyncError::Credentials)?;
+        let sealed = super::android::seal(blob).ok_or(SyncError::Credentials)?;
+        std::fs::create_dir_all(path.parent().ok_or(SyncError::Credentials)?).map_err(|_| SyncError::Credentials)?;
         // Written beside it and moved into place: a sign-in is whole or absent.
         let partial = path.with_extension("new");
-        std::fs::write(&partial, sealed).and_then(|()| std::fs::rename(&partial, &path)).map_err(|_| SyncError::Storage)
+        std::fs::write(&partial, sealed).and_then(|()| std::fs::rename(&partial, &path)).map_err(|_| SyncError::Credentials)
     }
     fn delete(&self, id: &str) {
         if let Some(path) = file(id) {
@@ -42,7 +42,7 @@ impl Credentials for Keychain {
         keyring::Entry::new(SERVICE, id).ok()?.get_secret().ok().map(Zeroizing::new)
     }
     fn save(&self, id: &str, blob: &[u8]) -> Result<(), SyncError> {
-        keyring::Entry::new(SERVICE, id).and_then(|e| e.set_secret(blob)).map_err(|_| SyncError::Storage)
+        keyring::Entry::new(SERVICE, id).and_then(|e| e.set_secret(blob)).map_err(|_| SyncError::Credentials)
     }
     fn delete(&self, id: &str) {
         if let Ok(entry) = keyring::Entry::new(SERVICE, id) {

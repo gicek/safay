@@ -1603,25 +1603,29 @@ pub fn bottom_sheet(
     close: impl Fn() + Copy + 'static,
     content: impl Fn() -> AnyElement + 'static,
 ) -> AnyElement {
-    // iOS: the system's sheet (`UISheetPresentationController`): half the screen or all of it, dragged between them,
-    // over the page it leaves visible, closed by a swipe down.
+    // iOS: the system's sheet (`UISheetPresentationController`): on a phone (and a narrow iPad window) half the screen
+    // or all of it, dragged between them, over the page it leaves visible, closed by a swipe down; in a wide iPad window
+    // a card in the middle of the screen over the dimmed page, as iPadOS presents forms.
     #[cfg(target_os = "ios")]
     {
         let content = std::rc::Rc::new(content);
         return when(open, move || {
             let content = content.clone();
-            nsh_base::dialog()
-                .presentation(nsh_core::ModalPresentation::PageSheet)
-                .detents(vec![nsh_core::SheetDetent::Medium, nsh_core::SheetDetent::Large])
-                .on_cancel(move |_: &()| close())
-                .child(
-                    view()
-                        .flex_1()
-                        .bg(move || tok("sheet-surface"))
-                        .pt(px(12.0))
-                        // A column the content's scroll view fills.
-                        .child(view().flex_1().min_h(px(0.0)).child(content())),
-                )
+            let dialog = if untracked(is_wide) {
+                nsh_base::dialog().presentation(nsh_core::ModalPresentation::FormSheet)
+            } else {
+                nsh_base::dialog()
+                    .presentation(nsh_core::ModalPresentation::PageSheet)
+                    .detents(vec![nsh_core::SheetDetent::Medium, nsh_core::SheetDetent::Large])
+            };
+            dialog.on_cancel(move |_: &()| close()).child(
+                view()
+                    .flex_1()
+                    .bg(move || tok("sheet-surface"))
+                    .pt(px(12.0))
+                    // A column the content's scroll view fills.
+                    .child(view().flex_1().min_h(px(0.0)).child(content())),
+            )
         })
         .into_element();
     }

@@ -175,15 +175,11 @@ ios: nsh-ready ## Development app for iOS devices in build/ios/debug, signed wit
 ios-run: nsh-ready ## Build it, then install and start it on the connected iPhone or iPad
 	$(PYTHON) scripts/ios.py --run
 
-# The simulator's SDK and simctl come with Xcode, not the command line tools `xcode-select` may name: Xcode in
-# /Applications unless DEVELOPER_DIR names another (as scripts/ios.py does for devices).
-ios-simulator ios-simulator-run: export DEVELOPER_DIR ?= /Applications/Xcode.app/Contents/Developer
-
 ios-simulator: nsh-ready ## Development app for the iOS simulator in build/ios-simulator/debug (needs Xcode)
-	$(NSH) package --target ios-simulator --id $(ID).debug --icon assets/ios/icon.png --out build/ios-simulator/debug
+	$(PYTHON) scripts/ios.py --simulator
 
 ios-simulator-run: nsh-ready ## Build it, then install and start it in the booted simulator
-	$(NSH) package --target ios-simulator --id $(ID).debug --icon assets/ios/icon.png --out build/ios-simulator/debug --run
+	$(PYTHON) scripts/ios.py --simulator --run
 
 ##@ Website (safay.gicek.com)
 

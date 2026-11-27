@@ -181,6 +181,10 @@ pub enum SyncError {
     TooLarge,
     #[error("the local vault couldn't be saved")]
     Storage,
+    /// A cloud sign-in couldn't be kept in the system's credential store (the Keychain, the Secret Service, Android's
+    /// sealed files): the server was reached and accepted it.
+    #[error("the sign-in couldn't be saved on this device")]
+    Credentials,
     #[error("wrong password for this backup")]
     Password,
     /// The server could not be reached: offline, timeout, DNS, or a TLS failure other than the certificate.
