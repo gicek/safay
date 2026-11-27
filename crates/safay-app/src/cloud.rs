@@ -1,8 +1,8 @@
 //! Cloud storage backup (SECURITY.md, Network): `cloudset` builds every request; this module only runs its state machines
 //! with an injected HTTP executor and keeps the serialized connection in an injected credential store (the system
 //! keychain in the app, memory in tests). Remote files are the folder backend's, `vault.safayvault` and
-//! `vault.metadata.json`, only ciphertext and non-secret metadata: at the root of Safay's app folder, or in a `Safay`
-//! folder on WebDAV and Nextcloud, or in the folder the user picked on a Synology NAS ([`backup_folder`]).
+//! `vault.metadata.json`, only ciphertext and non-secret metadata: at the root of Safay's app folder, or in the folder the
+//! user picked on a WebDAV server, a Nextcloud account or a Synology NAS ([`backup_folder`]).
 use crate::sync::{Backend, Expect, Remote, SyncError};
 use cloudset::{
     BoxOperation, Client, ClientConfig, CloudError, Connection, HttpRequest, HttpResponse, Precondition, ProviderKind, RemotePath,
@@ -175,10 +175,12 @@ fn version(entry: &cloudset::Entry) -> Option<RemoteVersion> {
 
 pub struct CloudBackend {
     credential: String,
+    /// WebDAV and Nextcloud: the folder picked for the backup (`Location::Cloud`'s `folder`).
+    folder: Option<String>,
 }
 impl CloudBackend {
-    pub fn new(credential: String) -> Self {
-        Self { credential }
+    pub fn new(credential: String, folder: Option<String>) -> Self {
+        Self { credential, folder }
     }
     fn client(&self, services: &Services) -> Result<Client, SyncError> {
         let blob = services.credentials.load(&self.credential).ok_or(SyncError::SignIn)?;
@@ -190,7 +192,7 @@ impl CloudBackend {
     // Each operation starts with the connection persisted by the previous one.
     fn file_operation<T>(&self, services: &Services, make: impl FnOnce(&Client, &RemotePath) -> BoxOperation<T>) -> Result<T, SyncError> {
         let client = self.client(services)?;
-        let folder = backup_folder(client.connection());
+        let folder = backup_folder(client.connection(), self.folder.as_deref())?;
         run(services, Some(&self.credential), make(&client, &folder), client.connection().certificate_pin())
     }
     /// Moves a QuickConnect connection to the address that answers now and stores it. `false` when the connection has no
@@ -212,13 +214,18 @@ fn unreachable(e: SyncError) -> bool {
     matches!(e, SyncError::Network | SyncError::Server(502..=504))
 }
 /// The folder that holds the backup. On Dropbox, OneDrive and Google Drive the sign-in is to Safay's app folder
-/// ("Apps › Safay", or the folder named for it in My Drive), so the backup lives at its root; a WebDAV or Nextcloud
-/// account keeps it in a `Safay` folder at the root. A Synology connection's root is the folder the user picked for it.
-fn backup_folder(connection: &Connection) -> RemotePath {
-    match (connection.provider(), connection.access_scope()) {
+/// ("Apps › Safay", or the folder named for it in My Drive), so the backup lives at its root. A Synology connection's
+/// root is the folder the user picked for it. On WebDAV and Nextcloud it is the folder the user picked (`picked`, the
+/// location's `folder`); a location set up before folders could be picked keeps a `Safay` folder at the top.
+fn backup_folder(connection: &Connection, picked: Option<&str>) -> Result<RemotePath, SyncError> {
+    Ok(match (connection.provider(), connection.access_scope()) {
         (ProviderKind::Synology, _) | (_, Some(cloudset::AccessScope::AppFolder)) => RemotePath::root(),
-        _ => RemotePath::parse(DEFAULT_FOLDER).expect("static path"),
-    }
+        // Never the top instead of a folder that no longer parses.
+        _ => match picked {
+            Some(folder) => RemotePath::parse(folder).map_err(|_| SyncError::FolderUnavailable)?,
+            None => RemotePath::parse(DEFAULT_FOLDER).expect("static path"),
+        },
+    })
 }
 fn path(folder: &RemotePath, name: &str) -> RemotePath {
     folder.join(name).expect("static file name")
@@ -287,7 +294,7 @@ impl Backend for CloudBackend {
         };
         let result = match upload() {
             Err(SyncError::NoRemote) => {
-                let folder = backup_folder(client.connection());
+                let folder = backup_folder(client.connection(), self.folder.as_deref())?;
                 if folder.is_root() {
                     return Err(SyncError::NoRemote);
                 }
@@ -346,6 +353,11 @@ pub fn take(credential: &str) -> Option<Zeroizing<Vec<u8>>> {
 /// Checks and stores a connection kept from an earlier sign-in, as [`connect`] does for a new one.
 pub fn reconnect(connection: &[u8]) -> Result<crate::sync::Location, SyncError> {
     connect(Connection::from_bytes(connection).map_err(map_error)?)
+}
+/// A connection kept from an earlier sign-in, held in memory again to pick a folder on ([`list_folder`]); nothing is
+/// stored.
+pub fn held(connection: &[u8]) -> Result<Connection, SyncError> {
+    Connection::from_bytes(connection).map_err(map_error)
 }
 
 /// The cloud sign-ins made during first-run restore, one per service, so choosing the service again needs no new
@@ -431,7 +443,11 @@ pub fn endpoint(address: &str, allow_http: bool) -> Result<cloudset::Endpoint, A
 }
 
 /// Checks a new connection by reading its root, then stores it under a fresh credential ID. Returns the location to link.
-pub fn connect(mut connection: Connection) -> Result<crate::sync::Location, SyncError> {
+pub fn connect(connection: Connection) -> Result<crate::sync::Location, SyncError> {
+    connect_in(connection, None)
+}
+/// [`connect`], the backup in `folder` (WebDAV and Nextcloud: the folder picked; `None` keeps the fixed one).
+fn connect_in(mut connection: Connection, folder: Option<RemotePath>) -> Result<crate::sync::Location, SyncError> {
     let provider = Provider::of(connection.provider()).ok_or(SyncError::Protocol)?;
     let services = services()?;
     let pin = connection.certificate_pin();
@@ -452,8 +468,14 @@ pub fn connect(mut connection: Connection) -> Result<crate::sync::Location, Sync
         },
         _ => connection.account().to_owned(),
     };
+    // The folder picked shows after the account, as a Synology NAS's does.
+    let account = match folder.as_ref().filter(|f| !f.is_root()) {
+        Some(folder) => format!("{account} › {}", folder.segments().join(" › ")),
+        None => account,
+    };
     let pinned = connection.certificate_pin().is_some();
-    Ok(crate::sync::Location::Cloud { provider, account, credential, pinned })
+    let folder = folder.map(|f| f.segments().join("/"));
+    Ok(crate::sync::Location::Cloud { provider, account, credential, pinned, folder })
 }
 
 /// A server certificate the user confirmed (its SHA-256), for requests to `server`'s origin.
@@ -601,7 +623,7 @@ pub struct SynologyLogin {
     /// A certificate the user confirmed (`https://` addresses typed by the user only).
     pub trusted: Option<[u8; 32]>,
 }
-/// Signs in to DSM, to the whole NAS: the user picks the folder next ([`synology_list`], [`synology_use_folder`]).
+/// Signs in to DSM, to the whole NAS: the user picks the folder next ([`list_folder`], [`use_folder`]).
 /// [`SyncError::OtpRequired`]: the account uses two-step verification and needs a code (or the one given was wrong);
 /// [`SyncError::SignIn`]: wrong user name or password; [`SyncError::Forbidden`]: the account can't use File Station.
 /// The connection is kept in memory only until a folder is picked.
@@ -623,14 +645,14 @@ pub fn synology_sign_in(login: SynologyLogin) -> Result<Connection, SyncError> {
     }
 }
 
-/// A folder on the NAS while the user picks one: its subfolders, and whether it can hold the backup.
+/// A folder of the server while the user picks one: its subfolders, and whether it can hold the backup.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FolderListing {
     /// Names of the subfolders, sorted.
     pub folders: Vec<String>,
     /// A Safay backup is already here.
     pub has_backup: bool,
-    /// When that backup was last written (Unix milliseconds), if the NAS says.
+    /// When that backup was last written (Unix milliseconds), if the server says.
     pub backup_saved_ms: Option<i64>,
     /// Nothing is here but system items (names starting with `.`, `#` or `@`, such as `#recycle` and `@eaDir`).
     pub empty: bool,
@@ -651,8 +673,9 @@ fn run_held<T>(connection: &mut Connection, make: impl FnOnce(&Client) -> BoxOpe
         Ok(())
     })
 }
-/// Lists a folder of the NAS (its top level: the shared folders).
-pub fn synology_list(connection: &mut Connection, folder: &RemotePath) -> Result<FolderListing, SyncError> {
+/// Lists a folder of the server (a Synology NAS's top level: its shared folders), on a connection held while the user
+/// picks the backup's folder (WebDAV, Nextcloud, Synology). Listing the top first also checks the sign-in.
+pub fn list_folder(connection: &mut Connection, folder: &RemotePath) -> Result<FolderListing, SyncError> {
     let entries = run_held(connection, |client| client.list(folder.clone()))?;
     let system = |name: &str| name.starts_with(['.', '#', '@']);
     let name = |e: &cloudset::Entry| e.path.name().unwrap_or_default().to_owned();
@@ -666,13 +689,17 @@ pub fn synology_list(connection: &mut Connection, folder: &RemotePath) -> Result
         empty: entries.iter().all(|e| system(&name(e))),
     })
 }
-/// Creates a folder on the NAS (not at its top level: shared folders are made in DSM).
-pub fn synology_create_folder(connection: &mut Connection, folder: &RemotePath) -> Result<(), SyncError> {
+/// Creates a folder on the server (on a Synology NAS not at its top level: shared folders are made in DSM).
+pub fn create_folder(connection: &mut Connection, folder: &RemotePath) -> Result<(), SyncError> {
     run_held(connection, |client| client.create_dir(folder.clone()))
 }
-/// Uses `folder` for the backup: checks and stores the connection moved there, as [`connect`] does. The session
-/// carries over, so no new sign-in or code is needed.
-pub fn synology_use_folder(connection: Connection, folder: RemotePath) -> Result<crate::sync::Location, SyncError> {
+/// Uses `folder` for the backup: checks and stores the connection, as [`connect`] does. Synology: the connection moves
+/// there, its session carried over, so no new sign-in or code is needed (not its top level, the shared folders). WebDAV
+/// and Nextcloud: the location keeps the folder, the top included.
+pub fn use_folder(connection: Connection, folder: RemotePath) -> Result<crate::sync::Location, SyncError> {
+    if connection.provider() != ProviderKind::Synology {
+        return connect_in(connection, Some(folder));
+    }
     if folder.is_root() {
         return Err(SyncError::Forbidden);
     }

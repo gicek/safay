@@ -42,6 +42,11 @@ pub enum Location {
         credential: String,
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         pinned: bool,
+        /// WebDAV and Nextcloud: the folder the user picked for the backup, as `/`-separated segments from the top of the
+        /// account (empty: the top itself). `None` for the services whose folder is fixed, and for a location set up
+        /// before folders could be picked, which keeps its `Safay` folder ([`crate::cloud`]'s `backup_folder`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        folder: Option<String>,
     },
     /// The CloudKit private database (`crate::icloud`), with the iCloud account at link time (an opaque per-container
     /// user ID). If the device switches accounts, syncing stops until iCloud is chosen again.
@@ -79,7 +84,7 @@ impl Location {
     pub fn backend(&self) -> Box<dyn Backend> {
         match self {
             Location::Folder { path } => Box::new(FolderBackend { folder: path.clone() }),
-            Location::Cloud { credential, .. } => Box::new(crate::cloud::CloudBackend::new(credential.clone())),
+            Location::Cloud { credential, folder, .. } => Box::new(crate::cloud::CloudBackend::new(credential.clone(), folder.clone())),
             Location::ICloud { account } => Box::new(crate::icloud::ICloudBackend::new(account.clone())),
         }
     }

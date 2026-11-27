@@ -122,7 +122,7 @@ fn setup(s: Store, provider: Provider, close: impl Fn() + Copy + 'static) -> imp
                     })
                 })
                 .otherwise(move || {
-                    // Picking a Synology folder: the button uses the folder shown.
+                    // Picking a folder (WebDAV, Nextcloud, Synology): the button uses the folder shown.
                     when(
                         move || s.folder_browser.with(|b| b.open),
                         move || {
@@ -132,7 +132,7 @@ fn setup(s: Store, provider: Provider, close: impl Fn() + Copy + 'static) -> imp
                                 move || s.folder_browser.with(|b| b.working),
                             )
                             .test_id("use-folder")
-                            .on_press(move || s.use_synology_folder())
+                            .on_press(move || s.use_folder())
                         },
                     )
                     .otherwise(move || {
@@ -180,6 +180,9 @@ fn pairing(s: Store, provider: Provider) -> impl IntoElement {
         )
         .child(
             ui::title(text(move || {
+                if let Some(title) = crate::pages::backup::folder_step_title(s) {
+                    return title;
+                }
                 s.label(match provider {
                     Provider::Webdav => "Connect to your own server or NAS",
                     Provider::Synology => "Sign in to your Synology NAS",
@@ -402,7 +405,7 @@ fn server_body(s: Store, provider: Provider, go: impl Fn() + Copy + 'static) -> 
         ))
 }
 
-/// Picking the Synology folder for the backup: the folder's path with up and New Folder, its subfolders, and what it
+/// Picking the folder for the backup (WebDAV, Nextcloud, Synology): the folder's path with up and New Folder, its subfolders, and what it
 /// means for the backup.
 fn folder_browser(s: Store) -> impl IntoElement {
     use crate::pages::backup::{backup_saved, folder_hint, folder_title};
@@ -430,7 +433,7 @@ fn folder_browser(s: Store) -> impl IntoElement {
             None => view().h(px(96.0)).items_center().justify_center().child(crate::components::spinner(20.0)).into_element(),
             Some(folders) if folders.is_empty() && backup.is_some() => found().into_element(),
             Some(folders) if folders.is_empty() => view()
-                .h(px(96.0))
+                .h(px(64.0))
                 .items_center()
                 .justify_center()
                 .child(ui::dim(ui::body(text(move || s.label("No folders")))))
@@ -450,7 +453,7 @@ fn folder_browser(s: Store) -> impl IntoElement {
                         .gap(px(16.0))
                         .px(px(16.0))
                         .h(px(56.0))
-                        .on_press(move || s.open_synology_folder(name.clone()))
+                        .on_press(move || s.open_folder(name.clone()))
                         .child(view().text_color(move || theme().primary).child(icon(Icon::FolderFill).size(px(22.0))))
                         .child(ui::body_large(text(label)).flex_1().number_of_lines(1))
                         .child(view().text_color(move || theme().muted_foreground).child(icon(Icon::ChevronRight).size(px(16.0))))
@@ -466,62 +469,150 @@ fn folder_browser(s: Store) -> impl IntoElement {
                 .flex_row()
                 .items_center()
                 .gap(px(4.0))
-                .child(
-                    ui::icon_button(move || s.label("Back"), || Icon::ChevronLeft).disabled(busy).on_press(move || s.synology_folder_up()),
-                )
+                .child(ui::icon_button(move || s.label("Back"), || Icon::ChevronLeft).disabled(busy).on_press(move || s.folder_up()))
                 .child(ui::title(text(move || folder_title(s))).flex_1().number_of_lines(1))
                 .child(when(
                     move || crate::pages::backup::can_create_folder(s),
                     move || {
                         ui::icon_button(move || s.label("New Folder"), || Icon::FolderPlus)
-                            .disabled(move || busy() || s.folder_browser.with(|b| b.at_top() || b.new_folder.is_some()))
-                            .on_press(move || s.start_synology_folder())
+                            .disabled(move || busy() || s.folder_browser.with(|b| b.in_shares() || b.new_folder.is_some()))
+                            .on_press(move || s.start_folder())
                     },
                 )),
         )
-        .child(when(
-            move || s.folder_browser.with(|b| b.new_folder.is_some()),
-            move || {
-                view()
-                    .gap(px(8.0))
-                    .child(ui::field(
-                        s,
-                        "new-folder",
-                        Entry::Text,
-                        move || s.label("Folder Name"),
-                        move || s.folder_browser.with(|b| b.new_folder.clone().unwrap_or_default()),
-                        move |v| s.folder_browser.update(|b| b.new_folder = Some(v.to_owned())),
-                        move || s.create_synology_folder(),
-                        |_| {},
-                        || false,
-                        ReturnKeyType::Done,
-                        None,
-                    ))
-                    .child(
-                        view()
-                            .flex_row()
-                            .justify_end()
-                            .gap(px(4.0))
-                            .child(
-                                ui::text_button(move || s.label("Cancel"), false)
-                                    .on_press(move || s.folder_browser.update(|b| b.new_folder = None)),
-                            )
-                            .child(ui::text_button(move || s.label("Create"), true).on_press(move || s.create_synology_folder())),
-                    )
-            },
-        ))
         .child(view().rounded(px(24.0)).bg(move || theme().secondary).overflow_hidden().child(dynamic(rows)))
         .child(when(
             move || folder_hint(s).is_some(),
             move || ui::dim(ui::caption(text(move || folder_hint(s).map(|(_, t)| t).unwrap_or_default()))).px(px(16.0)),
         ))
+        // While a new folder is named, its dialog says what went wrong.
         .child(when(
-            move || s.folder_browser.with(|b| b.error.is_some()),
+            move || s.folder_browser.with(|b| b.error.is_some() && b.new_folder.is_none()),
             move || {
                 ui::body(text(move || s.folder_browser.with(|b| b.error.clone().unwrap_or_default())))
                     .text_color(move || theme().destructive)
             },
         ))
+}
+
+/// A new folder's name, in the folder shown (`folder_browser.new_folder` while it is asked for): iOS, the system's alert
+/// with a text field; Android, a dialog. Over the whole interface, not inside the setup sheet, as the other dialogs are.
+/// A name the server refuses asks again, saying why; once made, the new folder opens.
+pub fn new_folder(s: Store) -> AnyElement {
+    if ui::IOS {
+        system_new_folder(s);
+        return view().into_element();
+    }
+    when(move || s.folder_browser.with(|b| b.new_folder.is_some()), move || drawn_new_folder(s)).into_element()
+}
+fn system_new_folder(s: Store) {
+    // An alert is up; a name is being made (no alert until it is refused, an error, or the folder opens).
+    let asking = stored(false);
+    let saving = stored(false);
+    effect(move || {
+        let (name, error) = s.folder_browser.with(|b| (b.new_folder.clone(), b.error.clone()));
+        let Some(name) = name else {
+            saving.replace(false);
+            return;
+        };
+        if asking.get() {
+            return;
+        }
+        if saving.get() {
+            if error.is_none() {
+                return;
+            }
+            saving.replace(false);
+        }
+        asking.replace(true);
+        untracked(move || {
+            let mut alert = nsh_base::alert_dialog()
+                .title(s.label("New Folder"))
+                .input(
+                    nsh_base::AlertDialogInput::new()
+                        .default_value(name)
+                        .placeholder(s.label("Folder Name"))
+                        .select_text_on_focus(true)
+                        .required(true),
+                )
+                .cancel("cancel", s.label("Cancel"))
+                .action("create", s.label("Create"));
+            if let Some(error) = error {
+                alert = alert.description(error);
+            }
+            let answer = alert.show();
+            s.task(async move {
+                let reply = answer.await.ok();
+                asking.replace(false);
+                match reply.and_then(|r| if r.action.as_deref() == Some("create") { r.value } else { None }) {
+                    Some(name) => {
+                        saving.replace(true);
+                        s.folder_browser.update(|b| {
+                            b.new_folder = Some(name.to_string());
+                            b.error = None;
+                        });
+                        s.create_folder();
+                    }
+                    None => s.folder_browser.update(|b| {
+                        b.new_folder = None;
+                        b.error = None;
+                    }),
+                }
+            });
+        });
+    });
+}
+fn drawn_new_folder(s: Store) -> impl IntoElement {
+    let blank = move || s.folder_browser.with(|b| b.new_folder.as_deref().is_none_or(|n| n.trim().is_empty()));
+    let busy = move || s.folder_browser.with(|b| b.working);
+    let submit = move || {
+        if !blank() && !busy() {
+            s.create_folder()
+        }
+    };
+    let cancel = move || {
+        dismiss_keyboard();
+        s.folder_browser.update(|b| {
+            b.new_folder = None;
+            b.error = None;
+        })
+    };
+    // Its one field takes the keyboard at once, as the system's alert with a text field does.
+    let field = element_ref();
+    request_animation_frame(move |_| field.focus());
+    ui::dialog(
+        move || s.label("New Folder"),
+        move || {
+            view()
+                .gap(px(8.0))
+                .child(ui::field(
+                    s,
+                    "new-folder",
+                    Entry::Text,
+                    move || s.label("Folder Name"),
+                    move || s.folder_browser.with(|b| b.new_folder.clone().unwrap_or_default()),
+                    move |v| {
+                        s.folder_browser.update(|b| {
+                            b.new_folder = Some(v.to_owned());
+                            b.error = None;
+                        })
+                    },
+                    submit,
+                    |_| {},
+                    move || s.folder_browser.with(|b| b.error.is_some()),
+                    ReturnKeyType::Done,
+                    Some(field),
+                ))
+                .child(ui::field_note(move || s.folder_browser.with(|b| b.error.clone()), || true))
+        },
+        ui::dialog_actions(false).child(ui::dialog_action(move || s.label("Cancel"), ui::Act::Cancel).on_press(cancel)).child(
+            ui::dialog_action(move || s.label("Create"), ui::Act::Default)
+                .test_id("create-folder")
+                .disabled(move || blank() || busy())
+                .on_press(submit),
+        ),
+        cancel,
+    )
 }
 
 fn insecure(s: Store) -> impl IntoElement {

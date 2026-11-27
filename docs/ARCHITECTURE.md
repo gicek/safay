@@ -66,16 +66,19 @@ so a development build never touches a release build's data:
 
 Exports are encrypted files of the same format with their own salt, marked `"app": "safay"`. A backup location holds
 `vault.safayvault` (the vault as is) and `vault.metadata.json` (device name and time): in a `Safay` folder inside the
-chosen folder or the WebDAV and Nextcloud account, in the folder picked on a Synology NAS, and at the root of Safay's
-app folder on Dropbox, OneDrive and Google Drive ("Apps › Safay", or the folder named for it in My Drive). iCloud keeps
-them in one CloudKit record.
+chosen folder, in the folder picked on a WebDAV server, a Nextcloud account or a Synology NAS (a WebDAV or Nextcloud
+location set up before folders could be picked keeps a `Safay` folder at the top of the account), and at the root of
+Safay's app folder on Dropbox, OneDrive and Google Drive ("Apps › Safay", or the folder named for it in My Drive).
+iCloud keeps them in one CloudKit record.
 
-A Synology sign-in reaches the whole NAS (`cloud::synology_sign_in`) and stays in memory while the user picks a folder
-inside a shared folder: an empty one or one with a Safay backup when backing up, one with a backup when restoring. The
-connection then moves to that folder (`Connection::with_root_folder`, keeping the session) and is stored like any
-other. Until then the sign-in outlives the sheet, so choosing Synology again returns to the folders; choosing another
-service, linking another location, creating the vault on first run, going back to the sign-in form or locking signs
-it out.
+A WebDAV, Nextcloud or Synology sign-in stays in memory while the user picks the backup's folder (`cloud::list_folder`,
+`cloud::create_folder`): an empty one or one with a Safay backup when backing up, one with a backup when restoring; on
+a NAS inside a shared folder (its sign-in, `cloud::synology_sign_in`, reaches the whole NAS). `cloud::use_folder` then
+stores the connection: a Synology connection moves to that folder (`Connection::with_root_folder`, keeping the
+session); a WebDAV or Nextcloud location keeps the folder itself (`Location::Cloud`'s `folder`). Until then the sign-in
+outlives the sheet, so choosing the service again returns to the folders; choosing another service, linking another
+location, creating the vault on first run, going back to the sign-in form or locking signs it out (a sign-in kept from
+earlier in a first-run restore stays kept).
 
 ## Backup and sync
 

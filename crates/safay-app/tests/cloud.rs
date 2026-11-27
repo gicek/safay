@@ -107,7 +107,7 @@ impl Device {
 }
 
 fn location() -> Location {
-    Location::Cloud { provider: Provider::Webdav, account: "alice".into(), credential: "test-webdav".into(), pinned: false }
+    Location::Cloud { provider: Provider::Webdav, account: "alice".into(), credential: "test-webdav".into(), pinned: false, folder: None }
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn webdav_backup_restore_conflict_and_failures() {
     use safay_app::sync::{Backend, Expect};
     let meta = safay_app::core::backup::BackupMetadata { device_name: "Device".into(), vault_updated_at: UNIX_EPOCH, saved_at: UNIX_EPOCH };
     let data = vec![0; safay_app::storage::MAX_FILE_BYTES as usize + 1];
-    let backend = cloud::CloudBackend::new("missing".into());
+    let backend = cloud::CloudBackend::new("missing".into(), None);
     assert_eq!(backend.write(&data, &meta, &Expect::Any), Err(SyncError::TooLarge));
     assert!(server.dav.lock().unwrap().requests.is_empty());
 
@@ -203,7 +203,7 @@ fn webdav_backup_restore_conflict_and_failures() {
     // Pad a real encrypted JSON envelope with legal trailing whitespace to exercise the exact restore boundary.
     let mut boundary = stored;
     boundary.resize(safay_app::storage::MAX_FILE_BYTES as usize, b' ');
-    let backend = cloud::CloudBackend::new(credential.clone());
+    let backend = cloud::CloudBackend::new(credential.clone(), None);
     let version = backend.write(&boundary, &meta, &Expect::Any).unwrap();
     let restored = backend.read().unwrap().unwrap();
     assert!(version.is_some() && version == restored.version);

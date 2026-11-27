@@ -145,9 +145,9 @@ fn footer(s: Store) -> impl IntoElement {
                     })
                     .on_press(move || {
                         s.status.set(None);
-                        // Picking a Synology folder: back to the sign-in form, as typed.
+                        // Picking a folder: back to the sign-in form, as typed.
                         if s.folder_browser.with(|b| b.open) {
-                            s.release_synology();
+                            s.release_held();
                         } else if s.cloud_restore.get() {
                             // Opened from the first-run restore page: back closes the sheet.
                             s.close_sheet();
@@ -193,7 +193,7 @@ fn footer(s: Store) -> impl IntoElement {
             move || {
                 push_button(move || s.label("Use This Folder"), Kind::Primary, false)
                     .disabled(move || !folder_usable(s))
-                    .on_press(move || s.use_synology_folder())
+                    .on_press(move || s.use_folder())
             },
         ))
         .child(when(
@@ -805,6 +805,9 @@ fn pairing_header(s: Store, provider: Provider) -> impl IntoElement {
                 .gap(px(3.0))
                 .child(
                     text(move || {
+                        if let Some(title) = folder_step_title(s) {
+                            return title;
+                        }
                         s.label(match provider {
                             Provider::Webdav => "Connect to your own server or NAS",
                             Provider::Synology => "Sign in to your Synology NAS",
@@ -987,7 +990,7 @@ fn server_setup(s: Store, provider: Provider) -> impl IntoElement {
         .gap(px(18.0))
         .child(pairing_header(s, provider))
         // Once connecting, the form gives way to the steps (they become progress); Nextcloud signs in in the browser, and
-        // Synology goes on to its folders.
+        // the servers go on to their folders.
         .child(when(move || s.folder_browser.with(|b| b.open), move || folder_browser(s)).otherwise(move || {
             when(
                 move || s.cloud_form.with(|f| f.working),
@@ -1000,9 +1003,11 @@ fn server_setup(s: Store, provider: Provider) -> impl IntoElement {
                     } else if provider == Provider::Synology {
                         steps.push(Box::new(move || s.label("Find your NAS")));
                         steps.push(Box::new(move || s.label("Sign in to your NAS")));
-                        steps.push(Box::new(move || s.label("Choose a folder")));
                     } else {
                         steps.push(Box::new(move || s.label("Sign in to your server")));
+                    }
+                    if provider.has_server() {
+                        steps.push(Box::new(move || s.label("Choose a folder")));
                     }
                     let last = steps.len() + 1;
                     steps.push(Box::new(move || {
@@ -1142,11 +1147,11 @@ fn otp_field(s: Store) -> impl IntoElement {
                 .text_color(move || theme().muted_foreground),
         )
 }
-/// Whether the folder shown can take the backup: inside a shared folder, and empty or holding a Safay backup (restoring:
-/// holding one).
+/// Whether the folder shown can take the backup: empty or holding a Safay backup (restoring: holding one), and on a NAS
+/// inside a shared folder.
 pub(crate) fn folder_usable(s: Store) -> bool {
     s.folder_browser.with(|b| {
-        !b.at_top() && !b.working && b.listing.as_ref().is_some_and(|l| if s.cloud_restore.get() { l.has_backup } else { l.usable() })
+        !b.in_shares() && !b.working && b.listing.as_ref().is_some_and(|l| if s.cloud_restore.get() { l.has_backup } else { l.usable() })
     })
 }
 /// What the folder shown means for the backup, under the list.
@@ -1154,7 +1159,7 @@ pub(crate) fn folder_hint(s: Store) -> Option<(bool, SharedString)> {
     s.folder_browser.with(|b| {
         let listing = b.listing.as_ref()?;
         let restore = s.cloud_restore.get();
-        Some(if b.at_top() {
+        Some(if b.in_shares() {
             (false, s.label("Open a shared folder, then choose the folder for the backup."))
         } else if listing.has_backup {
             (
@@ -1165,26 +1170,39 @@ pub(crate) fn folder_hint(s: Store) -> Option<(bool, SharedString)> {
             (false, s.label("There’s no Safay backup in this folder."))
         } else if listing.empty {
             (true, s.label("Safay backs up to this folder."))
+        } else if listing.folders.is_empty() {
+            // "No folders" above, yet not empty: it holds files.
+            (false, s.label("This folder has other files in it. Choose an empty folder, or create one here."))
         } else {
             (false, s.label("This folder isn’t empty. Choose an empty folder, or create one here."))
         })
     })
+}
+/// While a folder is picked, the setup's title says so instead of the sign-in it was.
+pub(crate) fn folder_step_title(s: Store) -> Option<SharedString> {
+    s.folder_browser
+        .with(|b| b.open)
+        .then(|| s.label(if s.cloud_restore.get() { "Choose the folder with your backup" } else { "Choose a folder for your backup" }))
 }
 /// Whether New Folder is offered: not where a backup was found (that is the folder to use), and not while restoring,
 /// which only reads.
 pub(crate) fn can_create_folder(s: Store) -> bool {
     !s.cloud_restore.get() && !s.folder_browser.with(|b| b.listing.as_ref().is_some_and(|l| l.has_backup))
 }
-/// When the backup in the folder shown was saved: "Saved …", or nothing when the NAS doesn't say.
+/// When the backup in the folder shown was saved: "Saved …", or nothing when the server doesn't say.
 pub(crate) fn backup_saved(s: Store, ms: Option<i64>) -> SharedString {
     ms.map(|ms| s.fmt("Saved {}", &[&stamp(ms)])).unwrap_or_default()
 }
-/// The folder title: "Shared Folders" at the top, else the path (`home › Safay`).
+/// The folder title: at the top, a NAS's "Shared Folders" or the server's host; else the path (`home › Safay`).
 pub(crate) fn folder_title(s: Store) -> SharedString {
-    s.folder_browser.with(|b| if b.at_top() { s.label("Shared Folders") } else { b.path.join(" › ").into() })
+    s.folder_browser.with(|b| match (b.at_top(), b.shares) {
+        (true, true) => s.label("Shared Folders"),
+        (true, false) => b.top.clone(),
+        _ => b.path.join(" › ").into(),
+    })
 }
-/// Picking the Synology folder for the backup: up, the folder's path and New Folder; its subfolders; what it means for
-/// the backup.
+/// Picking the folder for the backup (WebDAV, Nextcloud, Synology): up, the folder's path and New Folder; its
+/// subfolders; what it means for the backup.
 fn folder_browser(s: Store) -> impl IntoElement {
     let busy = move || s.folder_browser.with(|b| b.working);
     let rows = move || {
@@ -1246,7 +1264,7 @@ fn folder_browser(s: Store) -> impl IntoElement {
                         .py(px(8.0))
                         .hover(|st| st.bg(move || theme().foreground.opacity(0.05)))
                         .focus(focus_ring)
-                        .on_press(move || s.open_synology_folder(name.clone()))
+                        .on_press(move || s.open_folder(name.clone()))
                         .child(crate::icons::symbol(Icon::FolderFill, 15.0, move || tok("code-accent")))
                         .child(text(label).text_size(px(13.0)).flex_1().number_of_lines(1))
                         .child(crate::icons::symbol_weight(Icon::ChevronRight, 10.0, 0.3, move || tok("tertiary")))
@@ -1266,7 +1284,7 @@ fn folder_browser(s: Store) -> impl IntoElement {
                     icon_button(move || s.label("Back"), Icon::ChevronLeft)
                         .disabled(busy)
                         .disabled_style(|st| st.opacity(0.35))
-                        .on_press(move || s.synology_folder_up()),
+                        .on_press(move || s.folder_up()),
                 )
                 .child(
                     text(move || folder_title(s))
@@ -1281,8 +1299,8 @@ fn folder_browser(s: Store) -> impl IntoElement {
                     move || can_create_folder(s),
                     move || {
                         push_button(move || s.label("New Folder"), Kind::Standard, false)
-                            .disabled(move || busy() || s.folder_browser.with(|b| b.at_top() || b.new_folder.is_some()))
-                            .on_press(move || s.start_synology_folder())
+                            .disabled(move || busy() || s.folder_browser.with(|b| b.in_shares() || b.new_folder.is_some()))
+                            .on_press(move || s.start_folder())
                     },
                 )),
         )
@@ -1312,7 +1330,7 @@ fn folder_browser(s: Store) -> impl IntoElement {
                             .disabled(move || {
                                 busy() || s.folder_browser.with(|b| b.new_folder.as_deref().is_none_or(|n| n.trim().is_empty()))
                             })
-                            .on_press(move || s.create_synology_folder()),
+                            .on_press(move || s.create_folder()),
                     )
             },
         ))

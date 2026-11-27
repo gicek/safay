@@ -101,7 +101,7 @@ fn backups_live_at_the_root_of_the_app_folder() {
         let credentials = Arc::new(Memory::default());
         credentials.save(CREDENTIAL, &connection).unwrap();
         cloud::install(Services { http: server.clone(), credentials, user_agent: "safay-test/1".into() });
-        let location = Location::Cloud { provider, account: "alice".into(), credential: CREDENTIAL.into(), pinned: false };
+        let location = Location::Cloud { provider, account: "alice".into(), credential: CREDENTIAL.into(), pinned: false, folder: None };
 
         let clock = Arc::new(Time::default());
         let a = device_at(clock.clone());

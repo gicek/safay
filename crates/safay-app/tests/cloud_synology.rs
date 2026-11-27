@@ -108,16 +108,16 @@ fn quickconnect_sign_in_backup_and_a_moved_nas() {
     let path = |p: &str| cloudset::RemotePath::parse(p).unwrap();
     server.0.lock().unwrap().put_external("home/notes.txt", b"n");
     server.0.lock().unwrap().mkdir_external("home/#recycle");
-    let top = cloud::synology_list(&mut connection, &path("")).unwrap();
+    let top = cloud::list_folder(&mut connection, &path("")).unwrap();
     assert_eq!(top.folders, vec![SHARE.to_owned()]);
-    let home = cloud::synology_list(&mut connection, &path(SHARE)).unwrap();
+    let home = cloud::list_folder(&mut connection, &path(SHARE)).unwrap();
     assert_eq!((home.folders.is_empty(), home.empty, home.usable()), (true, false, false), "a file is there; #recycle is hidden");
-    assert_eq!(cloud::synology_create_folder(&mut connection, &path("Backups")), Err(SyncError::Forbidden), "no new shared folders");
-    cloud::synology_create_folder(&mut connection, &path("home/Safay")).unwrap();
-    let folder = cloud::synology_list(&mut connection, &path("home/Safay")).unwrap();
+    assert_eq!(cloud::create_folder(&mut connection, &path("Backups")), Err(SyncError::Forbidden), "no new shared folders");
+    cloud::create_folder(&mut connection, &path("home/Safay")).unwrap();
+    let folder = cloud::list_folder(&mut connection, &path("home/Safay")).unwrap();
     assert!(folder.empty && folder.usable() && !folder.has_backup);
-    assert_eq!(cloud::synology_use_folder(connection.clone(), path("")).err(), Some(SyncError::Forbidden));
-    let location = cloud::synology_use_folder(connection.clone(), path("home/Safay")).unwrap();
+    assert_eq!(cloud::use_folder(connection.clone(), path("")).err(), Some(SyncError::Forbidden));
+    let location = cloud::use_folder(connection.clone(), path("home/Safay")).unwrap();
     let Location::Cloud { provider, account, .. } = &location else { panic!("a cloud location") };
     assert_eq!((*provider, account.as_str()), (Provider::Synology, "alice · cloudset-nas › home/Safay"));
 
@@ -128,7 +128,7 @@ fn quickconnect_sign_in_backup_and_a_moved_nas() {
     sync::link(&a, a.epoch(), location.clone()).unwrap();
     // The first backup replaces nothing: uploaded without asking, into the folder picked.
     assert_eq!(sync::run(&a, a.epoch(), "Device", Source::Auto), Ok(Status::Synced));
-    let again = cloud::synology_list(&mut connection, &path("home/Safay")).unwrap();
+    let again = cloud::list_folder(&mut connection, &path("home/Safay")).unwrap();
     assert!(again.has_backup && again.usable() && !again.empty, "a folder with a backup can be picked again");
     assert!(server.0.lock().unwrap().data("home/Safay/vault.safayvault").is_some());
     assert!(server.0.lock().unwrap().data("home/Safay/vault.metadata.json").is_some());

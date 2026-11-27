@@ -225,6 +225,7 @@ pub fn scene(s: crate::store::Store) {
                 }
                 s.folder_browser.set(crate::store::FolderBrowser {
                     open: true,
+                    shares: true,
                     path: if found { vec!["home".into(), "Safay".into()] } else { vec!["home".into()] },
                     listing: Some(safay_app::cloud::FolderListing {
                         folders: if found { Vec::new() } else { vec!["Documents".into(), "Photos".into(), "Safay".into()] },

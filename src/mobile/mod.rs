@@ -285,6 +285,7 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
         .child(when(move || s.unlocked(), move || view().child(detail::sheet(s)).child(menus::add_to(s, nav))))
         .child(when(move || s.unlocked(), move || backup::dialogs(s, nav)))
         .child(backup::setup_sheet(s))
+        .child(backup::new_folder(s))
         .child(dialogs::all(s))
         .child(dialogs::of(s, nav))
         // Android with three-button navigation: the page scrolls under the bar, which a veil of the page's color keeps
@@ -530,7 +531,8 @@ fn toast(s: Store, lifted: impl Fn() -> bool + Copy + 'static) -> impl IntoEleme
 
 /// Development: the demo vault opens on the page, sheet or menu `SAFAY_DEMO_PAGE` names, for screenshots of each
 /// (`settings`, `categories`, `create`, `restore`, `deleted`, `manual`, `scan`, `review`, `add`, `more`, `context`, `detail`, `qr`,
-/// `add-to`, `backup`, `qr`, `fair-password`, `auto-lock`, `language`, `change-password`, `export`, `search`, `work`).
+/// `add-to`, `backup`, `qr`, `fair-password`, `auto-lock`, `language`, `change-password`, `export`, `search`, `work`,
+/// `folders` and `new-folder`: picking a WebDAV folder, one holding only files, and naming a new one there).
 /// RFC 6238's public test key in Base32 ("12345678901234567890").
 #[cfg(debug_assertions)]
 fn rfc_6238_key() -> String {
@@ -603,6 +605,24 @@ fn demo_page(s: Store, nav: Nav) {
                 "qr" => {
                     if let Some(id) = first {
                         s.reveal(crate::store::Auth::Qr(id))
+                    }
+                }
+                "folders" | "new-folder" => {
+                    s.open_cloud_setup(safay_app::cloud::Provider::Webdav);
+                    s.sheet.set(Some(crate::store::Sheet::Backup));
+                    s.folder_browser.set(crate::store::FolderBrowser {
+                        open: true,
+                        top: "nas.example.com".into(),
+                        path: vec!["Documents".into()],
+                        listing: Some(safay_app::cloud::FolderListing { empty: false, ..Default::default() }),
+                        ..Default::default()
+                    });
+                    // Named once the sheet is up, as after a press on New Folder (its dialog then comes over the sheet).
+                    if page == "new-folder" {
+                        s.task(async move {
+                            drop(blocking(|| std::thread::sleep(std::time::Duration::from_millis(1500))).await);
+                            s.start_folder();
+                        });
                     }
                 }
                 "work" => {

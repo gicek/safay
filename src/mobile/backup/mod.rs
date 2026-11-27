@@ -55,7 +55,7 @@ mod conflict;
 mod location;
 mod restore;
 
-pub use cloud::setup_sheet;
+pub use cloud::{new_folder, setup_sheet};
 pub use conflict::conflict;
 pub use location::{dialogs, location};
 pub use restore::{restore_back, restore_page, restoring};
