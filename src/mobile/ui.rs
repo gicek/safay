@@ -34,8 +34,9 @@ pub const BAR: f32 = if IOS { 52.0 } else { 56.0 };
 pub const FAB: f32 = if IOS { 52.0 } else { 56.0 };
 /// Room under a list for the floating button over its end: the button, its margins and some air.
 pub const FAB_CLEARANCE: f32 = 120.0;
-/// A list's rows: an account, a category.
-pub const ROW: f32 = if IOS { 68.0 } else { 72.0 };
+/// A list's rows: an account, a category. The account row's own height (its names, 14 pt above and below), so the list's
+/// estimate is its measure: a row measured taller than estimated moves the rows after it as the list scrolls.
+pub const ROW: f32 = if IOS { 70.0 } else { 72.0 };
 /// Where a hairline between two rows of a group starts on iOS: under the text, past a row's leading tile.
 pub const TILE_INSET: f32 = 16.0 + 30.0 + 14.0;
 /// From this window width on (a tablet, a phone's window made wide), the list shows its categories in a sidebar beside

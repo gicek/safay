@@ -32,7 +32,7 @@ endif
 
 .PHONY: help all ci build build-release run preview fmt fmt-check lint nsh-features raycast check test test-ui test-native screenshots \
 	package package-adhoc package-release open icloud-check release release-android update-keygen nsh-ready nsh-install nsh-update audit clean clean-all \
-	android android-run ios-simulator ios-simulator-run site site-shots site-serve site-deploy
+	android android-run ios ios-run ios-simulator ios-simulator-run site site-shots site-serve site-deploy
 
 help: ## List the targets
 	@echo "$(NAME) $(VERSION) ($(BUILD)) build commands"
@@ -159,6 +159,12 @@ android: nsh-ready build/android/java/classes.dex ## Development APK in build/an
 android-run: android ## Install it on the running emulator or the connected device, and start it
 	adb install -r "build/android/debug/$(NAME).apk"
 	adb shell monkey -p $(ID).debug -c android.intent.category.LAUNCHER 1
+
+ios: nsh-ready ## Development app for iOS devices in build/ios/debug, signed with local.toml's identity and [ios] profile
+	$(PYTHON) scripts/ios.py
+
+ios-run: nsh-ready ## Build it, then install and start it on the connected iPhone or iPad
+	$(PYTHON) scripts/ios.py --run
 
 ios-simulator: nsh-ready ## Development app for the iOS simulator in build/ios-simulator/debug (needs Xcode)
 	$(NSH) package --target ios-simulator --id $(ID).debug --icon assets/ios/icon.png --out build/ios-simulator/debug

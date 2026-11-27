@@ -32,7 +32,15 @@ pub fn setup_sheet(s: Store) -> impl IntoElement {
         .child(ui::bottom_sheet(
             move || connecting(s).is_some(),
             close,
-            move || dynamic(move || connecting(s).map(|p| setup(s, p, close).into_element())).into_element(),
+            // iOS: a column the system's sheet fills, so the setup inside it can fill it in turn and scroll.
+            move || {
+                view()
+                    .flex_grow(if cfg!(target_os = "ios") { 1.0 } else { 0.0 })
+                    .flex_shrink(1.0)
+                    .min_h(px(0.0))
+                    .child(dynamic(move || connecting(s).map(|p| setup(s, p, close).into_element())))
+                    .into_element()
+            },
         ))
         .child(when(move || s.cloud_form.with(|f| f.needs_consent) && connecting(s).is_some(), move || insecure(s)))
         .child(when(move || s.cloud_form.with(|f| f.untrusted.is_some()) && connecting(s).is_some(), move || certificate(s)))
@@ -53,6 +61,11 @@ fn setup(s: Store, provider: Provider, close: impl Fn() + Copy + 'static) -> imp
     // The title row (48), and the action under the scroll view (12 above a 56 pt button, 12 below it).
     const CHROME: f32 = 48.0 + 12.0 + 56.0 + 12.0;
     view()
+        // iOS: the system's sheet sizes itself; this fills it, so the scroll view below takes what the title and the
+        // action leave and scrolls (a long list of a NAS's folders). Sized by its content, it would run past the sheet.
+        .flex_grow(if cfg!(target_os = "ios") { 1.0 } else { 0.0 })
+        .flex_shrink(1.0)
+        .min_h(px(0.0))
         .pb(move || ui::sheet_bottom(12.0))
         .child(
             view()
@@ -75,6 +88,8 @@ fn setup(s: Store, provider: Provider, close: impl Fn() + Copy + 'static) -> imp
             scroll()
                 .max_h(move || ui::sheet_room(CHROME))
                 .flex_grow(if cfg!(target_os = "ios") { 1.0 } else { 0.0 })
+                .flex_shrink(1.0)
+                .min_h(px(0.0))
                 .keyboard_dismiss_mode(KeyboardDismissMode::None)
                 .keyboard_taps(KeyboardTaps::Handled)
                 .child(

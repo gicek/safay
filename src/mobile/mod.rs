@@ -368,14 +368,20 @@ fn native_stack(s: Store, nav: Nav) -> impl IntoElement {
                 // leading item would sit on glass, as a button does).
                 .title("Safay")
                 .header_title(
-                    view().w(move || window().width).child(
-                        text("Safay")
-                            .text_size(px(28.0))
-                            .line_height(px(34.0))
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(move || theme().foreground)
-                            .number_of_lines(1),
-                    ),
+                    // Narrowed to a letter: the bar's title is the letter's capsule alone, which UIKit centers in the bar
+                    // (`home::letter_chip`); a view as wide as the window is laid at the bar's start instead.
+                    view().child(when(move || nav.letter.get().is_some(), move || home::letter_chip(s, nav).into_element()).otherwise(
+                        move || {
+                            view().w(move || window().width).child(
+                                text("Safay")
+                                    .text_size(px(28.0))
+                                    .line_height(px(34.0))
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(move || theme().foreground)
+                                    .number_of_lines(1),
+                            )
+                        },
+                    )),
                 )
                 .header_shadow_visible(false)
                 .header_right_items(move || home::header_items(s, nav))
@@ -488,7 +494,14 @@ fn toast(s: Store, lifted: impl Fn() -> bool + Copy + 'static) -> impl IntoEleme
                         .items_center()
                         .gap(px(8.0))
                         .rounded(px(if ui::IOS { 22.0 } else { 8.0 }))
-                        .bg(move || tok("glass"))
+                        // iOS: Liquid Glass tinted with the alerts' surface, frosted enough to read over the codes under it.
+                        .bg(move || if ui::IOS && cfg!(target_os = "ios") { tok("glass").opacity(0.0) } else { tok("glass") })
+                        .glass_effect(if ui::IOS && cfg!(target_os = "ios") {
+                            nsh_core::GlassEffect::Regular
+                        } else {
+                            nsh_core::GlassEffect::None
+                        })
+                        .glass_tint_color(move || (ui::IOS && cfg!(target_os = "ios")).then(|| tok("popover").opacity(0.9)))
                         .shadow_lg()
                         .pointer_events(move || if undoable() { nsh_core::PointerEvents::Auto } else { nsh_core::PointerEvents::None })
                         .child(

@@ -31,9 +31,44 @@ pub fn location(s: Store, nav: Nav) -> impl IntoElement {
             in_setup.replace(false);
         }
     });
-    let rows: Vec<AnyElement> = providers()
+    // iOS: iCloud first, as the system's own, in a build signed with the iCloud entitlement (elsewhere it is not listed:
+    // there is nothing to set up on a phone that could make it work).
+    let icloud_row = (crate::platform::supports::ICLOUD && safay_app::icloud::available()).then(|| {
+        let linked = move || s.icloud_linked();
+        button()
+            .test_id("iCloud")
+            .accessibility_label(|| Some(SharedString::from("iCloud")))
+            .min_h(move || px(ui::ROW) * font_scale())
+            .px(px(16.0))
+            .flex_row()
+            .items_center()
+            .gap(px(16.0))
+            .bg(move || theme().card)
+            .active(|st| st.bg(move || if ui::IOS { tok("pressed") } else { tok("surface-high") }))
+            .disabled(move || s.syncing.get())
+            // Nothing to set up: it links at once, and settings' backup card shows how that goes.
+            .on_press(move || {
+                if !linked() {
+                    s.link_icloud();
+                }
+                nav.pop();
+            })
+            .child(plate(LocationIcon::Icloud))
+            .child(
+                view()
+                    .flex_1()
+                    .min_w(px(0.0))
+                    .child(ui::body_large(text("iCloud")))
+                    .child(ui::dim(ui::caption(text(move || s.label("Private to your Apple Account"))))),
+            )
+            .child(
+                when(linked, || view().text_color(move || theme().primary).child(icon(Icon::Check).size(px(24.0)))).otherwise(ui::chevron),
+            )
+            .into_element()
+    });
+    let rows: Vec<AnyElement> = icloud_row
         .into_iter()
-        .map(move |provider| {
+        .chain(providers().into_iter().map(move |provider| {
             button()
                 .test_id(provider.name())
                 .accessibility_label(move || Some(SharedString::from(provider.name())))
@@ -55,7 +90,7 @@ pub fn location(s: Store, nav: Nav) -> impl IntoElement {
                     .otherwise(ui::chevron),
                 )
                 .into_element()
-        })
+        }))
         .collect();
     view().flex_1().pt(ui::page_top).child(ui::top_bar(s, Some("Choose Location"), move || nav.pop())).child(
         scroll().flex_1().child(

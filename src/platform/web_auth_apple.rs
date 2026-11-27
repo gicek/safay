@@ -1,13 +1,14 @@
-//! macOS sign-in for the OAuth backup services (Dropbox, OneDrive, Google Drive): an
-//! `ASWebAuthenticationSession` opens the provider's page and hands back the callback URL for its registered scheme
-//! itself, so no URL scheme is registered with the system.
-//! NSH has no web authentication API.
-use nsh_platform_macos::{
-    objc2::{AllocAnyThread, MainThreadMarker, MainThreadOnly, define_class, msg_send, rc::Retained, runtime::ProtocolObject},
-    objc2_app_kit::{NSApplication, NSWindow},
-    objc2_foundation::{NSError, NSObject, NSObjectProtocol, NSString, NSURL},
-};
+//! Sign-in for the OAuth backup services (Dropbox, OneDrive, Google Drive) on macOS, and on iOS where NSH's session
+//! refuses the callback scheme (Google's, longer than its `MAX_SCHEME_LEN`): an `ASWebAuthenticationSession` opens
+//! the provider's page and hands back the callback URL for its registered scheme itself, so no URL scheme is
+//! registered with the system. NSH's web sign-in session is the same on iOS, short schemes only.
+use objc2::{AllocAnyThread, MainThreadMarker, MainThreadOnly, define_class, msg_send, rc::Retained, runtime::ProtocolObject};
+#[cfg(target_os = "macos")]
+use objc2_app_kit::{NSApplication, NSWindow};
 use objc2_authentication_services::{ASWebAuthenticationPresentationContextProviding, ASWebAuthenticationSession};
+use objc2_foundation::{NSError, NSObject, NSObjectProtocol, NSString, NSURL};
+#[cfg(target_os = "ios")]
+use objc2_ui_kit::{UIApplication, UISceneActivationState, UIWindow, UIWindowScene};
 use std::{cell::RefCell, sync::mpsc};
 
 define_class!(
@@ -17,6 +18,18 @@ define_class!(
     struct Anchor;
     unsafe impl NSObjectProtocol for Anchor {}
     unsafe impl ASWebAuthenticationPresentationContextProviding for Anchor {
+        #[cfg(target_os = "ios")]
+        #[unsafe(method_id(presentationAnchorForWebAuthenticationSession:))]
+        fn anchor(&self, _session: &ASWebAuthenticationSession) -> Retained<UIWindow> {
+            // The key window of the scene in front.
+            let app = UIApplication::sharedApplication(self.mtm());
+            let scenes: Vec<_> = app.connectedScenes().iter().filter_map(|s| s.downcast::<UIWindowScene>().ok()).collect();
+            let active = scenes.iter().find(|s| s.activationState() == UISceneActivationState::ForegroundActive).or(scenes.first());
+            active
+                .and_then(|s| s.windows().iter().find(|w| w.isKeyWindow()).or_else(|| s.windows().firstObject()))
+                .expect("a window to present sign-in from")
+        }
+        #[cfg(target_os = "macos")]
         #[unsafe(method_id(presentationAnchorForWebAuthenticationSession:))]
         fn anchor(&self, _session: &ASWebAuthenticationSession) -> Retained<NSWindow> {
             let app = NSApplication::sharedApplication(self.mtm());
@@ -43,7 +56,7 @@ pub type Outcome = mpsc::Receiver<Signed>;
 const CANCELED_LOGIN: isize = 1;
 
 /// Starts a sign-in from any thread: the session is created and started on the main thread (store actions run on
-/// the engine thread, where AppKit and AuthenticationServices must not be used).
+/// the engine thread, where AppKit, UIKit and AuthenticationServices must not be used).
 pub fn start(url: &str, callback_scheme: &str) -> Outcome {
     let (tx, rx) = mpsc::channel();
     let (url, scheme) = (url.to_owned(), callback_scheme.to_owned());
@@ -70,8 +83,8 @@ pub fn start(url: &str, callback_scheme: &str) -> Outcome {
         });
         let anchor: Retained<Anchor> = unsafe { msg_send![Anchor::alloc(mtm), init] };
         // SAFETY: the session is configured and started on the main thread; the handler and anchor outlive it in RUNNING.
-        // The scheme-based initializer: its replacement (`initWithURL:callback:completionHandler:`) needs macOS 14.4,
-        // above the app's minimum.
+        // The scheme-based initializer: its replacement (`initWithURL:callback:completionHandler:`) needs macOS 14.4 and
+        // iOS 17.4, above the app's minimums.
         #[allow(deprecated)]
         let session = unsafe {
             ASWebAuthenticationSession::initWithURL_callbackURLScheme_completionHandler(

@@ -78,12 +78,43 @@ fn open_search(nav: Nav, field: ElementRef) {
     nav.menu.set(false);
     nav.letter.set(None);
     nav.searching.set(true);
-    // From the next frame, as the field opens: the keyboard comes up with it.
+    // From the next frames, once the field is in the page (it is made as the search opens): the keyboard comes up with
+    // it.
     request_animation_frame(move |_| {
-        if nav.searching.get_untracked() {
-            field.focus()
-        }
+        request_animation_frame(move |_| {
+            if nav.searching.get_untracked() {
+                field.focus()
+            }
+        });
     });
+}
+
+/// Narrowed to a letter (`nav.letter`): a capsule in the middle of the top bar saying which, a press letting the list
+/// go. Pressing the letter again, a category, the search and Android's back do it too, but none of those shows, and
+/// iOS's list has no swipe back.
+pub fn letter_chip(s: Store, nav: Nav) -> impl IntoElement {
+    let letter = move || nav.letter.get().map(|l| l.to_string()).unwrap_or_default();
+    when(
+        move || nav.letter.get().is_some(),
+        move || {
+            nsh_base::button()
+                .test_id("letter-clear")
+                .accessibility_label(move || Some(s.fmt("Show all, not only “{}”", &[&letter()])))
+                .flex_row()
+                .items_center()
+                .gap(px(4.0))
+                .h(px(32.0))
+                .pl(px(14.0))
+                .pr(px(8.0))
+                .rounded_full()
+                .bg(move || tok("primary-container"))
+                .text_color(move || tok("primary-container-foreground"))
+                .active(|st| st.opacity(0.7))
+                .on_press(move || nav.letter.set(None))
+                .child(ui::label(text(move || s.fmt("Initial “{}”", &[&letter()]))).number_of_lines(1))
+                .child(icon(Icon::Close).size(px(16.0)))
+        },
+    )
 }
 
 /// The bar at the top: the app's name (in a wide window the section's: "All" or the category), the add button and the
@@ -113,6 +144,16 @@ fn header(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
         } else {
             ui::title_large(text(name)).flex_1().into_element()
         })
+        // In the bar's middle, over the title's room.
+        .child(
+            view()
+                .absolute()
+                .left(px(0.0))
+                .right(px(0.0))
+                .items_center()
+                .pointer_events(nsh_core::PointerEvents::BoxNone)
+                .child(letter_chip(s, nav)),
+        )
         .child(ui::bar_button(move || s.label("Add Account"), || Icon::Plus).test_id("add").on_press(move || {
             dismiss_keyboard();
             nav.menu.set(false);
@@ -168,7 +209,10 @@ fn search(s: Store, nav: Nav) -> impl IntoElement {
                 .ease_out()
                 .on_press(move |_: &()| field.focus())
                 .child(view().pl(px(16.0)).text_color(move || theme().muted_foreground).child(icon(Icon::Search).size(px(22.0))))
-                .child(
+                // Only while the search is open: a text field left in the page, even out of sight, is one UIKit gives
+                // the focus back to as one of its menus (a long press, "+", a setting's choices) opens or closes, and
+                // the keyboard would come up with it.
+                .child(when(open, move || {
                     ui::themed_input(input())
                         .element_ref(&field)
                         .test_id("search")
@@ -189,8 +233,8 @@ fn search(s: Store, nav: Nav) -> impl IntoElement {
                         .min_w(px(0.0))
                         .mx(px(12.0))
                         .text_size(px(16.0))
-                        .text_color(move || theme().foreground),
-                ),
+                        .text_color(move || theme().foreground)
+                })),
         )
         .child(
             ui::fab(move || s.label(if open() { "Close" } else { "Search" }))

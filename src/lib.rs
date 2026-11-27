@@ -62,6 +62,9 @@ pub fn install_controller(controller: Arc<Controller>, preview: bool) -> Result<
 #[native_module("safay/native")]
 fn native(r: &mut Registry) {
     r.assets(assets!());
+    // iOS: the delegate's remote notifications reach observers added before the app runs, as this entry does.
+    #[cfg(target_os = "ios")]
+    platform::ios::observe_remote_notifications();
     r.register::<App>();
     #[cfg(debug_assertions)]
     {

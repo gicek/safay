@@ -164,19 +164,28 @@ pub fn restore_page(s: Store, scaffold: impl FnOnce(AnyElement, AnyElement) -> A
 
 /// Where a backup can be: each cloud service of this build, and an exported file.
 fn sources(s: Store) -> impl IntoElement {
-    let mut rows: Vec<AnyElement> = providers()
-        .into_iter()
-        .map(|provider| {
-            source_row(LocationIcon::Cloud(provider), provider.name().into())
-                .test_id(provider.name())
-                .on_press(move || {
-                    s.error.set(None);
-                    s.status.set(None);
-                    open_setup(s, provider, true)
-                })
-                .into_element()
-        })
-        .collect();
+    // iOS: iCloud first, in a build signed with the iCloud entitlement.
+    let icloud = (crate::platform::supports::ICLOUD && safay_app::icloud::available()).then(|| {
+        source_row(LocationIcon::Icloud, "iCloud".into())
+            .test_id("iCloud")
+            .on_press(move || {
+                s.error.set(None);
+                s.status.set(None);
+                s.choose_restore_icloud()
+            })
+            .into_element()
+    });
+    let mut rows: Vec<AnyElement> = icloud.into_iter().collect();
+    rows.extend(providers().into_iter().map(|provider| {
+        source_row(LocationIcon::Cloud(provider), provider.name().into())
+            .test_id(provider.name())
+            .on_press(move || {
+                s.error.set(None);
+                s.status.set(None);
+                open_setup(s, provider, true)
+            })
+            .into_element()
+    }));
     rows.push(
         source_row(LocationIcon::ExportFile, s.label("Safay Exported File"))
             .test_id("export-file")

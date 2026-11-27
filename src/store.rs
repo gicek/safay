@@ -787,6 +787,9 @@ impl Store {
                 #[cfg(any(target_os = "android", target_os = "ios"))]
                 platform::clipboard::flush();
                 self.copied.set(Some(id));
+                // iOS shows nothing of its own when an app copies (Android 13 and later does): the toast says it.
+                #[cfg(target_os = "ios")]
+                self.show_toast(Tone::Success, self.label("Copied"));
                 self.owner.get().run(|| {
                     set_timeout(Duration::from_millis(if self.surface == Surface::Panel { 1100 } else { 600 }), move || {
                         if self.copied.get() == Some(id) {
@@ -1720,6 +1723,12 @@ impl Store {
         set_interval(Duration::from_secs(1), move || {
             self.refresh();
             self.refresh_updates();
+            // iOS: another device changed the iCloud backup (silent push): sync now; while locked, the sync after
+            // unlocking picks it up. (macOS's shell polls its own flag.)
+            #[cfg(target_os = "ios")]
+            if platform::ios::take_icloud_change() && self.icloud_linked() && self.unlocked() && !self.syncing.get() {
+                self.sync_now(safay_app::sync::Source::Auto);
+            }
         });
         self.refresh_updates();
         self.schedule_updates();
@@ -2778,6 +2787,8 @@ impl Store {
         if crate::hosted() {
             platform::macos::enable_remote_push();
         }
+        #[cfg(target_os = "ios")]
+        platform::ios::enable_remote_push();
         self.task(async move {
             drop(blocking(safay_app::icloud::subscribe).await);
         });

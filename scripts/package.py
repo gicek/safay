@@ -65,6 +65,9 @@ def settings() -> dict:
         "android_upload_keystore": pick("SAFAY_ANDROID_UPLOAD_KEYSTORE", android.get("upload_keystore")),
         "android_upload_key_alias": pick("SAFAY_ANDROID_UPLOAD_KEY_ALIAS", android.get("upload_key_alias")),
         "android_upload_keychain": pick("SAFAY_ANDROID_UPLOAD_KEYCHAIN", android.get("upload_keychain")),
+        # iOS devices: the development provisioning profile (`.mobileprovision`) of the development app ID, with the
+        # devices it installs on (scripts/ios.py).
+        "ios_profile": pick("SAFAY_IOS_PROFILE", data.get("ios", {}).get("profile")),
     }
 
 
@@ -196,7 +199,7 @@ def package_macos(metadata: dict, exe: Path, out: Path, release: bool) -> Path:
             entitlements["com.apple.developer.aps-environment"] = push
         else:
             print(f"note: the profile for {bundle_id} has no push capability; iCloud changes arrive without silent push")
-        # The app creates its CloudKit container only when this key is present (src/platform/icloud_macos.rs).
+        # The app creates its CloudKit container only when this key is present (src/platform/icloud_apple.rs).
         info["SafayICloudContainer"] = ICLOUD_CONTAINER
     if update_url:
         write_updater(app / "Contents/Resources/nsh", bundle_id, metadata["version"], update_url)

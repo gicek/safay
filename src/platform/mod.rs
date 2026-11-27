@@ -53,14 +53,14 @@ pub mod biometric;
 #[cfg(target_os = "android")]
 #[path = "biometric_android.rs"]
 pub mod biometric;
-#[cfg(target_os = "macos")]
-#[path = "icloud_macos.rs"]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[path = "icloud_apple.rs"]
 pub mod icloud;
 #[cfg(target_os = "macos")]
 #[path = "symbols_macos.rs"]
 pub mod symbols;
-#[cfg(target_os = "macos")]
-#[path = "web_auth_macos.rs"]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[path = "web_auth_apple.rs"]
 pub mod web_auth;
 
 // Linux only.
@@ -122,6 +122,12 @@ pub fn web_sign_in(url: &str, callback_scheme: &str) -> std::sync::mpsc::Receive
             web_sign_in_android::start(url, callback_scheme, sender);
             return receiver;
         }
+        // iOS: the system's own session, which NSH's opens too, called directly.
+        #[cfg(target_os = "ios")]
+        if callback_scheme.len() > nsh_core::auth_session::MAX_SCHEME_LEN {
+            drop(sender);
+            return web_auth::start(url, callback_scheme);
+        }
         let session = open_auth_session(nsh_core::auth_session::AuthSessionRequest::new(url, callback_scheme));
         spawn(async move {
             drop(sender.send(match session.await {
@@ -152,7 +158,7 @@ pub fn loopback_sign_in(
 /// callback no longer ends a session).
 pub fn cancel_web_sign_in() {
     loopback::cancel();
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     web_auth::cancel();
     #[cfg(not(target_os = "macos"))]
     nsh_core::prelude::close_auth_session();
@@ -182,9 +188,9 @@ pub mod supports {
     /// Scanning with the camera (macOS: AVFoundation, needs the packaged app's camera usage description; Linux: the
     /// desktop portal's Camera and PipeWire; Android: Camera2, with the camera permission; iOS: AVFoundation).
     pub const CAMERA: bool = cfg!(any(target_os = "macos", target_os = "linux", target_os = "android", target_os = "ios"));
-    /// iCloud backup is listed among the locations: macOS has it (in a signed package); Windows lists it as unavailable;
-    /// Linux, which never has it, does not list it.
-    pub const ICLOUD: bool = cfg!(any(target_os = "macos", target_os = "windows"));
+    /// iCloud backup is listed among the locations: macOS and iOS have it (in a package signed with the iCloud
+    /// entitlement); Windows lists it as unavailable; Linux and Android, which never have it, do not list it.
+    pub const ICLOUD: bool = cfg!(any(target_os = "macos", target_os = "ios", target_os = "windows"));
     /// Cloud storage backup: its sign-ins go to the system credential store (Linux: the Secret Service).
     pub const CLOUD: bool = true;
     /// OAuth sign-in for Dropbox, OneDrive and Google Drive (macOS: `ASWebAuthenticationSession`; Linux and Windows:
@@ -428,7 +434,7 @@ pub fn install_network(preview: bool) {
     if preview {
         safay_app::icloud::install(std::sync::Arc::new(safay_app::icloud::MemoryStore::new("_preview")));
     } else {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
         if let Some(store) = icloud::CloudKitStore::new() {
             safay_app::icloud::install(std::sync::Arc::new(store));
         }

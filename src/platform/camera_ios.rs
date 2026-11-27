@@ -57,6 +57,9 @@ struct Shared {
 static SHARED: Mutex<Option<Shared>> = Mutex::new(None);
 /// Which start is current: a permission answer or a setup that arrives after [`stop`] sees a newer number.
 static GENERATION: AtomicU64 = AtomicU64::new(0);
+/// A preview is in a window, its layer given the session: the session runs only then, so the preview layer is attached
+/// before the session starts and never while it is starting.
+static ATTACHED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 fn with_shared<R>(f: impl FnOnce(&mut Shared) -> R) -> R {
     f(SHARED.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(Shared::default))
@@ -75,6 +78,9 @@ unsafe impl Send for Capture {}
 
 static CAPTURE: Mutex<Option<Capture>> = Mutex::new(None);
 
+/// Runs `f` with the session under the lock. Never start, stop or attach the session inside it: `startRunning` waits
+/// for the main thread, which may be waiting for this lock (a preview made meanwhile); take the session out
+/// ([`session`]) and call it after.
 fn with_capture<R>(f: impl FnOnce(&mut Capture) -> R) -> R {
     let mut capture = CAPTURE.lock().unwrap_or_else(|e| e.into_inner());
     let capture = capture.get_or_insert_with(|| Capture {
@@ -84,6 +90,11 @@ fn with_capture<R>(f: impl FnOnce(&mut Capture) -> R) -> R {
         _delegate: None,
     });
     f(capture)
+}
+
+/// The session, out of the lock.
+fn session() -> Retained<AVCaptureSession> {
+    with_capture(|c| c.session.clone())
 }
 
 /// Asks for the camera permission if need be, then runs the camera until [`stop`].
@@ -124,15 +135,32 @@ fn run(generation: u64) {
             if !c.configured {
                 c.configured = configure(c);
             }
-            if c.configured {
-                unsafe { c.session.startRunning() };
-            }
             c.configured
         });
         with_shared(|s| if ok { s.ready = true } else { s.error = Some(CameraError::Unavailable) });
+        // The preview may be on screen already (it starts the session itself once it is: `PreviewView`).
+        if ok && ATTACHED.load(Ordering::SeqCst) {
+            run_session(generation);
+        }
+    });
+}
+
+/// Starts the session on its queue for this start, unless it was stopped meanwhile. Out of the lock: `startRunning`
+/// waits for the main thread.
+fn run_session(generation: u64) {
+    let queue = with_capture(|c| c.queue.clone());
+    queue.exec_async(move || {
+        let configured = with_capture(|c| c.configured);
+        if !configured || GENERATION.load(Ordering::SeqCst) != generation || !ATTACHED.load(Ordering::SeqCst) {
+            return;
+        }
+        let session = session();
+        if !unsafe { session.isRunning() } {
+            unsafe { session.startRunning() };
+        }
         // Stopped while it started: what `stop` stopped has just been started again.
         if GENERATION.load(Ordering::SeqCst) != generation {
-            with_capture(|c| unsafe { c.session.stopRunning() });
+            unsafe { session.stopRunning() };
         }
     });
 }
@@ -171,7 +199,7 @@ pub fn stop() {
     GENERATION.fetch_add(1, Ordering::SeqCst);
     with_shared(|s| *s = Shared::default());
     let queue = with_capture(|c| c.queue.clone());
-    queue.exec_async(|| with_capture(|c| unsafe { c.session.stopRunning() }));
+    queue.exec_async(|| unsafe { session().stopRunning() });
 }
 
 pub fn poll() -> Poll {
@@ -213,7 +241,8 @@ impl Reader {
 }
 
 define_class!(
-    /// The preview: a view whose layer is the session's preview layer, turned with the interface.
+    /// The preview: a view whose layer is the session's preview layer, turned with the interface. In a window it gives
+    /// its layer the session and starts it; out of one, it stops the session and lets it go.
     #[unsafe(super(UIView, UIResponder, NSObject))]
     #[thread_kind = MainThreadOnly]
     #[name = "SafayCameraView"]
@@ -230,6 +259,26 @@ define_class!(
             let _: () = unsafe { msg_send![super(self), layoutSubviews] };
             self.turn();
         }
+
+        #[unsafe(method(didMoveToWindow))]
+        fn did_move_to_window(&self) {
+            let _: () = unsafe { msg_send![super(self), didMoveToWindow] };
+            let layer = self.preview_layer();
+            if self.window().is_some() {
+                // The layer has the session before it runs.
+                let session = session();
+                unsafe { layer.setSession(Some(&session)) };
+                ATTACHED.store(true, Ordering::SeqCst);
+                self.turn();
+                run_session(GENERATION.load(Ordering::SeqCst));
+            } else {
+                // Only stopped: `stopRunning` waits for the main thread, so the layer keeps the session (it lets it go
+                // as the view goes) instead of being detached here meanwhile.
+                ATTACHED.store(false, Ordering::SeqCst);
+                let queue = with_capture(|c| c.queue.clone());
+                queue.exec_async(|| unsafe { session().stopRunning() });
+            }
+        }
     }
 );
 
@@ -237,32 +286,45 @@ impl PreviewView {
     fn new(mtm: MainThreadMarker) -> Retained<Self> {
         let this = Self::alloc(mtm).set_ivars(());
         let view: Retained<Self> = unsafe { msg_send![super(this), init] };
-        let layer = view.layer();
-        let layer: &AVCaptureVideoPreviewLayer = unsafe { &*(Retained::as_ptr(&layer) as *const AVCaptureVideoPreviewLayer) };
-        with_capture(|c| unsafe { layer.setSession(Some(&c.session)) });
+        let layer = view.preview_layer();
+        // Black where the picture has not come yet: the page draws no background of its own over it.
+        view.setBackgroundColor(Some(&objc2_ui_kit::UIColor::blackColor()));
         if let Some(gravity) = unsafe { AVLayerVideoGravityResizeAspectFill } {
             unsafe { layer.setVideoGravity(gravity) };
         }
         view
     }
 
-    /// The picture upright in the interface's orientation (`UIInterfaceOrientation` and `AVCaptureVideoOrientation`
-    /// number the four the same way).
+    fn preview_layer(&self) -> Retained<AVCaptureVideoPreviewLayer> {
+        // SAFETY: the view's layer is of its `layerClass`, AVCaptureVideoPreviewLayer.
+        unsafe { Retained::cast_unchecked(self.layer()) }
+    }
+
+    /// The picture upright in the interface's orientation, through the connection's rotation angle (iOS 17; the
+    /// orientation it replaces is deprecated), set only when it changes.
     fn turn(&self) {
         let Some(window) = self.window() else { return };
         let scene: *mut AnyObject = unsafe { msg_send![&*window, windowScene] };
         let Some(scene) = (unsafe { scene.as_ref() }) else { return };
+        // UIInterfaceOrientation: 1 portrait, 2 upside down, 3 landscape left, 4 landscape right.
         let orientation: isize = unsafe { msg_send![scene, interfaceOrientation] };
-        if !(1..=4).contains(&orientation) {
-            return;
-        }
+        let angle: f64 = match orientation {
+            1 => 90.0,
+            2 => 270.0,
+            3 => 180.0,
+            4 => 0.0,
+            _ => return,
+        };
         let layer = self.layer();
         let connection: *mut AnyObject = unsafe { msg_send![&*layer, connection] };
-        if let Some(connection) = unsafe { connection.as_ref() } {
-            let supported: Bool = unsafe { msg_send![connection, isVideoOrientationSupported] };
-            if supported.as_bool() {
-                let _: () = unsafe { msg_send![connection, setVideoOrientation: orientation] };
-            }
+        let Some(connection) = (unsafe { connection.as_ref() }) else { return };
+        let current: f64 = unsafe { msg_send![connection, videoRotationAngle] };
+        if current == angle {
+            return;
+        }
+        let supported: Bool = unsafe { msg_send![connection, isVideoRotationAngleSupported: angle] };
+        if supported.as_bool() {
+            let _: () = unsafe { msg_send![connection, setVideoRotationAngle: angle] };
         }
     }
 }

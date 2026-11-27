@@ -661,5 +661,7 @@
   "Keep accounts from both sides.": "保留兩邊的帳號。",
   "Both copies have the same accounts and categories. Merging them changes nothing you see.": "兩份副本的帳號和分類完全相同，合併後你看到的內容不會變化。",
   "Comparing with the backup": "正在與備份比對",
-  "Safay reads the backup and lists what differs. Nothing changes until you choose.": "Safay 會讀取備份並列出不同之處。在你做出選擇之前，不會有任何變更。"
+  "Safay reads the backup and lists what differs. Nothing changes until you choose.": "Safay 會讀取備份並列出不同之處。在你做出選擇之前，不會有任何變更。",
+  "Show all, not only “{}”": "顯示全部，不只「{}」",
+  "Initial “{}”": "首字母「{}」"
 }

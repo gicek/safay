@@ -81,7 +81,9 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
     view()
         .absolute()
         .inset(px(0.0))
-        .bg(|| BLACK)
+        // iOS: no background here: the camera's native view is black itself, and a background of this view could be
+        // drawn over it.
+        .bg(|| if cfg!(target_os = "ios") { BLACK.opacity(0.0) } else { BLACK })
         // Android and iOS: the camera draws its preview itself, into a native view.
         .child(if cfg!(any(target_os = "android", target_os = "ios")) {
             native("safay.camera").absolute().inset(px(0.0)).into_element()

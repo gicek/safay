@@ -1,6 +1,7 @@
 //! iOS services NSH has no API for, through UIKit: the lock when the device locks, a cover over the app while it is in
-//! the background (the app switcher's picture shows no codes), and a clipboard entry that stays on this device and
-//! expires. Everything here runs on the main thread; [`start`] hands itself there.
+//! the background (the app switcher's picture shows no codes), a clipboard entry that stays on this device and
+//! expires, and the silent push of an iCloud backup change (NSH delivers the delegate's callback; registering is the
+//! app's). Everything here runs on the main thread; [`start`] hands itself there.
 use objc2::{MainThreadMarker, rc::Retained, runtime::ProtocolObject};
 use objc2_foundation::{NSDate, NSDictionary, NSNotification, NSNotificationCenter, NSObjectProtocol, NSOperationQueue, NSString};
 use objc2_ui_kit::{
@@ -178,4 +179,36 @@ pub fn prefer_alert_action(title: String, action: String) {
         }
     }
     dispatch2::DispatchQueue::main().exec_async(move || attempt(title, action, 20));
+}
+
+static ICLOUD_CHANGED: AtomicBool = AtomicBool::new(false);
+/// Another device changed the iCloud backup (a silent push of this app's subscription) since the last call.
+pub fn take_icloud_change() -> bool {
+    ICLOUD_CHANGED.swap(false, Ordering::SeqCst)
+}
+/// Hears the application delegate's remote notifications through NSH (`on_application_event`), from the native
+/// module's entry, before the app runs: only this app's backup subscription counts (`platform::icloud::is_backup_change`);
+/// it raises a flag the store polls, and nothing else is read. Once, however often the entry runs.
+pub fn observe_remote_notifications() {
+    static OBSERVED: std::sync::Once = std::sync::Once::new();
+    OBSERVED.call_once(|| {
+        nsh_platform_ios::on_application_event(|event| {
+            if let nsh_platform_ios::ApplicationEvent::RemoteNotification { user_info, .. } = event {
+                // SAFETY: the dictionary UIKit delivered, valid while the event is delivered.
+                let info = unsafe { user_info.as_ptr().cast::<NSDictionary>().as_ref() };
+                if super::icloud::is_backup_change(info) {
+                    ICLOUD_CHANGED.store(true, Ordering::SeqCst);
+                }
+            }
+        });
+    });
+}
+/// Registers for remote notifications: iCloud backup changes arrive as silent pushes. Without the push entitlement
+/// (`aps-environment`, from the provisioning profile) registration fails quietly and backups sync on unlock, after
+/// saves and by hand. Any thread.
+pub fn enable_remote_push() {
+    dispatch2::DispatchQueue::main().exec_async(|| {
+        let Some(mtm) = MainThreadMarker::new() else { return };
+        UIApplication::sharedApplication(mtm).registerForRemoteNotifications();
+    });
 }

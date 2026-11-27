@@ -1,22 +1,21 @@
-//! macOS iCloud backup: the `safay_app::icloud::Store` over the system CloudKit framework. NSH has no
+//! iCloud backup on macOS and iOS: the `safay_app::icloud::Store` over the system CloudKit framework. NSH has no
 //! CloudKit API. Calls block on CloudKit's completion handlers (never on the UI thread: sync runs in `blocking`).
 //!
-//! The container comes from `SafayICloudContainer` in Info.plist, which `scripts/package.py` writes only when it signs
-//! the bundle with a provisioning profile carrying the iCloud entitlement. `CKContainer` terminates a process that lacks
-//! the entitlement, so without that key the store is never created and iCloud stays unavailable.
-use nsh_platform_macos::{
-    objc2::{
-        AnyThread,
-        rc::Retained,
-        runtime::{AnyObject, ProtocolObject},
-    },
-    objc2_foundation::{NSArray, NSBundle, NSDate, NSError, NSString, NSURL},
+//! The container comes from `SafayICloudContainer` in Info.plist, which the package is given only when it is signed
+//! with a provisioning profile carrying the iCloud entitlement (`scripts/package.py` on macOS, `scripts/ios.py` on
+//! iOS). `CKContainer` terminates a process that lacks the entitlement, so without that key the store is never created
+//! and iCloud stays unavailable.
+use objc2::{
+    AnyThread,
+    rc::Retained,
+    runtime::{AnyObject, ProtocolObject},
 };
 use objc2_cloud_kit::{
     CKAccountStatus, CKAsset, CKContainer, CKCurrentUserDefaultName, CKDatabase, CKDatabaseSubscription, CKErrorCode, CKErrorDomain,
     CKModifyRecordsOperation, CKNotificationInfo, CKPartialErrorsByItemIDKey, CKRecord, CKRecordID, CKRecordKeyValueSetting,
     CKRecordSavePolicy, CKRecordZone, CKRecordZoneID, CKSubscription,
 };
+use objc2_foundation::{NSArray, NSBundle, NSDate, NSDictionary, NSError, NSString, NSURL};
 use safay_app::icloud::{AccountState, Condition, ICloudError, RECORD_NAME, RECORD_TYPE, Record, SUBSCRIPTION_ID, Store, StoreError, ZONE};
 use std::{
     io::Write,
@@ -286,9 +285,9 @@ impl Store for CloudKitStore {
 
 /// Whether a remote notification (its `userInfo`) is this app's backup subscription firing: another device changed the
 /// backup, matched by this app's subscription ID.
-pub fn is_backup_change(user_info: &nsh_platform_macos::objc2_foundation::NSDictionary) -> bool {
+pub fn is_backup_change(user_info: &NSDictionary) -> bool {
     use objc2_cloud_kit::CKNotification;
-    // SAFETY: `user_info` is the dictionary AppKit delivered with the notification.
+    // SAFETY: `user_info` is the dictionary AppKit or UIKit delivered with the notification.
     let notification = unsafe { CKNotification::notificationFromRemoteNotificationDictionary(user_info) };
     notification.and_then(|n| unsafe { n.subscriptionID() }).is_some_and(|id| id.to_string() == SUBSCRIPTION_ID)
 }
@@ -311,7 +310,7 @@ impl Failure {
             let partial = error
                 .userInfo()
                 .objectForKey(unsafe { CKPartialErrorsByItemIDKey })
-                .and_then(|d| d.downcast::<nsh_platform_macos::objc2_foundation::NSDictionary>().ok())
+                .and_then(|d| d.downcast::<NSDictionary>().ok())
                 .and_then(|d| d.allValues().firstObject())
                 .and_then(|e| e.downcast::<NSError>().ok());
             return partial.map(|e| Failure::of(&e)).unwrap_or(Failure::Service);
@@ -349,8 +348,8 @@ fn wait<T>(rx: mpsc::Receiver<T>) -> Result<T, Failure> {
     rx.recv_timeout(TIMEOUT).map_err(|_| Failure::Code(CKErrorCode::NetworkFailure.0))
 }
 
-/// `--icloud-check` (debug builds): prints whether this bundle can reach CloudKit. Never prints the account ID or data.
-#[cfg(debug_assertions)]
+/// `--icloud-check` (debug builds, macOS): prints whether this bundle can reach CloudKit. Never prints the account ID or data.
+#[cfg(all(debug_assertions, target_os = "macos"))]
 pub fn check() -> i32 {
     let Some(container) = container_identifier() else {
         println!("no SafayICloudContainer in Info.plist: this build has no iCloud");

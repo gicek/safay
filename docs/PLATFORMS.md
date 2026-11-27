@@ -1,8 +1,8 @@
 # Platforms
 
 macOS is the primary platform. Android has a phone interface of its own (`src/mobile`) over the same core and is
-supported from Android 12. iOS and iPadOS share that interface in the system's look; they run in the simulator and have
-not been released or tried on a device. Windows and Linux share every page and the whole core, but CI does not build
+supported from Android 12. iOS and iPadOS share that interface in the system's look; they run in the simulator and on an
+iPhone with a development package, and have not been released. Windows and Linux share every page and the whole core, but CI does not build
 them yet.
 Windows has not been run end to end; Linux has, on one system (see [Linux details](#linux-details)). The parts below
 marked *coded* are written and untested on a real system. The interface shows a capability only where
@@ -12,11 +12,11 @@ marked *coded* are written and untested on a real system. The interface shows a 
 
 | Capability | macOS | Windows | Linux | Android | iOS |
 |---|---|---|---|---|---|
-| Vault, accounts, categories, codes, import and export | Yes | Coded | Coded | Yes (exports go to the share sheet) | Yes (simulator; exports go to the share sheet) |
+| Vault, accounts, categories, codes, import and export | Yes | Coded | Coded | Yes (exports go to the share sheet) | Yes (exports go to the share sheet) |
 | Folder backup | Yes | Coded | Coded | — | — |
-| WebDAV, Nextcloud and Synology backup | Yes | Coded (Credential Manager) | Yes (the Secret Service: GNOME Keyring, KWallet) | Yes | Coded (the Keychain) |
-| Dropbox, OneDrive, Google Drive | Yes | Coded (sign-in in the browser) | Coded (sign-in in the browser) | Yes (sign-in in a Custom Tab) | Coded (the system sign-in session) |
-| iCloud | Yes | — | — | — | Not yet |
+| WebDAV, Nextcloud and Synology backup | Yes | Coded (Credential Manager) | Yes (the Secret Service: GNOME Keyring, KWallet) | Yes | Synology: yes; WebDAV, Nextcloud: coded (the Keychain) |
+| Dropbox, OneDrive, Google Drive | Yes | Coded (sign-in in the browser) | Coded (sign-in in the browser) | Yes (sign-in in a Custom Tab) | Google Drive: yes; Dropbox, OneDrive: coded (the system sign-in session) |
+| iCloud | Yes | — | — | — | Yes (development packages so far) |
 | Touch ID / hardware-protected unlock | Touch ID | Planned: Windows Hello key release | Not planned (no common hardware key API) | Strong biometrics (a Keystore key) | Coded: Face ID or Touch ID (a Secure Enclave key) |
 | Lock on sleep, screen lock, user switch | Yes | Coded (`WM_WTSSESSION_CHANGE`, power broadcasts) | Coded (logind, screensaver) | Yes (screen off) | Coded (device lock) |
 | Auto-lock on app input | Yes | Partial (input inside the page only) | Partial | Yes (also in the background) | Yes |
@@ -60,8 +60,12 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
 ## iOS and iPadOS details
 
 - Built for the simulator (`make ios-simulator`) and checked there on iPhone 18 Pro and iPad Pro 11-inch (iOS 27.2):
-  every page of `previews/mobile.test.tsx`, light and dark. Face ID and Touch ID, the camera, the clipboard's expiry, the
-  cover in the background and cloud sign-ins are coded and untried on a device; iCloud backup is not there yet.
+  every page of `previews/mobile.test.tsx`, light and dark.
+- On an iPhone (iOS 27, `make ios-run`): iCloud backup with silent pushes from other devices, Google Drive sign-in,
+  Synology, and the copied-code message. Face ID and Touch ID, the clipboard's expiry and the cover in the background
+  are coded and untried on a device; the camera's preview is a known issue (below).
+- Sign-ins open the system's sign-in session. A callback scheme NSH's session refuses (Google's, longer than its
+  `MAX_SCHEME_LEN`) goes to `ASWebAuthenticationSession` directly (`platform::web_auth`).
 - The interface follows the system: its navigation bar, swipe back, menus, sheets, switches and segmented controls, and
   the alert for a category's name, are UIKit's. Dialogs with password fields are drawn in the look of an iOS alert,
   since the system's alert has no secure field.
@@ -109,6 +113,10 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
 ## Known issues
 
 - Android 16 and later: Back while the keyboard shows closes the page along with the keyboard.
+- iPhone: "Scan QR Code" shows a black preview on a device, though the session runs and its preview layer reports a
+  picture; "Choose from Photos" and "Enter Setup Key" add accounts meanwhile.
+- iPhone: closing a system menu (a long press on an account, "+", "More") can show the software keyboard, with NSH's
+  surface root as the first responder and no text field focused. Swipe the keyboard down or tap outside it.
 - iOS: the system's sidebar of a split view is not used on iPad (NSH's `SplitView` ends the app there); Safay draws its
   own. Switches are on in the accent color rather than the system's green.
 - Opening the menu bar panel with its shortcut before the menu bar icon has ever been clicked places it at the top right

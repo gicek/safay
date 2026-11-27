@@ -115,7 +115,7 @@ Packages go to `build/` at the repository root (untracked), each system in a fol
 | `make release` | `build/dist/` | Notarized app, zip and DMG, update archive and manifest: what is published |
 
 Development packages for phones and tablets go there too. Both start in the phone interface (`src/mobile`); Android is
-supported from Android 12, and the iOS one runs in the simulator (not yet on a device or in a store).
+supported from Android 12, and the iOS one runs in the simulator and, signed for development, on a device (not yet in a store).
 
 | Command | Output | Needs |
 |---|---|---|
@@ -125,6 +125,8 @@ supported from Android 12, and the iOS one runs in the simulator (not yet on a d
 | `python3 scripts/android_ui_test.py` | Installs the demo package and walks every page of the phone interface on a device or emulator, through its accessibility tree: onboarding, adding accounts, reordering by dragging, details, categories, search, settings and their dialogs, export, locking, an import of 150 accounts (made by `cargo run -p safay-core --example export_fixture`) whose list it scrolls and narrows by letter and erasing. It reports each failed check with a screenshot in `build/android/ui-test/`, and erases the demo package's data before and after | `adb` and the `android` command-line tool (cmdline-tools); one device online, or `--serial` |
 | `make ios-simulator` | `build/ios-simulator/debug/Safay.app` | Xcode (`DEVELOPER_DIR` when `xcode-select` names the command line tools); `rustup target add aarch64-apple-ios-sim` |
 | `make ios-simulator-run` | Builds it, then installs and starts it in the booted simulator | An iOS simulator runtime |
+| `make ios` | `build/ios/debug/Safay.ipa` (`com.gicek.safay.debug`), signed with the development identity and the iOS profile; with iCloud when the profile has its container (`scripts/ios.py`) | `local.toml` `[signing] development_identity` and `[ios] profile` (a `.mobileprovision` for the app ID); `rustup target add aarch64-apple-ios` |
+| `make ios-run` | Builds it, then installs and starts it on the connected device (`--device <UDID>` with more than one) | A paired device in Developer Mode |
 | `python3 scripts/nsh.py test previews/mobile.test.tsx --target ios` | Walks every page of the phone and tablet interface over the demo vault in the simulator (`--device "iPad Pro 11-inch (M5)"` for a tablet; `--target android` on a device or emulator) and saves a picture of each in `build/screenshots/mobile/` | Same as `make ios-simulator`; the test answers system alerts itself, so they show in no picture |
 
 The phone and tablet icons come from `assets/icon.png`: `python3 scripts/mobile_icons.py` (needs Pillow) writes
@@ -203,6 +205,9 @@ on. Without it they use the `[google]` client like macOS.
 - iCloud and push are restricted entitlements: the app ID must have the container `iCloud.com.gicek.safay` and Push
   Notifications enabled, with matching profiles in `~/Library/Developer/Xcode/UserData/Provisioning Profiles`. The
   script picks the profile by app ID, type and expiry, and adds the push entitlement only when the profile has it.
+- iOS devices: `make ios` copies `nsh.json` to `build/ios/app/` with the iCloud container, the CloudKit Development
+  entitlements and the remote-notification background mode added when the profile in `[ios] profile` grants the
+  container; the tracked `nsh.json` stays without them for the simulator.
 - `Safay.app/Contents/MacOS/Safay --icloud-check` prints the CloudKit account status of a signed package without
   opening the vault.
 
