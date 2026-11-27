@@ -8,8 +8,9 @@ tracked, so the tracked nsh.json cannot list them: this writes `build/android/ap
 schemes added and its paths pointing back at the project, and packages from there.
 
 Output: `build/android/debug/Safay.apk` with the development app ID (`--release`: `build/android/release`, the app's own
-ID). Other arguments go to `nsh package` (`--run`, `--keystore …`, `--format aab`). The launcher icon is the adaptive
-icon in assets/android/.
+ID). Other arguments go to `nsh package` (`--run`, `--keystore …`, `--format aab`). Development and demo packages are
+built for `arm64-v8a` only, what current phones and the emulators on Apple silicon run, unless `--abi` names others;
+release packages for every ABI NSH builds by default. The launcher icon is the adaptive icon in assets/android/.
 """
 from pathlib import Path
 import argparse
@@ -84,6 +85,8 @@ def main() -> None:
         manifest["id"] = project["id"] + ".debug"
     (app / "nsh.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     out = root / "build/android" / ("release" if args.release else "demo" if args.demo else "debug")
+    if not args.release and not any(a == "--abi" or a.startswith("--abi=") for a in rest):
+        rest = ["--abi", "arm64-v8a", *rest]
     command = [sys.executable, str(root / "scripts/nsh.py"), "package", str(app), "--target", "android", "--out", str(out), *rest]
     # Development packages allow screenshots of the unlocked app (src/mobile/mod.rs), for checking the interface.
     env = dict(os.environ)

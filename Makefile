@@ -156,15 +156,28 @@ build/android/java/classes.dex: $(ANDROID_JAVA)
 android: nsh-ready build/android/java/classes.dex ## Development APK in build/android/debug, signed with the debug key (needs the Android SDK and NDK)
 	$(PYTHON) scripts/android.py
 
-android-run: android ## Install it on the running emulator or the connected device, and start it
-	adb install -r "build/android/debug/$(NAME).apk"
-	adb shell monkey -p $(ID).debug -c android.intent.category.LAUNCHER 1
+android-run: android ## Install it on every emulator and device online (or the one ANDROID_SERIAL names), and start it
+	@serials="$${ANDROID_SERIAL:-$$(adb devices | awk 'NR > 1 && $$2 == "device" { print $$1 }')}"; \
+	test -n "$$serials" || { echo "No Android emulator or device online"; exit 1; }; \
+	failed=""; \
+	for serial in $$serials; do \
+		echo "$$serial: installing"; \
+		adb -s "$$serial" install -r "build/android/debug/$(NAME).apk" >/dev/null \
+			&& activity="$$(adb -s "$$serial" shell cmd package resolve-activity --brief -c android.intent.category.LAUNCHER $(ID).debug | tail -n 1 | tr -d '\r')" \
+			&& adb -s "$$serial" shell am start -n "$$activity" >/dev/null \
+			&& echo "$$serial: started" || failed="$$failed $$serial"; \
+	done; \
+	test -z "$$failed" || { echo "Failed on:$$failed"; exit 1; }
 
 ios: nsh-ready ## Development app for iOS devices in build/ios/debug, signed with local.toml's identity and [ios] profile
 	$(PYTHON) scripts/ios.py
 
 ios-run: nsh-ready ## Build it, then install and start it on the connected iPhone or iPad
 	$(PYTHON) scripts/ios.py --run
+
+# The simulator's SDK and simctl come with Xcode, not the command line tools `xcode-select` may name: Xcode in
+# /Applications unless DEVELOPER_DIR names another (as scripts/ios.py does for devices).
+ios-simulator ios-simulator-run: export DEVELOPER_DIR ?= /Applications/Xcode.app/Contents/Developer
 
 ios-simulator: nsh-ready ## Development app for the iOS simulator in build/ios-simulator/debug (needs Xcode)
 	$(NSH) package --target ios-simulator --id $(ID).debug --icon assets/ios/icon.png --out build/ios-simulator/debug

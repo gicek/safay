@@ -119,11 +119,11 @@ supported from Android 12, and the iOS one runs in the simulator and, signed for
 
 | Command | Output | Needs |
 |---|---|---|
-| `make android` | `build/android/debug/Safay.apk` (debug key, `arm64-v8a` and `armeabi-v7a`) | The Android SDK with `platforms;android-36`, build tools and an NDK; a JDK; `rustup target add aarch64-linux-android armv7-linux-androideabi` |
-| `make android-run` | Installs it on the running emulator or the connected device, and starts it | `adb` |
+| `make android` | `build/android/debug/Safay.apk` (debug key, `arm64-v8a`; `python3 scripts/android.py --abi arm64-v8a,armeabi-v7a` adds 32-bit phones) | The Android SDK with `platforms;android-36`, build tools and an NDK; a JDK; `rustup target add aarch64-linux-android armv7-linux-androideabi` |
+| `make android-run` | Installs it on every emulator and device online, and starts it; `ANDROID_SERIAL=<serial>` picks one | `adb` |
 | `python3 scripts/android.py --demo` | `build/android/demo/Safay Demo.apk` (`com.gicek.safay.demo`, "Safay Demo"): a package of its own, for trying a build on a device without touching the development package's vault | Same as `make android` |
 | `python3 scripts/android_ui_test.py` | Installs the demo package and walks every page of the phone interface on a device or emulator, through its accessibility tree: onboarding, adding accounts, reordering by dragging, details, categories, search, settings and their dialogs, export, locking, an import of 150 accounts (made by `cargo run -p safay-core --example export_fixture`) whose list it scrolls and narrows by letter and erasing. It reports each failed check with a screenshot in `build/android/ui-test/`, and erases the demo package's data before and after | `adb` and the `android` command-line tool (cmdline-tools); one device online, or `--serial` |
-| `make ios-simulator` | `build/ios-simulator/debug/Safay.app` | Xcode (`DEVELOPER_DIR` when `xcode-select` names the command line tools); `rustup target add aarch64-apple-ios-sim` |
+| `make ios-simulator` | `build/ios-simulator/debug/Safay.app` | Xcode (`/Applications/Xcode.app` unless `DEVELOPER_DIR` names another); `rustup target add aarch64-apple-ios-sim` |
 | `make ios-simulator-run` | Builds it, then installs and starts it in the booted simulator | An iOS simulator runtime |
 | `make ios` | `build/ios/debug/Safay.ipa` (`com.gicek.safay.debug`), signed with the development identity and the iOS profile; with iCloud when the profile has its container (`scripts/ios.py`) | `local.toml` `[signing] development_identity` and `[ios] profile` (a `.mobileprovision` for the app ID); `rustup target add aarch64-apple-ios` |
 | `make ios-run` | Builds it, then installs and starts it on the connected device (`--device <UDID>` with more than one) | A paired device in Developer Mode |
