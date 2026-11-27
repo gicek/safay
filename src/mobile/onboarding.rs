@@ -94,7 +94,9 @@ fn scaffold(top: impl IntoElement, content: impl IntoElement) -> impl IntoElemen
 
 fn welcome(s: Store) -> impl IntoElement {
     scaffold(
-        view().h(px(48.0)),
+        // iOS: no bar above the page (`page_top` is 0 there), and the Dynamic Island's inset is the bar's own: more room
+        // keeps the icon as far down as Android's, under its status bar.
+        view().h(px(if ui::IOS { 96.0 } else { 48.0 })),
         view()
             .w_full()
             .items_center()
