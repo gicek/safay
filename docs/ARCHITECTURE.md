@@ -158,7 +158,17 @@ the interface uses the system's own parts where NSH offers them: the pages are a
 reports), the list's buttons, the account's menu and the settings' choices are system menus, the account's details and
 "Add to" are system sheets, switches and segmented controls are the system's, and the category name is asked in a system
 alert. Dialogs with password fields stay drawn, in the look of the system's alerts (`ui::dialog`, `ui::compact`): the
-system's alert has no secure field. A window 700 pt wide or more (`ui::is_wide`: a tablet) lists the categories in a
+system's alert has no secure field.
+
+Each platform gets its own form of the same part. A dialog holds one field at most; a task with more (changing the
+master password, an export's password, choosing the backup location) is a page. Fields are a form of the platform's
+(`ui::form`): on iOS the rows of one inset group, with what a field's value means (the strength meter, a mismatch) said
+under the group; on Android Material's outlined fields on the page. A choice among a few values is the system's pull-down
+menu from the value at the row's end on iOS, a dialog of radio buttons on Android. Android's page titles start at the
+leading edge, its search replaces the top bar, and its drawn dialogs take the system alerts' surface; iOS keeps its
+floating search button, deletes categories in an edit mode, and its sheets have a close button. The pages over the list
+change as one (`Nav`: the stack and the page in one `batch`), so the native stack never sees a route in between. A
+window 700 pt wide or more (`ui::is_wide`: a tablet) lists the categories in a
 sidebar and the accounts as cards in columns, and centers the pages over it. The `ios-look` feature shows the iOS look
 in a desktop's development build (`SAFAY_MOBILE=1`, or `<width>x<height>`).
 

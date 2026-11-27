@@ -199,7 +199,7 @@ pub enum Payload {
     /// One account added by hand: its service name, for the toast.
     Added(String),
     /// An account moved to Recently Deleted (its service name; `true` from its details sheet), or back from it.
-    Deleted(String, bool),
+    Deleted(Uuid, String, bool),
     Recovered(String),
     Export(Vec<u8>, usize),
     Detail(Detail),
@@ -240,6 +240,9 @@ pub struct Store {
     pub inline_errors: Signal<u32>,
     pub status: Signal<Option<Status>>,
     pub toast: Signal<Option<Status>>,
+    /// The account the toast on screen says was moved to Recently Deleted, and that toast's text: the phone's toast
+    /// offers to put it back while that text shows.
+    pub undo: Signal<Option<(Uuid, SharedString)>>,
     /// How a sync conflict is to be resolved ([`Self::resolve_conflict`]): 0 merge both, 1 keep this device's copy, 2
     /// use the backup's.
     pub resolution: Signal<u8>,
@@ -384,6 +387,7 @@ impl Store {
             inline_errors: signal(0),
             status: signal(None),
             toast: signal(None),
+            undo: signal(None),
             resolution: signal(0),
             done: signal(None),
             query: signal(String::new()),
@@ -540,10 +544,13 @@ impl Store {
         }
     }
     pub fn show_toast(self, tone: Tone, text: SharedString) {
+        self.toast_for(tone, text, 2600);
+    }
+    fn toast_for(self, tone: Tone, text: SharedString, ms: u64) {
         let status = Status { tone, text };
         self.toast.set(Some(status.clone()));
         self.owner.get().run(|| {
-            set_timeout(Duration::from_millis(2600), move || {
+            set_timeout(Duration::from_millis(ms), move || {
                 if self.toast.get().as_ref() == Some(&status) {
                     self.toast.set(None);
                 }
@@ -741,11 +748,14 @@ impl Store {
                 }
                 self.finished(Done::Imported);
             }
-            Payload::Deleted(issuer, in_sheet) => {
+            Payload::Deleted(id, issuer, in_sheet) => {
                 if in_sheet {
                     self.close_sheet();
                 }
-                self.show_toast(Tone::Info, self.fmt("Moved “{}” to Recently Deleted", &[&issuer]));
+                // Longer than other toasts: it offers to put the account back (`undo`).
+                let text = self.fmt("Moved “{}” to Recently Deleted", &[&issuer]);
+                self.undo.set(Some((id, text.clone())));
+                self.toast_for(Tone::Info, text, 5000);
             }
             Payload::Recovered(issuer) => self.show_toast(Tone::Success, self.fmt("Recovered “{}”", &[&issuer])),
             Payload::Added(issuer) => {
@@ -1454,7 +1464,7 @@ impl Store {
         let in_sheet = self.sheet.get().is_some();
         self.dispatch(true, move |s| {
             s.delete_account(id)?;
-            Ok(Payload::Deleted(issuer, in_sheet))
+            Ok(Payload::Deleted(id, issuer, in_sheet))
         });
     }
     /// Puts an account from Recently Deleted back.

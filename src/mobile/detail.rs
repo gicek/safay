@@ -23,14 +23,17 @@ fn shown(s: Store) -> Option<Uuid> {
     }
 }
 
+/// Lets the sheet go, and what it showed.
+fn close(s: Store) {
+    s.revealed.set(Zeroizing::new(String::new()));
+    s.sheet.set(None);
+    s.detail.set(None);
+}
+
 pub fn sheet(s: Store) -> impl IntoElement {
     ui::bottom_sheet(
         move || shown(s).is_some() && s.detail.with(Option::is_some),
-        move || {
-            s.revealed.set(Zeroizing::new(String::new()));
-            s.sheet.set(None);
-            s.detail.set(None);
-        },
+        move || close(s),
         move || dynamic(move || shown(s).map(|id| content(s, id).into_element())).into_element(),
     )
 }
@@ -94,7 +97,12 @@ fn content(s: Store, id: Uuid) -> impl IntoElement {
                                     editing.set(true)
                                 })
                             }),
-                        ),
+                        )
+                        // iOS: the sheet's own close button at its end, as the system's sheets have (a swipe down too).
+                        .child(when(
+                            move || ui::IOS && !editing.get(),
+                            move || ui::bar_button(move || s.label("Close"), || Icon::Close).test_id("close").on_press(move || close(s)),
+                        )),
                 )
                 // The code: a press copies it.
                 .child(

@@ -35,14 +35,18 @@ pub enum Page {
     Review,
     /// "Resolve Conflict", from the backup card in settings.
     Conflict,
+    /// "Change Master Password", from settings.
+    ChangePassword,
+    /// "Export Encrypted Backup", from settings.
+    Export,
+    /// "Choose Location": where the backup is kept, from the backup card in settings.
+    Location,
 }
 /// A dialog of settings or of the add menu.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Dialog {
     AutoLock,
     Language,
-    ChangePassword,
-    Export,
     BackupPassword,
 }
 
@@ -63,10 +67,10 @@ pub struct Nav {
     /// The account "Add to" is choosing categories for.
     pub add_to: Signal<Option<safay_app::Uuid>>,
     pub dialog: Signal<Option<Dialog>>,
-    /// "Choose Location" is open.
-    pub choosing: Signal<bool>,
     /// The master password of a backup this vault cannot open is asked for.
     pub restoring: Signal<bool>,
+    /// "Manage Categories" is in its edit mode (iOS): each row shows its delete control.
+    pub editing: Signal<bool>,
     /// The pages under the one showing, the list excepted.
     pub stack: Signal<Vec<Page>>,
     /// iOS: the list is being reordered: its rows show their drag handles and press nothing else.
@@ -170,13 +174,13 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
         dialog: signal(None),
         stack: signal(Vec::new()),
         reordering: signal(false),
-        choosing: signal(false),
         restoring: signal(false),
+        editing: signal(false),
     };
     // Locking leaves no page over the list for the next unlock.
     effect(move || {
         if !s.unlocked() {
-            nav.page.set(None);
+            nav.home();
             nav.adding.set(false);
             nav.searching.set(false);
             nav.letter.set(None);
@@ -184,10 +188,9 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
             nav.context.set(None);
             nav.add_to.set(None);
             nav.dialog.set(None);
-            nav.stack.set(Vec::new());
-            nav.choosing.set(false);
             nav.restoring.set(false);
             nav.reordering.set(false);
+            nav.editing.set(false);
         }
     });
     // A backup file was chosen: one that needs no password is imported at once, another asks for its password.
@@ -284,8 +287,23 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
         .child(backup::setup_sheet(s))
         .child(dialogs::all(s))
         .child(dialogs::of(s, nav))
+        // Android with three-button navigation: the page scrolls under the bar, which a veil of the page's color keeps
+        // legible, as the system's own contrast scrim does (gesture navigation's thin handle needs none).
+        .child(when(
+            move || !ui::IOS && safe_area().bottom > px(40.0),
+            move || {
+                view()
+                    .absolute()
+                    .left(px(0.0))
+                    .right(px(0.0))
+                    .bottom(px(0.0))
+                    .h(move || safe_area().bottom)
+                    .bg(move || theme().background.opacity(0.92))
+                    .pointer_events(nsh_core::PointerEvents::None)
+            },
+        ))
         // Above the add button while the list shows.
-        .child(toast(s, move || s.unlocked() && nav.page.get().is_none()))
+        .child(toast(s, move || ui::IOS && s.unlocked() && nav.page.get().is_none()))
 }
 
 fn unlocked(s: Store, nav: Nav) -> AnyElement {
@@ -294,7 +312,18 @@ fn unlocked(s: Store, nav: Nav) -> AnyElement {
     }
     // One branch per page: a page pushed over another (the review over "Enter Setup Key", "Recently Deleted" over the
     // settings) replaces it, which a single branch for "some page" would not notice.
-    let pages = [Page::Scan, Page::Manual, Page::Categories, Page::Settings, Page::Deleted, Page::Review, Page::Conflict];
+    let pages = [
+        Page::Scan,
+        Page::Manual,
+        Page::Categories,
+        Page::Settings,
+        Page::Deleted,
+        Page::Review,
+        Page::Conflict,
+        Page::ChangePassword,
+        Page::Export,
+        Page::Location,
+    ];
     pages
         .into_iter()
         .fold(view().flex_1().child(when(move || nav.page.get().is_none(), move || home::page(s, nav))), |root, p| {
@@ -312,6 +341,9 @@ fn page(s: Store, nav: Nav, page: Page) -> AnyElement {
         Page::Deleted => settings::deleted(s, nav).into_element(),
         Page::Review => add::review(s, nav).into_element(),
         Page::Conflict => backup::conflict(s, nav).into_element(),
+        Page::ChangePassword => settings::change_password(s, nav).into_element(),
+        Page::Export => settings::export(s, nav).into_element(),
+        Page::Location => backup::location(s, nav).into_element(),
     }
 }
 /// A page in a column of a readable width, centered in a wide window ([`ui::PAGE_MAX`]); the camera's page takes the
@@ -367,6 +399,9 @@ fn native_stack(s: Store, nav: Nav) -> impl IntoElement {
                     Page::Deleted => "Recently Deleted",
                     Page::Review => "Add Account",
                     Page::Conflict => "Resolve Conflict",
+                    Page::ChangePassword => "Change Master Password",
+                    Page::Export => "Export Encrypted Backup",
+                    Page::Location => "Choose Location",
                     // The camera's page is the picture alone, with its own close button.
                     Page::Scan => "",
                 };
@@ -380,13 +415,22 @@ fn native_stack(s: Store, nav: Nav) -> impl IntoElement {
                         .header_shadow_visible(false)
                 };
                 let screen = if kind == Page::Categories {
+                    // "Edit" shows each row's delete control, as the system's lists do; "Done" ends it.
                     screen.header_right_items(move || {
-                        vec![
-                            nsh_core::element::header::HeaderItem::symbol("plus")
+                        use nsh_core::element::header::HeaderItem;
+                        if nav.editing.get() {
+                            return vec![HeaderItem::new(s.label("Done").to_string()).key("done").on_press(move || nav.editing.set(false))];
+                        }
+                        let mut items = vec![
+                            HeaderItem::symbol("plus")
                                 .key("new-category")
                                 .label(s.label("New Category").to_string())
                                 .on_press(move || s.editing.set(Some(crate::store::CategoryEdit::default()))),
-                        ]
+                        ];
+                        if s.projection.with(|p| !p.categories.is_empty()) {
+                            items.push(HeaderItem::new(s.label("Edit").to_string()).key("edit").on_press(move || nav.editing.set(true)));
+                        }
+                        items
                     })
                 } else {
                     screen
@@ -418,6 +462,9 @@ fn shows_errors(s: Store) {
 
 /// One line at the bottom about what just happened, above the navigation bar; it takes no input.
 fn toast(s: Store, lifted: impl Fn() -> bool + Copy + 'static) -> impl IntoElement {
+    let undoable =
+        move || s.undo.with(|u| u.as_ref().map(|(_, text)| text.clone())) == s.toast.with(|t| t.as_ref().map(|t| t.text.clone()));
+    let undoable = move || undoable() && s.undo.with(Option::is_some);
     when(
         move || s.toast.get().is_some(),
         move || {
@@ -429,21 +476,40 @@ fn toast(s: Store, lifted: impl Fn() -> bool + Copy + 'static) -> impl IntoEleme
                 .pb_safe_area_plus(px(16.0))
                 .px(px(ui::MARGIN))
                 .items_center()
-                .pointer_events(nsh_core::PointerEvents::None)
+                .pointer_events(nsh_core::PointerEvents::BoxNone)
                 .child(
                     view()
                         .min_h(px(ui::TOUCH))
                         .max_w(px(480.0))
-                        .px(px(16.0))
-                        .py(px(12.0))
-                        .justify_center()
-                        .rounded(px(12.0))
+                        .pl(px(16.0))
+                        .pr(move || px(if undoable() { 4.0 } else { 16.0 }))
+                        .py(px(4.0))
+                        .flex_row()
+                        .items_center()
+                        .gap(px(8.0))
+                        .rounded(px(if ui::IOS { 22.0 } else { 8.0 }))
                         .bg(move || tok("glass"))
                         .shadow_lg()
+                        .pointer_events(move || if undoable() { nsh_core::PointerEvents::Auto } else { nsh_core::PointerEvents::None })
                         .child(
                             ui::body(text(move || s.toast.get().map(|t| t.text).unwrap_or_default()))
+                                .flex_shrink(1.0)
+                                .py(px(8.0))
                                 .text_color(move || tok("glass-foreground")),
-                        ),
+                        )
+                        // A deleted account: "Undo" puts it back (Material's snackbar action; iOS's toast the same).
+                        .child(when(undoable, move || {
+                            ui::text_button(move || s.label("Undo"), false)
+                                .test_id("undo")
+                                .text_color(move || tok("toast-action"))
+                                .on_press(move || {
+                                    if let Some((id, _)) = s.undo.get() {
+                                        s.undo.set(None);
+                                        s.toast.set(None);
+                                        s.recover_account(id)
+                                    }
+                                })
+                        })),
                 )
         },
     )
@@ -506,14 +572,20 @@ fn demo_page(s: Store, nav: Nav) {
                 "add-to" => nav.add_to.set(first),
                 "auto-lock" => nav.dialog.set(Some(Dialog::AutoLock)),
                 "language" => nav.dialog.set(Some(Dialog::Language)),
-                "change-password" => nav.dialog.set(Some(Dialog::ChangePassword)),
-                "export" => nav.dialog.set(Some(Dialog::Export)),
+                "change-password" => {
+                    nav.push(Page::Settings);
+                    nav.push(Page::ChangePassword)
+                }
+                "export" => {
+                    nav.push(Page::Settings);
+                    nav.push(Page::Export)
+                }
                 "search" => nav.searching.set(true),
                 // The alert a fair password asks with ("Password Isn’t Strong Enough").
                 "fair-password" => s.confirm_fair(safay_app::Zeroizing::new("correcthorse1".to_owned()), |_| {}),
                 "backup" => {
                     nav.push(Page::Settings);
-                    nav.choosing.set(true)
+                    nav.push(Page::Location)
                 }
                 "qr" => {
                     if let Some(id) = first {

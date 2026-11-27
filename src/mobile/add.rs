@@ -77,9 +77,9 @@ pub fn manual(s: Store, nav: Nav) -> impl IntoElement {
                             move || {
                                 view()
                                     .gap(px(16.0))
-                                    .child(
-                                        ui::form_card()
-                                            .gap(px(12.0))
+                                    .child(ui::form(move || {
+                                        view()
+                                            .gap(px(if ui::in_form() { 0.0 } else { 12.0 }))
                                             .child(ui::field(
                                                 s,
                                                 "issuer",
@@ -137,8 +137,8 @@ pub fn manual(s: Store, nav: Nav) -> impl IntoElement {
                                                 ReturnKeyType::Done,
                                                 Some(secret),
                                             ))
-                                            .child(ui::field_note(problem, || true)),
-                                    )
+                                            .child(ui::field_note(problem, || true))
+                                    }))
                                     .child(advanced_options(s, advanced))
                                     .child(
                                         ui::primary_button(move || s.label("Add Account"), valid, move || s.busy.get())
@@ -273,9 +273,9 @@ fn paste_mode(s: Store) -> impl IntoElement {
     };
     view()
         .gap(px(16.0))
-        .child(
-            ui::form_card()
-                .gap(px(8.0))
+        .child(ui::form(move || {
+            view()
+                .gap(px(if ui::in_form() { 0.0 } else { 8.0 }))
                 .child(ui::text_area(
                     s,
                     "otpauth",
@@ -292,8 +292,8 @@ fn paste_mode(s: Store) -> impl IntoElement {
                 .child(ui::field_note(
                     move || s.error.get().map(|_| s.label("The text doesn’t contain an otpauth or migration link.")),
                     || true,
-                )),
-        )
+                ))
+        }))
         .child(
             ui::primary_button(move || s.label("Parse"), move || s.form.with(|f| !f.text.trim().is_empty()), move || s.busy.get())
                 .test_id("parse")

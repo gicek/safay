@@ -1,6 +1,6 @@
 //! The dialogs every page may raise: the master password asked again, an account's QR code, a category's name.
 use super::ui::{self, Entry};
-use crate::store::{Done, Sheet, Store};
+use crate::store::{Sheet, Store};
 use nsh_core::prelude::*;
 use safay_app::Zeroizing;
 
@@ -153,6 +153,9 @@ fn drawn_category_name(s: Store) -> impl IntoElement {
         dismiss_keyboard();
         s.editing.set(None)
     };
+    // Its one field takes the keyboard at once, as the system's alert with a text field does.
+    let field = element_ref();
+    request_animation_frame(move |_| field.focus());
     ui::dialog(
         move || s.label(if renaming() { "Rename" } else { "New Category" }),
         move || {
@@ -176,7 +179,7 @@ fn drawn_category_name(s: Store) -> impl IntoElement {
                     |_| {},
                     move || s.editing.with(|e| e.as_ref().is_some_and(|e| e.error.is_some())),
                     ReturnKeyType::Done,
-                    None,
+                    Some(field),
                 ))
                 .child(ui::field_note(
                     move || s.editing.with(|e| e.as_ref().and_then(|e| e.error)).map(|e| s.label(crate::i18n::error_key(e))),
@@ -201,8 +204,6 @@ pub fn of(s: Store, nav: super::Nav) -> impl IntoElement {
     view()
         .child(when(move || is(Dialog::AutoLock), move || auto_lock(s, nav)))
         .child(when(move || is(Dialog::Language), move || language(s, nav)))
-        .child(when(move || is(Dialog::ChangePassword), move || change_password(s, nav)))
-        .child(when(move || is(Dialog::Export), move || export(s, nav)))
         .child(when(move || is(Dialog::BackupPassword), move || backup_password(s, nav)))
 }
 
@@ -273,112 +274,6 @@ fn language(s: Store, nav: super::Nav) -> impl IntoElement {
             .collect(),
         move || s.preferences.get().language,
         move |l| s.update_preferences(move |p| p.language = l),
-    )
-}
-
-fn change_password(s: Store, nav: super::Nav) -> impl IntoElement {
-    use crate::pages::unlock::new_password_ok;
-    let ready = move || s.form.with(|f| !f.password.is_empty()) && new_password_ok(s) && !s.busy.get();
-    let submit = move || {
-        if ready() {
-            dismiss_keyboard();
-            s.change_password()
-        }
-    };
-    let close = move || {
-        if !s.busy.get() {
-            s.clear();
-            nav.dialog.set(None)
-        }
-    };
-    super::shows_errors(s);
-    super::on_done(s, Done::PasswordChanged, move || {
-        nav.dialog.set(None);
-        s.show_toast(crate::store::Tone::Success, s.label("Master password changed"));
-    });
-    ui::dialog(
-        move || s.label("Change Master Password"),
-        move || {
-            view()
-                .gap(px(8.0))
-                .child(ui::field(
-                    s,
-                    "current-password",
-                    Entry::Password,
-                    move || s.label("Current Master Password"),
-                    move || s.form.with(|f| f.password.to_string()),
-                    move |v| {
-                        s.error.set(None);
-                        s.form.update(|f| f.password = Zeroizing::new(v.to_owned()))
-                    },
-                    || {},
-                    |_| {},
-                    move || s.error.get().is_some(),
-                    ReturnKeyType::Next,
-                    None,
-                ))
-                .child(super::onboarding::new_password_fields(s, "New Password", "Enter again", submit))
-                .child(ui::dim(ui::caption(text(move || {
-                    s.label("The vault on this device is re-encrypted with the new password. If sync is on, your backup is updated too.")
-                }))))
-                .child(ui::field_note(move || s.error.get().map(|e| s.label(crate::i18n::error_key(e))), || true))
-        },
-        ui::dialog_actions(true)
-            .child(ui::dialog_action(move || s.label("Cancel"), ui::Act::Cancel).disabled(move || s.busy.get()).on_press(close))
-            .child(
-                ui::dialog_action(move || s.label("Change Password"), ui::Act::Default)
-                    .test_id("change")
-                    .disabled(move || !ready())
-                    .on_press(submit),
-            ),
-        close,
-    )
-}
-
-/// "Export Encrypted Backup": the password the file is encrypted with, then the master password, then where to save.
-fn export(s: Store, nav: super::Nav) -> impl IntoElement {
-    use crate::{pages::unlock::new_password_ok, store::Auth};
-    // Every account: the export takes the ones the store selects as it lists them (which needs its export sheet, let
-    // go with the dialog). Nothing is exported before they are listed.
-    s.selected.set(Default::default());
-    s.open_sheet(Sheet::ExportImport);
-    cleanup(move || {
-        if s.sheet.get_untracked() == Some(Sheet::ExportImport) {
-            s.sheet.set(None);
-        }
-    });
-    let ready = move || new_password_ok(s) && !s.busy.get() && !s.selected.with(|x| x.is_empty());
-    let close = move || {
-        s.form.update(|f| {
-            f.new_password = Zeroizing::new(String::new());
-            f.confirmation = Zeroizing::new(String::new());
-        });
-        nav.dialog.set(None)
-    };
-    let submit = move || {
-        if ready() {
-            dismiss_keyboard();
-            let p = s.form.with(|f| f.new_password.clone());
-            s.confirm_fair(p, move |_| {
-                nav.dialog.set(None);
-                s.reveal(Auth::Export)
-            })
-        }
-    };
-    ui::dialog(
-        move || s.label("Export Encrypted Backup"),
-        move || {
-            view()
-                .gap(px(8.0))
-                .child(ui::message(ui::body(text(move || {
-                    s.label("The backup is encrypted with this separate password. You’ll need it to import on another device.")
-                }))))
-                .child(super::onboarding::new_password_fields(s, "Export Password", "Enter again", submit))
-        },
-        ui::dialog_actions(false).child(ui::dialog_action(move || s.label("Cancel"), ui::Act::Cancel).on_press(close)).child(
-            ui::dialog_action(move || s.label("Export"), ui::Act::Default).test_id("export-go").disabled(move || !ready()).on_press(submit),
-        ),
-        close,
     )
 }
 

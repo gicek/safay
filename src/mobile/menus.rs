@@ -6,7 +6,7 @@ use crate::{
     icons::{Icon, icon},
     store::{Auth, CategoryEdit, Sheet, Store},
 };
-use nsh_base::theme;
+use nsh_base::{button, theme};
 use nsh_core::prelude::*;
 use safay_app::Uuid;
 use std::collections::BTreeSet;
@@ -142,29 +142,63 @@ pub fn add_to(s: Store, nav: Nav) -> impl IntoElement {
         }
         nav.add_to.set(None)
     };
+    let close = move || nav.add_to.set(None);
+    let new_category = move || s.editing.set(Some(CategoryEdit { account: nav.add_to.get(), ..Default::default() }));
+    let account = move || {
+        let id = nav.add_to.get();
+        s.projection.with(|p| p.rows.iter().find(|r| Some(r.id) == id).map(|r| SharedString::from(r.issuer.clone()))).unwrap_or_default()
+    };
+    let none = move || s.projection.with(|p| p.categories.is_empty());
     ui::bottom_sheet(
         move || nav.add_to.get().is_some(),
-        move || nav.add_to.set(None),
+        close,
         move || {
             view()
                 .pb_safe_area_plus(px(8.0))
-                .child(
+                .child(if ui::IOS {
+                    // iOS: a sheet's bar, "Cancel", the title, "Save".
                     view()
                         .flex_row()
                         .items_center()
-                        .px(px(12.0))
+                        .px(px(8.0))
+                        .pb(px(8.0))
+                        .child(ui::text_button(move || s.label("Cancel"), false).on_press(close))
+                        .child(ui::title(text(move || s.label("Add to"))).flex_1().text_center().number_of_lines(1))
                         .child(
-                            ui::text_button(move || s.label("New Category"), false)
-                                .on_press(move || s.editing.set(Some(CategoryEdit { account: nav.add_to.get(), ..Default::default() }))),
+                            ui::text_button(move || s.label("Save"), false)
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .test_id("save")
+                                .on_press(save),
                         )
-                        .child(view().flex_1())
-                        .child(ui::text_button(move || s.label("Save"), false).test_id("save").on_press(save)),
-                )
-                // iOS: the categories as one group of rows, as the system's checklists.
+                        .into_element()
+                } else {
+                    // Android: the title at the start, over the account it is for; "Save" at the end.
+                    view()
+                        .flex_row()
+                        .items_center()
+                        .pl(px(24.0))
+                        .pr(px(12.0))
+                        .pb(px(8.0))
+                        .child(
+                            view()
+                                .flex_1()
+                                .min_w(px(0.0))
+                                .child(ui::title_large(text(move || s.label("Add to"))).number_of_lines(1))
+                                .child(ui::dim(ui::body(text(account))).number_of_lines(1)),
+                        )
+                        .child(ui::text_button(move || s.label("Save"), false).test_id("save").on_press(save))
+                        .into_element()
+                })
+                // iOS: which account, under the bar, as a group's header.
+                .child(when(
+                    || ui::IOS,
+                    move || ui::footer(move || s.fmt("Categories for “{}”", &[&account()])).px(px(ui::MARGIN + 16.0)).pb(px(7.0)),
+                ))
+                // iOS: the categories as one group of rows, as the system's checklists; the last row makes a new one.
                 .child(
                     scroll().max_h(px(360.0)).child(
                         view()
-                            .py(px(8.0))
+                            .py(px(if ui::IOS { 0.0 } else { 8.0 }))
                             .mx(px(if ui::IOS { ui::MARGIN } else { 0.0 }))
                             .mb(px(if ui::IOS { 16.0 } else { 0.0 }))
                             .rounded(px(if ui::IOS { ui::GROUP_RADIUS } else { 0.0 }))
@@ -190,22 +224,71 @@ pub fn add_to(s: Store, nav: Nav) -> impl IntoElement {
                                                 }
                                             })
                                         })
-                                        .child(view().text_color(move || theme().foreground).child(icon(Icon::Folder).size(px(24.0))))
+                                        // Android: Material's checkbox at the start; iOS: a folder, the checkmark at the end.
+                                        .child(if ui::IOS {
+                                            view()
+                                                .text_color(move || theme().foreground)
+                                                .child(icon(Icon::Folder).size(px(24.0)))
+                                                .into_element()
+                                        } else {
+                                            checkbox_mark(on).into_element()
+                                        })
                                         .child(
                                             ui::body_large(text(move || c.with(|c| SharedString::from(c.name.clone()))))
                                                 .number_of_lines(1)
                                                 .flex_1()
                                                 .text_color(move || theme().foreground),
                                         )
-                                        .child(when(on, || {
-                                            view().text_color(move || theme().primary).child(icon(Icon::Check).size(px(24.0)))
-                                        }))
+                                        .child(when(
+                                            move || ui::IOS && on(),
+                                            || view().text_color(move || theme().primary).child(icon(Icon::Check).size(px(24.0))),
+                                        ))
                                         .child(when(move || ui::IOS && index.get() > 0, || ui::separator(16.0 + 24.0 + 16.0)))
                                 },
-                            )),
+                            ))
+                            // "New Category", a row of the list, after the categories.
+                            .child(
+                                button()
+                                    .test_id("new-category")
+                                    .accessibility_label(move || Some(s.label("New Category")))
+                                    .min_h(move || px(ui::TOUCH) * font_scale())
+                                    .px(px(if ui::IOS { 16.0 } else { 24.0 }))
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(px(16.0))
+                                    .active(|st| st.bg(move || tok("pressed")))
+                                    .on_press(new_category)
+                                    .child(view().text_color(move || theme().primary).child(icon(Icon::FolderPlus).size(px(24.0))))
+                                    .child(
+                                        ui::body_large(text(move || s.label("New Category…"))).flex_1().text_color(move || theme().primary),
+                                    )
+                                    .child(when(move || ui::IOS && !none(), || ui::separator(16.0 + 24.0 + 16.0))),
+                            ),
                     ),
                 )
+                // No category yet: what one is for.
+                .child(when(none, move || {
+                    ui::footer(move || s.label("Categories group your accounts. Create one, and this account goes in it."))
+                        .px(px(if ui::IOS { ui::MARGIN + 16.0 } else { 24.0 }))
+                        .pb(px(8.0))
+                }))
                 .into_element()
         },
+    )
+}
+
+/// Material's checkbox: a 18 pt box, filled with the primary color and checked when `on`.
+fn checkbox_mark(on: impl Fn() -> bool + Copy + 'static) -> impl IntoElement {
+    view().size(px(24.0)).items_center().justify_center().child(
+        view()
+            .size(px(18.0))
+            .rounded(px(2.0))
+            .border(px(2.0))
+            .border_color(move || if on() { theme().primary } else { tok("outline") })
+            .bg(move || if on() { theme().primary } else { theme().card.opacity(0.0) })
+            .items_center()
+            .justify_center()
+            .text_color(move || theme().primary_foreground)
+            .child(when(on, || icon(Icon::Check).size(px(16.0)))),
     )
 }

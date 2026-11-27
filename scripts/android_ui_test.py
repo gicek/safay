@@ -635,7 +635,7 @@ def categories(r: Run):
 
 def search(r: Run):
     d = r.d
-    d.tap("search-button", settle=1.2)
+    d.tap("search-open", settle=1.2)
     s = d.screen()
     r.check(s.keyboard_top is not None, "the search button opens the field with the keyboard up")
     d.type("drop")
@@ -649,7 +649,7 @@ def search(r: Run):
     r.check(bool(n) and s.visible(n[0]), '"No matching accounts" shows above the keyboard')
     d.tap("search-button", settle=1.2)
     s = d.screen()
-    r.check(s.keyboard_top is None and not s.has("Close"), "the close button closes the field and the keyboard")
+    r.check(s.keyboard_top is None and not s.has("Close"), "the back arrow closes the field and the keyboard")
     r.check(len(rows(s)) == 3, "closing the search brings every account back")
 
 
@@ -662,6 +662,7 @@ def delete_and_recover(r: Run):
         sorted(rows(s)) == ["AWS", "GitHub Work"],
         f"the list drops the deleted account and keeps the others (rows {rows(s)})",
     )
+    r.check(s.has("undo"), 'the toast offers "Undo"')
     open_settings(d)
     scroll_down(d)
     d.tap("deleted", settle=1.2)
@@ -687,10 +688,11 @@ def settings_dialogs(r: Run):
     d.tap("5 minutes", settle=1.0)
 
     d.tap("change-password", settle=1.0)
+    s = d.wait("Change Master Password")
+    r.check(all(s.has(x) for x in ("Current Master Password", "New Password", "Enter again")), "Change Master Password is a page of its own")
     d.fill("Current Master Password", PASSWORD)
-    r.check(not d.dialog_clipped(), "the Change Master Password dialog and its focused field stay on screen")
     d.hide_keyboard()
-    d.tap("Cancel")
+    d.tap("Back", settle=1.0)
 
     scroll_down(d)
     d.tap("reset", settle=1.0)
@@ -719,9 +721,9 @@ def settings_dialogs(r: Run):
     d.tap("Close")
 
     # Synology: the NAS, the account and an optional code; the folder is picked after signing in. Closing a sheet goes
-    # back to Settings, so the locations are opened again.
-    d.tap("backup-set-up", settle=1.2)
-    d.wait("Choose Location")
+    # back to Choose Location.
+    s = d.wait("Choose Location")
+    r.check(s.has("Synology"), "closing a service's sheet goes back to Choose Location")
     d.tap("Synology", 0, settle=1.2)
     s = d.wait("Connect to Synology")
     r.check(
@@ -736,6 +738,8 @@ def settings_dialogs(r: Run):
     d.hide_keyboard()
     d.shot("backup-synology")
     d.tap("Close")
+    d.wait("Choose Location")
+    d.tap("Back", settle=1.0)
     d.tap("Back")
 
 
@@ -950,7 +954,7 @@ def letter_filter(r: Run, d: Device):
     s = d.screen()
     r.check(whole() and s.has("more"), "the back key lets the list go, and stays in the app")
     press("V")
-    d.tap("search-button", settle=1.2)
+    d.tap("search-open", settle=1.2)
     r.check(whole(), "opening the search lets the list go")
     d.tap("search-button", settle=1.2)
     press("V")

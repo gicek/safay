@@ -1,7 +1,7 @@
 //! Settings, as groups of rows: security, the vault's data, how the app looks, and what it is.
 use super::{Dialog, Nav, Page, ui};
 use crate::{
-    icons::Icon,
+    icons::{Icon, icon},
     store::{Auth, Store},
 };
 use nsh_base::theme;
@@ -54,7 +54,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
         .test_id("change-password")
         .on_press(move || {
             s.clear();
-            nav.dialog.set(Some(Dialog::ChangePassword))
+            nav.push(Page::ChangePassword)
         })
         .into_element();
     let icons_note = move || s.label("Each icon comes straight from the account’s website.");
@@ -72,7 +72,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
     .into_element();
     let export = ui::row(ui::round_tile(Icon::ExportImport, false), move || s.label("Export Encrypted Backup"), None, ui::chevron())
         .test_id("export")
-        .on_press(move || nav.dialog.set(Some(Dialog::Export)))
+        .on_press(move || nav.push(Page::Export))
         .into_element();
     let import = ui::row(ui::round_tile(Icon::Download, false), move || s.label("Import Backup File"), None, ui::chevron())
         .test_id("import")
@@ -222,65 +222,198 @@ pub fn deleted(s: Store, nav: Nav) -> impl IntoElement {
         .child(ui::top_bar(s, Some("Recently Deleted"), move || {
             nav.pop();
         }))
-        .child(
-            scroll().flex_1().child(
+        // Nothing in it: centered on the page, as the list's own empty state.
+        .child(when(
+            move || count() == 0,
+            move || {
                 view()
-                    .px(px(ui::MARGIN))
-                    .pt(px(8.0))
-                    .pb_safe_area_plus(px(32.0))
-                    .child(view().gap(px(ui::GROUP_GAP)).child(each(
-                        move || s.projection.with(|p| p.deleted.clone()),
-                        |d| d.id,
-                        move |d, index| {
-                            let id = d.with_untracked(|d| d.id);
-                            ui::group_corners(
-                                view()
-                                    .flex_row()
-                                    .items_center()
-                                    .bg(move || theme().card)
-                                    .min_h(move || px(ui::ROW) * font_scale())
-                                    .pl(px(20.0))
-                                    .pr(px(4.0)),
-                                move || index.get(),
-                                count,
-                            )
-                            .child(
-                                view()
-                                    .flex_1()
-                                    .min_w(px(0.0))
-                                    .child(
-                                        ui::body_large(text(move || d.with(|d| SharedString::from(d.issuer.clone())))).number_of_lines(1),
-                                    )
-                                    .child(
-                                        ui::dim(ui::body(text(move || d.with(|d| SharedString::from(d.username.clone())))))
-                                            .number_of_lines(1),
-                                    ),
-                            )
-                            .child(ui::text_button(move || s.label("Recover"), false).on_press(move || s.recover_account(id)))
-                            .child(ui::icon_button(move || s.label("Delete"), || Icon::Trash).on_press(move || s.remove_deleted(Some(id))))
-                        },
-                    )))
-                    .child(
-                        ui::dim(ui::caption(text(move || {
-                            s.label(if count() == 0 {
-                                "No recently deleted accounts"
-                            } else {
-                                "Accounts are deleted for good after 30 days."
-                            })
-                        })))
-                        .p(px(16.0)),
-                    )
-                    // Empties it, after asking.
-                    .child(when(
-                        move || count() > 1,
-                        move || {
-                            view().items_center().child(
-                                ui::text_button(move || s.label("Delete All"), true)
-                                    .test_id("delete-all")
-                                    .on_press(move || s.remove_deleted(None)),
-                            )
-                        },
-                    )),
+                    .flex_1()
+                    .items_center()
+                    .justify_center()
+                    .px(px(32.0))
+                    .pb_safe_area_plus(px(48.0))
+                    .gap(px(8.0))
+                    .child(view().text_color(move || theme().muted_foreground).child(icon(Icon::Trash).size(px(48.0))))
+                    .child(ui::title(text(move || s.label("No recently deleted accounts"))).text_center().mt(px(8.0)))
+                    .child(ui::dim(ui::body(text(move || s.label("Accounts you delete wait here for 30 days.")))).text_center())
+            },
+        ))
+        .child(when(
+            move || count() > 0,
+            move || {
+                scroll().flex_1().child(
+                    view()
+                        .px(px(ui::MARGIN))
+                        .pt(px(8.0))
+                        .pb_safe_area_plus(px(32.0))
+                        .child(view().gap(px(ui::GROUP_GAP)).child(each(
+                            move || s.projection.with(|p| p.deleted.clone()),
+                            |d| d.id,
+                            move |d, index| {
+                                let id = d.with_untracked(|d| d.id);
+                                ui::group_corners(
+                                    view()
+                                        .flex_row()
+                                        .items_center()
+                                        .bg(move || theme().card)
+                                        .min_h(move || px(ui::ROW) * font_scale())
+                                        .pl(px(20.0))
+                                        .pr(px(4.0)),
+                                    move || index.get(),
+                                    count,
+                                )
+                                .child(
+                                    view()
+                                        .flex_1()
+                                        .min_w(px(0.0))
+                                        .child(
+                                            ui::body_large(text(move || d.with(|d| SharedString::from(d.issuer.clone()))))
+                                                .number_of_lines(1),
+                                        )
+                                        .child(
+                                            ui::dim(ui::body(text(move || d.with(|d| SharedString::from(d.username.clone())))))
+                                                .number_of_lines(1),
+                                        ),
+                                )
+                                .child(ui::text_button(move || s.label("Recover"), false).on_press(move || s.recover_account(id)))
+                                .child(
+                                    ui::icon_button(move || s.label("Delete"), || Icon::Trash).on_press(move || s.remove_deleted(Some(id))),
+                                )
+                            },
+                        )))
+                        .child(ui::dim(ui::caption(text(move || s.label("Accounts are deleted for good after 30 days.")))).p(px(16.0)))
+                        // Empties it, after asking.
+                        .child(when(
+                            move || count() > 1,
+                            move || {
+                                view().items_center().child(
+                                    ui::text_button(move || s.label("Delete All"), true)
+                                        .test_id("delete-all")
+                                        .on_press(move || s.remove_deleted(None)),
+                                )
+                            },
+                        )),
+                )
+            },
+        ))
+}
+
+// ---- Pages of a task -----------------------------------------------------------------------------------------------
+
+/// A page that does one thing with a few fields: its bar, then a column of a readable width that scrolls, the action
+/// at its end. iOS: under the system's header (small title), as the pages a task opens.
+fn task_page(s: Store, nav: Nav, title: &'static str, column: impl IntoElement) -> impl IntoElement {
+    view().flex_1().pt(ui::page_top).child(ui::top_bar(s, Some(title), move || nav.pop())).child(
+        scroll().flex_1().keyboard_dismiss_mode(KeyboardDismissMode::None).keyboard_taps(KeyboardTaps::Handled).child(
+            view().items_center().pb_safe_area_plus(px(24.0)).child(
+                view().w_full().max_w(px(480.0)).px(px(ui::MARGIN)).pt(px(if ui::IOS { 8.0 } else { 12.0 })).gap(px(16.0)).child(column),
             ),
-        )
+        ),
+    )
+}
+/// What a page says about itself, under its bar.
+fn intro(text_: impl Fn() -> SharedString + 'static) -> impl IntoElement {
+    ui::dim(ui::body(text(text_))).px(px(if ui::IOS { 16.0 } else { 4.0 }))
+}
+
+/// "Change Master Password": the current one, then the new one twice. Its fields are a form of each platform's
+/// (`ui::form`), not crowded into a dialog.
+pub fn change_password(s: Store, nav: Nav) -> impl IntoElement {
+    use crate::pages::unlock::new_password_ok;
+    use ui::Entry;
+    let ready = move || s.form.with(|f| !f.password.is_empty()) && new_password_ok(s) && !s.busy.get();
+    let new_field = element_ref();
+    let submit = move || {
+        if ready() {
+            dismiss_keyboard();
+            s.change_password()
+        }
+    };
+    s.clear();
+    // What was typed goes with the page.
+    cleanup(move || s.clear());
+    super::shows_errors(s);
+    super::on_done(s, crate::store::Done::PasswordChanged, move || {
+        nav.pop();
+        s.show_toast(crate::store::Tone::Success, s.label("Master password changed"));
+    });
+    task_page(
+        s,
+        nav,
+        "Change Master Password",
+        view()
+            .gap(px(16.0))
+            .child(intro(move || {
+                s.label("The vault on this device is re-encrypted with the new password. If sync is on, your backup is updated too.")
+            }))
+            .child(ui::form(move || {
+                view()
+                    .child(ui::field(
+                        s,
+                        "current-password",
+                        Entry::Password,
+                        move || s.label("Current Master Password"),
+                        move || s.form.with(|f| f.password.to_string()),
+                        move |v| {
+                            s.error.set(None);
+                            s.form.update(|f| f.password = safay_app::Zeroizing::new(v.to_owned()))
+                        },
+                        move || new_field.focus(),
+                        |_| {},
+                        move || s.error.get().is_some(),
+                        ReturnKeyType::Next,
+                        None,
+                    ))
+                    // A wrong password, said under its field.
+                    .child(ui::field_note(move || s.error.get().map(|e| s.label(crate::i18n::error_key(e))), || true))
+            }))
+            .child(super::onboarding::new_password_form(s, "New Password", "Enter again", submit, new_field))
+            .child(
+                ui::primary_button(move || s.label("Change Password"), move || ready() || s.busy.get(), move || s.busy.get())
+                    .test_id("change")
+                    .on_press(submit),
+            ),
+    )
+}
+
+/// "Export Encrypted Backup": the password the file is encrypted with, then the master password, then where to save.
+pub fn export(s: Store, nav: Nav) -> impl IntoElement {
+    use crate::{pages::unlock::new_password_ok, store::Sheet};
+    // Every account: the export takes the ones the store selects as it lists them (which needs its export sheet, let
+    // go with the page). Nothing is exported before they are listed.
+    s.selected.set(Default::default());
+    s.open_sheet(Sheet::ExportImport);
+    // A password from before is not offered again. (Not as the page goes: the export, after it, still needs it.)
+    s.form.update(|f| {
+        f.new_password = safay_app::Zeroizing::new(String::new());
+        f.confirmation = safay_app::Zeroizing::new(String::new());
+    });
+    cleanup(move || {
+        if s.sheet.get_untracked() == Some(Sheet::ExportImport) {
+            s.sheet.set(None);
+        }
+    });
+    let ready = move || new_password_ok(s) && !s.busy.get() && !s.selected.with(|x| x.is_empty());
+    let submit = move || {
+        if ready() {
+            dismiss_keyboard();
+            let p = s.form.with(|f| f.new_password.clone());
+            s.confirm_fair(p, move |_| {
+                nav.pop();
+                s.reveal(Auth::Export)
+            })
+        }
+    };
+    task_page(
+        s,
+        nav,
+        "Export Encrypted Backup",
+        view()
+            .gap(px(16.0))
+            .child(intro(move || {
+                s.label("The backup is encrypted with this separate password. You’ll need it to import on another device.")
+            }))
+            .child(super::onboarding::new_password_form(s, "Export Password", "Enter again", submit, element_ref()))
+            .child(ui::primary_button(move || s.label("Export"), ready, move || s.busy.get()).test_id("export-go").on_press(submit)),
+    )
 }

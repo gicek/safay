@@ -5,52 +5,67 @@ use super::*;
 
 /// The dialogs of the card: where to keep the backup, and the master password of a backup this vault cannot open.
 pub fn dialogs(s: Store, nav: Nav) -> impl IntoElement {
-    view()
-        .child(when(move || nav.choosing.get(), move || choose(s, nav)))
-        .child(when(move || nav.restoring.get(), move || restore_unreadable(s, nav)))
+    view().child(when(move || nav.restoring.get(), move || restore_unreadable(s, nav)))
 }
 
-fn choose(s: Store, nav: Nav) -> impl IntoElement {
-    let close = move || nav.choosing.set(false);
+/// "Choose Location": a page of the services, the one in use checked. A service's setup opens over it, so its back
+/// comes back here; once a location is set up, the page goes too.
+pub fn location(s: Store, nav: Nav) -> impl IntoElement {
     let current = move || match s.projection.with(|p| p.sync.location.clone()) {
         Some(Location::Cloud { provider, .. }) => Some(provider),
         _ => None,
     };
-    ui::dialog(
-        move || s.label("Choose Location"),
-        move || {
-            view()
-                .mx(px(-24.0))
+    let was = s.projection.with_untracked(|p| p.sync.location.clone());
+    effect(move || {
+        let now = s.projection.with(|p| p.sync.location.clone());
+        if now.is_some() && now != was {
+            untracked(|| nav.pop());
+        }
+    });
+    let rows: Vec<AnyElement> = providers()
+        .into_iter()
+        .map(move |provider| {
+            button()
+                .test_id(provider.name())
+                .accessibility_label(move || Some(SharedString::from(provider.name())))
+                .min_h(move || px(ui::ROW) * font_scale())
+                .px(px(16.0))
+                .flex_row()
+                .items_center()
+                .gap(px(16.0))
+                .bg(move || theme().card)
+                .active(|st| st.bg(move || if ui::IOS { tok("pressed") } else { tok("surface-high") }))
+                .on_press(move || open_setup(s, provider, false))
+                .child(plate(LocationIcon::Cloud(provider)))
+                .child(ui::body_large(text(provider.name())).flex_1())
                 .child(
-                    ui::message(ui::body(text(move || {
-                        s.label("Choose where to keep the encrypted backup. Only one location is used at a time.")
-                    })))
-                    .px(px(24.0))
-                    .pb(px(8.0)),
+                    when(
+                        move || current() == Some(provider),
+                        || view().text_color(move || theme().primary).child(icon(Icon::Check).size(px(24.0))),
+                    )
+                    .otherwise(ui::chevron),
                 )
-                .children(providers().into_iter().map(move |provider| {
-                    button()
-                        .test_id(provider.name())
-                        .min_h(px(56.0))
-                        .px(px(24.0))
-                        .flex_row()
-                        .items_center()
-                        .gap(px(16.0))
-                        .active(|st| st.bg(move || tok("pressed")))
-                        .on_press(move || {
-                            close();
-                            open_setup(s, provider, false)
-                        })
-                        .child(plate(LocationIcon::Cloud(provider)))
-                        .child(ui::body_large(text(provider.name())).flex_1())
-                        .child(when(
-                            move || current() == Some(provider),
-                            || view().text_color(move || theme().primary).child(icon(Icon::Check).size(px(24.0))),
-                        ))
-                }))
-        },
-        ui::dialog_actions(false).child(ui::dialog_action(move || s.label("Cancel"), ui::Act::Cancel).on_press(close)),
-        close,
+                .into_element()
+        })
+        .collect();
+    view().flex_1().pt(ui::page_top).child(ui::top_bar(s, Some("Choose Location"), move || nav.pop())).child(
+        scroll().flex_1().child(
+            view().items_center().pb_safe_area_plus(px(24.0)).child(
+                view()
+                    .w_full()
+                    .max_w(px(480.0))
+                    .px(px(ui::MARGIN))
+                    .pt(px(8.0))
+                    .child(
+                        ui::dim(ui::body(text(move || {
+                            s.label("Choose where to keep the encrypted backup. Only one location is used at a time.")
+                        })))
+                        .px(px(16.0))
+                        .pb(px(12.0)),
+                    )
+                    .child(ui::group(rows)),
+            ),
+        ),
     )
 }
 

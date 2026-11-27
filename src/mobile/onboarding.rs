@@ -111,8 +111,8 @@ fn welcome(s: Store) -> impl IntoElement {
             .child(
                 view()
                     .w_full()
-                    // iOS: two cards of their own, apart.
-                    .gap(px(if ui::IOS { 12.0 } else { ui::GROUP_GAP }))
+                    // Two cards of their own, apart, on both platforms.
+                    .gap(px(12.0))
                     .child(choice(
                         s,
                         Icon::PlusCircleFill,
@@ -141,6 +141,8 @@ fn welcome(s: Store) -> impl IntoElement {
     )
 }
 
+/// How tall a choice of the welcome page is at the default text size: its padding, a title and two lines of detail.
+const CHOICE: f32 = 14.0 * 2.0 + 24.0 + 2.0 + 20.0 * 2.0;
 /// A choice of the welcome page: a tile, a title over a line of detail, a chevron.
 #[allow(clippy::too_many_arguments)]
 fn choice(
@@ -157,7 +159,10 @@ fn choice(
         .flex_row()
         .items_center()
         .gap(px(16.0))
-        .p(px(18.0))
+        .px(px(18.0))
+        .py(px(14.0))
+        // One height for both choices, whichever detail wraps to a second line: the title and two lines of detail.
+        .min_h(move || px(CHOICE) * font_scale())
         .rounded(px(if ui::IOS { ui::GROUP_RADIUS } else { 28.0 }))
         .bg(move || theme().card)
         .active(|st| st.bg(move || if ui::IOS { tok("pressed") } else { tok("surface-high") }))
@@ -206,7 +211,7 @@ fn create(s: Store) -> impl IntoElement {
                 view()
                     .gap(px(12.0))
                     .child(
-                        ui::form_card().child(new_password_fields(s, "New Password", "Enter again", submit)),
+                        new_password_form(s, "New Password", "Enter again", submit, element_ref()),
                     )
                     .child(
                         view()
@@ -234,42 +239,102 @@ fn create(s: Store) -> impl IntoElement {
 
 /// A new password and its confirmation, with the strength bar between them: shared by every page that sets a password.
 /// The requirement under the bar shows only while there is one; the mismatch line always keeps its height.
-pub fn new_password_fields(
+/// The first field is reachable through `first` (Return in a field above moves to it).
+pub fn new_password_fields_at(
     s: Store,
     new_label: &'static str,
     confirm_label: &'static str,
     submit: impl Fn() + Copy + 'static,
+    first: ElementRef,
 ) -> impl IntoElement {
     let confirm = element_ref();
-    let level = move || s.strength.with(|x| x.0);
-    let short = move || s.form.with(|f| f.new_password.chars().count()) < 8;
-    let weak = move || !short() && !s.strength.with(|x| x.1);
     view()
         .gap(px(8.0))
-        .child(ui::field(
-            s,
-            "new-password",
-            Entry::Password,
-            move || s.label(new_label),
-            move || s.form.with(|f| f.new_password.to_string()),
-            move |v| {
-                s.error.set(None);
-                let next = password::filter_password_input(v);
-                s.form.update(|f| f.new_password = Zeroizing::new(next));
-            },
-            move || confirm.focus(),
-            move |focused| {
-                s.marks.update(|m| {
-                    m.new_focused = focused;
-                    m.new_left |= !focused;
-                })
-            },
-            weak,
-            ReturnKeyType::Next,
-            None,
-        ))
-        // The strength meter, with a little more room under it than the gap: the next field's label stands above it.
-        .child(view().flex_row().gap(px(4.0)).px(px(4.0)).mb(px(4.0)).children((1..=4u8).map(move |i| {
+        .child(new_field(s, new_label, first, confirm))
+        .child(strength(s))
+        .child(confirm_field(s, confirm_label, submit, confirm))
+        .child(ui::field_note(move || mismatch(s), || true))
+}
+/// A new password and its confirmation as a form of the platform's (`ui::form`). iOS: the two fields are the rows of
+/// one group, and the strength meter, its requirement and a mismatch are said under the group, as the system's footers
+/// are; a meter between two rows would read as a third field. Android: `new_password_fields_at` as it is.
+pub fn new_password_form(
+    s: Store,
+    new_label: &'static str,
+    confirm_label: &'static str,
+    submit: impl Fn() + Copy + 'static,
+    first: ElementRef,
+) -> AnyElement {
+    if !ui::IOS {
+        return ui::form(move || new_password_fields_at(s, new_label, confirm_label, submit, first)).into_element();
+    }
+    let confirm = element_ref();
+    view()
+        .gap(px(8.0))
+        .child(ui::form(move || {
+            view().child(new_field(s, new_label, first, confirm)).child(confirm_field(s, confirm_label, submit, confirm))
+        }))
+        .child(strength(s))
+        .child(when(move || mismatch(s).is_some(), move || ui::field_note(move || mismatch(s), || true)))
+        .into_element()
+}
+fn short(s: Store) -> bool {
+    s.form.with(|f| f.new_password.chars().count()) < 8
+}
+fn weak(s: Store) -> bool {
+    !short(s) && !s.strength.with(|x| x.1)
+}
+fn new_field(s: Store, label: &'static str, me: ElementRef, confirm: ElementRef) -> impl IntoElement {
+    ui::field(
+        s,
+        "new-password",
+        Entry::Password,
+        move || s.label(label),
+        move || s.form.with(|f| f.new_password.to_string()),
+        move |v| {
+            s.error.set(None);
+            let next = password::filter_password_input(v);
+            s.form.update(|f| f.new_password = Zeroizing::new(next));
+        },
+        move || confirm.focus(),
+        move |focused| {
+            s.marks.update(|m| {
+                m.new_focused = focused;
+                m.new_left |= !focused;
+            })
+        },
+        move || weak(s),
+        ReturnKeyType::Next,
+        Some(me),
+    )
+}
+fn confirm_field(s: Store, label: &'static str, submit: impl Fn() + Copy + 'static, me: ElementRef) -> impl IntoElement {
+    ui::field(
+        s,
+        "confirm-password",
+        Entry::Password,
+        move || s.label(label),
+        move || s.form.with(|f| f.confirmation.to_string()),
+        move |v| {
+            s.error.set(None);
+            let next = password::filter_password_input(v);
+            s.form.update(|f| f.confirmation = Zeroizing::new(next));
+        },
+        submit,
+        move |focused| s.marks.update(|m| m.confirm_focused = focused),
+        move || mismatch(s).is_some(),
+        ReturnKeyType::Done,
+        Some(me),
+    )
+}
+/// The strength meter, and under it the requirement while there is one.
+fn strength(s: Store) -> impl IntoElement {
+    let level = move || s.strength.with(|x| x.0);
+    // iOS: at the group's text inset, as its footer.
+    let inset = if ui::IOS { 16.0 } else { 4.0 };
+    view()
+        .gap(px(6.0))
+        .child(view().flex_row().gap(px(4.0)).px(px(inset)).mb(px(4.0)).children((1..=4u8).map(move |i| {
             view()
                 .flex_1()
                 .h(px(4.0))
@@ -290,35 +355,17 @@ pub fn new_password_fields(
                 .ease_out()
         })))
         .child(when(
-            move || short() || weak(),
+            move || short(s) || weak(s),
             move || {
                 ui::caption(text(move || {
-                    s.label(if short() {
+                    s.label(if short(s) {
                         "At least 8 characters"
                     } else {
                         "Too easy to crack. Use a longer password, or a few unrelated words."
                     })
                 }))
-                .px(px(4.0))
-                .text_color(move || if weak() { theme().destructive } else { theme().muted_foreground })
+                .px(px(inset))
+                .text_color(move || if weak(s) { theme().destructive } else { theme().muted_foreground })
             },
         ))
-        .child(ui::field(
-            s,
-            "confirm-password",
-            Entry::Password,
-            move || s.label(confirm_label),
-            move || s.form.with(|f| f.confirmation.to_string()),
-            move |v| {
-                s.error.set(None);
-                let next = password::filter_password_input(v);
-                s.form.update(|f| f.confirmation = Zeroizing::new(next));
-            },
-            submit,
-            move |focused| s.marks.update(|m| m.confirm_focused = focused),
-            move || mismatch(s).is_some(),
-            ReturnKeyType::Done,
-            Some(confirm),
-        ))
-        .child(ui::field_note(move || mismatch(s), || true))
 }

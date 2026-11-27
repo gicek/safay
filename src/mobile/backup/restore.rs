@@ -93,23 +93,25 @@ pub fn restore_page(s: Store, scaffold: impl FnOnce(AnyElement, AnyElement) -> A
                                         ),
                                 ),
                         )
-                        .child(ui::form_card().child(ui::field(
-                            s,
-                            "password",
-                            Entry::Password,
-                            move || s.label(if export() { "Export Password" } else { "Existing Master Password" }),
-                            move || s.form.with(|f| f.password.to_string()),
-                            move |v| {
-                                s.error.set(None);
-                                s.status.set(None);
-                                s.form.update(|f| f.password = Zeroizing::new(v.to_owned()))
-                            },
-                            submit,
-                            |_| {},
-                            move || s.error.get().is_some(),
-                            ReturnKeyType::Done,
-                            None,
-                        )))
+                        .child(ui::form(move || {
+                            ui::field(
+                                s,
+                                "password",
+                                Entry::Password,
+                                move || s.label(if export() { "Export Password" } else { "Existing Master Password" }),
+                                move || s.form.with(|f| f.password.to_string()),
+                                move |v| {
+                                    s.error.set(None);
+                                    s.status.set(None);
+                                    s.form.update(|f| f.password = Zeroizing::new(v.to_owned()))
+                                },
+                                submit,
+                                |_| {},
+                                move || s.error.get().is_some(),
+                                ReturnKeyType::Done,
+                                None,
+                            )
+                        }))
                         .child(when(export, move || {
                             view()
                                 .gap(px(12.0))
@@ -132,9 +134,7 @@ pub fn restore_page(s: Store, scaffold: impl FnOnce(AnyElement, AnyElement) -> A
                                 )
                                 .child(when(
                                     move || !use_as_master.get(),
-                                    move || {
-                                        ui::form_card().child(onboarding::new_password_fields(s, "Master Password", "Enter again", submit))
-                                    },
+                                    move || onboarding::new_password_form(s, "Master Password", "Enter again", submit, element_ref()),
                                 ))
                         }))
                         .child(

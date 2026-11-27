@@ -10,10 +10,12 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 - **Synology**: back up to a folder you pick or create on your Synology NAS, found by its QuickConnect ID or address,
   with an optional two-step verification code.
 - **Tablets**: on a tablet or an open foldable, your categories sit in a sidebar and your accounts show as cards.
+- **Undo**: after you delete an account on your phone, "Undo" in the message puts it right back.
 
 ### Changed
 
 - **Google Drive**: changes upload automatically, as on the other services, instead of waiting for you to approve them.
+- **Phones**: Android and iPhone each follow their own system: forms, menus and search, with password changes on a page.
 
 ## [1.5.0] - 2026-11-24
 

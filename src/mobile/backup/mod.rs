@@ -57,7 +57,7 @@ mod restore;
 
 pub use cloud::setup_sheet;
 pub use conflict::conflict;
-pub use location::dialogs;
+pub use location::{dialogs, location};
 pub use restore::{restore_back, restore_page, restoring};
 
 // ---- Settings ------------------------------------------------------------------------------------------------------
@@ -83,7 +83,7 @@ pub fn section(s: Store, nav: Nav) -> impl IntoElement {
                             view().flex_row().child(
                                 ui::filled_button(Some(Icon::Cloud), move || s.label("Set Up"))
                                     .test_id("backup-set-up")
-                                    .on_press(move || nav.choosing.set(true)),
+                                    .on_press(move || nav.push(Page::Location)),
                             ),
                         )
                 }))
@@ -239,7 +239,7 @@ fn linked(s: Store, nav: Nav) -> impl IntoElement {
                         ui::outlined_button(move || s.label("Change Location"))
                             .test_id("change-location")
                             .disabled(busy)
-                            .on_press(move || nav.choosing.set(true)),
+                            .on_press(move || nav.push(Page::Location)),
                     )
             },
         ))

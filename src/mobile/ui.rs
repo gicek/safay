@@ -450,6 +450,11 @@ pub enum Entry {
 /// error color while `error` holds. A press anywhere in it focuses `me`. It keeps room above itself for the half of its
 /// floated label that stands out over the outline, so whatever is above stays clear of the label.
 fn outlined(focused: Signal<bool>, error: impl Fn() -> bool + Copy + 'static, me: ElementRef) -> View {
+    // iOS, in a form: a row of its group, a hairline over every row but the first.
+    if let Some(rows) = FORM.get().filter(|_| IOS) {
+        FORM.set(Some(rows + 1));
+        return view().bg(move || theme().card).on_press(move |_: &()| me.focus()).child(when(move || rows > 0, || separator(16.0)));
+    }
     // iOS: a filled box, its label inside (`floating_label`); the focus and a problem draw its edge.
     if IOS {
         return view()
@@ -467,10 +472,11 @@ fn outlined(focused: Signal<bool>, error: impl Fn() -> bool + Copy + 'static, me
             })
             .on_press(move |_: &()| me.focus());
     }
+    let on_dialog = compact_now();
     view()
         .mt(move || px(8.0) * font_scale())
         .rounded(px(16.0))
-        .bg(move || theme().card)
+        .bg(move || field_surface(on_dialog))
         .border(move || px(outline_width(focused, error)))
         .border_color(move || {
             if error() {
@@ -482,6 +488,11 @@ fn outlined(focused: Signal<bool>, error: impl Fn() -> bool + Copy + 'static, me
             }
         })
         .on_press(move |_: &()| me.focus())
+}
+/// What an outlined field is filled with: the surface it stands on (a dialog's, or the page's cards'), so its floated
+/// label's band, which is the same, breaks the outline without a patch of another color.
+fn field_surface(on_dialog: bool) -> AdaptiveColor {
+    if on_dialog { tok("popover") } else { theme().card }
 }
 fn outline_width(focused: Signal<bool>, error: impl Fn() -> bool) -> f32 {
     if focused.get() || error() { 2.0 } else { 1.0 }
@@ -521,6 +532,7 @@ fn floating_label(
                     .ease_out(),
             );
     }
+    let on_dialog = compact_now();
     view()
         .absolute()
         .left(px(12.0))
@@ -537,7 +549,7 @@ fn floating_label(
                 .right(px(0.0))
                 .top(move || px(8.0 * font_scale() - outline() / 2.0 - 0.5))
                 .h(move || px(outline() + 1.0))
-                .bg(move || theme().card)
+                .bg(move || field_surface(on_dialog))
                 .opacity(move || if floated() { 1.0_f32 } else { 0.0 }),
         )
         .child(
@@ -563,13 +575,27 @@ fn floating_label(
 thread_local! {
     /// Fields and notes are being built for an alert (`compact`).
     static COMPACT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Fields are being built as the rows of an iOS form (`form`): how many there are so far.
+    static FORM: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
 }
-/// Builds `content` for an alert: on iOS its fields are the system alert's (44 pt, their label as the placeholder, no
-/// control of their own) and a field's note takes room only while it says something.
-pub fn compact<R>(content: impl FnOnce() -> R) -> R {
+/// Fields on a page, as each platform lays out a form. iOS: the rows of one inset group (a card, hairlines between
+/// them), each field a row of it. Android: Material's outlined fields straight on the page, no card around them.
+pub fn form<E: IntoElement>(content: impl FnOnce() -> E) -> View {
     if !IOS {
-        return content();
+        return view().gap(px(12.0)).child(content());
     }
+    let was = FORM.replace(Some(0));
+    let built = content();
+    FORM.set(was);
+    view().rounded(px(GROUP_RADIUS)).overflow_hidden().bg(move || theme().card).child(built)
+}
+/// Whether fields are being built as iOS form rows (`form`).
+pub fn in_form() -> bool {
+    IOS && FORM.get().is_some()
+}
+/// Builds `content` for an alert: a field's note takes room only while it says something, and on iOS its fields are the
+/// system alert's (44 pt, their label as the placeholder, no control of their own).
+pub fn compact<R>(content: impl FnOnce() -> R) -> R {
     let was = COMPACT.replace(true);
     let built = content();
     COMPACT.set(was);
@@ -594,7 +620,7 @@ pub fn field(
     return_key: ReturnKeyType,
     reference: Option<ElementRef>,
 ) -> impl IntoElement + Styled {
-    if compact_now() {
+    if IOS && compact_now() {
         return alert_field(s, id, entry, label_, get, set, on_submit, on_focus_change, error, return_key, reference);
     }
     let focused = signal(false);
@@ -832,13 +858,16 @@ pub fn text_area(
 /// The line under a field: a problem in the error color, or nothing, in a height that is always there so the form does
 /// not move.
 pub fn field_note(message: impl Fn() -> Option<SharedString> + Copy + 'static, problem: impl Fn() -> bool + Copy + 'static) -> AnyElement {
-    // An alert's: only while it says something, centered.
-    if compact_now() {
+    // An alert's, or a form row's on iOS: only while it says something (iOS's alert: centered).
+    if compact_now() || (IOS && FORM.get().is_some()) {
+        let in_form = !compact_now();
         return when(
             move || message().is_some(),
             move || {
-                caption(text(move || message().unwrap_or_default()))
-                    .text_center()
+                let note = caption(text(move || message().unwrap_or_default()));
+                if IOS && !in_form { note.text_center() } else { note }
+                    .px(px(if IOS && !in_form { 0.0 } else { 16.0 }))
+                    .pb(px(if in_form { 10.0 } else { 0.0 }))
                     .text_color(move || if problem() { theme().destructive } else { theme().muted_foreground })
             },
         )
@@ -934,9 +963,9 @@ pub fn top_bar(s: Store, title_: Option<&'static str>, back: impl Fn() + 'static
     }
     own_top_bar(s, title_, back)
 }
-/// The bar of a page: a back button, an optional centered title.
+/// The bar of a page, as Material's top app bar: the back arrow, then the title at the start.
 fn own_top_bar(s: Store, title_: Option<&'static str>, back: impl Fn() + 'static) -> AnyElement {
-    let back_button = icon_button(move || s.label("Back"), || Icon::ChevronLeft).text_color(move || theme().foreground).on_press(back);
+    let back_button = icon_button(move || s.label("Back"), || Icon::Back).text_color(move || theme().foreground).on_press(back);
     view()
         .flex_row()
         .items_center()
@@ -945,10 +974,8 @@ fn own_top_bar(s: Store, title_: Option<&'static str>, back: impl Fn() + 'static
         .child(back_button)
         .child(when(
             move || title_.is_some(),
-            move || title_large(text(move || s.label(title_.unwrap_or_default()))).number_of_lines(1).flex_1().text_center(),
+            move || title_large(text(move || s.label(title_.unwrap_or_default()))).number_of_lines(1).flex_1().pl(px(4.0)).pr(px(12.0)),
         ))
-        // The title stays centered: as wide as the back button.
-        .child(when(move || title_.is_some(), || view().w(px(TOUCH))))
         .into_element()
 }
 
@@ -1142,7 +1169,10 @@ pub fn picker_row<T: Copy + PartialEq + 'static>(
         let _ = on_press;
         let options = std::rc::Rc::new(options);
         let chosen = options.clone();
-        return nsh_base::menu_button()
+        // The system's pop-up button is the value at the row's end, as the system's settings have it: its menu opens
+        // from there, at the trailing edge, and the row stays as it is. (A button as wide as the row would be the
+        // menu's source: the menu would open from the row's middle and the row would go while it is open.)
+        let button = nsh_base::menu_button()
             .test_id(id)
             .accessibility_label(move || Some(title_()))
             .items(move || {
@@ -1163,13 +1193,29 @@ pub fn picker_row<T: Copy + PartialEq + 'static>(
                     set(v)
                 }
             })
+            .min_h(px(TOUCH))
+            .pl(px(12.0))
+            .mr(px(-16.0))
+            .pr(px(16.0))
+            .flex_row()
+            .items_center()
+            .justify_end()
+            .gap(px(6.0))
+            .flex_shrink(1.0)
+            .min_w(px(0.0))
+            .child(dim(body_large(text(value))).number_of_lines(1).flex_shrink(1.0))
+            .child(view().text_color(move || tok("tertiary")).child(crate::icons::icon_bold(Icon::ChevronUpDown).size(px(16.0))));
+        return view()
             .bg(move || theme().card)
-            .child(value_body(
-                leading,
-                title_,
-                value,
-                view().text_color(move || tok("tertiary")).child(crate::icons::icon_bold(Icon::ChevronUpDown).size(px(16.0))),
-            ))
+            .min_h(move || px(48.0) * font_scale())
+            .pl(px(16.0))
+            .pr(px(16.0))
+            .flex_row()
+            .items_center()
+            .gap(px(14.0))
+            .child(leading)
+            .child(body_large(text(title_)).flex_1().min_w(px(0.0)).accessibility_elements_hidden(true))
+            .child(button)
             .into_element();
     }
     #[allow(unreachable_code)]
@@ -1459,7 +1505,8 @@ pub fn dialog<E: IntoElement>(
                 .w_full()
                 .max_w(px(if IOS { 320.0 } else { 560.0 }))
                 .rounded(px(if IOS { 34.0 } else { 28.0 }))
-                .bg(move || if IOS { tok("popover") } else { tok("surface-high") })
+                // Android: the system's own alerts' surface, so a drawn dialog reads as one of them.
+                .bg(move || tok("popover"))
                 // A light rim in dark appearance, where the shadow does not show.
                 .border_1()
                 .border_color(move || tok("sheet-rim"))
@@ -1477,7 +1524,7 @@ pub fn dialog<E: IntoElement>(
                     // iOS 26's: the actions as capsules across the alert (`dialog_action`).
                     view().px(px(16.0)).pt(px(12.0)).pb(px(16.0)).child(actions).into_element()
                 } else {
-                    view().flex_row().justify_end().gap(px(4.0)).px(px(12.0)).pt(px(12.0)).pb(px(12.0)).child(actions).into_element()
+                    view().flex_row().justify_end().gap(px(4.0)).px(px(12.0)).pt(px(16.0)).pb(px(12.0)).child(actions).into_element()
                 }),
         ),
     )

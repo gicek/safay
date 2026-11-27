@@ -13,13 +13,39 @@ use safay_app::session::CategoryRow;
 pub fn page(s: Store, nav: Nav) -> impl IntoElement {
     let r = Reorder::new(s, Kind::Categories, |_| (if ui::IOS { 0.0 } else { CATEGORY_GAP }, 1), Pickup::LongPress);
     let count = move || r.count();
+    // The edit mode is this page's: it ends as the page goes, or once nothing is left to delete.
+    nav.editing.set(false);
+    cleanup(move || nav.editing.set(false));
+    effect(move || {
+        if count() == 0 {
+            untracked(|| nav.editing.set(false));
+        }
+    });
     view()
         .flex_1()
         .pt(ui::page_top)
         .child(ui::top_bar(s, Some("Manage Categories"), move || {
             nav.pop();
         }))
-        .child(
+        // None yet: centered on the page, as the other empty states.
+        .child(when(
+            move || count() == 0,
+            move || {
+                view()
+                    .flex_1()
+                    .items_center()
+                    .justify_center()
+                    .px(px(32.0))
+                    .pb_safe_area_plus(px(48.0))
+                    .gap(px(8.0))
+                    .child(view().text_color(move || theme().muted_foreground).child(icon(Icon::Folder).size(px(48.0))))
+                    .child(ui::title(text(move || s.label("No categories yet"))).text_center().mt(px(8.0)))
+                    .child(
+                        ui::dim(ui::body(text(move || s.label("Create one, then long-press an account and choose Add to.")))).text_center(),
+                    )
+            },
+        ))
+        .child(when(move || count() > 0, move ||
             scroll().flex_1().child(
                 view()
                     .px(px(ui::MARGIN))
@@ -32,14 +58,14 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
                             .child(each(
                                 move || r.categories(),
                                 |c| c.id,
-                                move |c, index| category_row(s, r, c, index),
+                                move |c, index| category_row(s, nav, r, c, index),
                             ))
                             .child(when(move || r.pointer.get().is_some() && r.dragged.get().is_some(), move || standin(s, r))),
                     )
                     .child(
                         ui::dim(ui::caption(text(move || {
-                            s.label(if count() == 0 {
-                                "No categories yet. Create one, then long-press an account and choose Add to."
+                            s.label(if ui::IOS {
+                                "Tap a category to rename it, or touch and hold it to drag it to another place. Tap Edit to delete one; its accounts stay."
                             } else {
                                 "Tap a category to rename it, or touch and hold it to drag it to another place. Deleting a category doesn’t delete its accounts."
                             })
@@ -47,7 +73,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
                         .p(px(16.0)),
                     ),
             ),
-        )
+        ))
         // iOS: "+" in the system's header instead (`mobile::native_stack`).
         .child(when(|| !ui::IOS, move ||
             view().absolute().right(px(ui::MARGIN)).bottom(px(0.0)).pb_safe_area_plus(px(ui::MARGIN)).child(
@@ -60,7 +86,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
 }
 
 /// A category's row: a press renames it, a long press picks it up to drag, its button deletes it.
-fn category_row(s: Store, r: Reorder, c: ReadSignal<CategoryRow>, index: ReadSignal<usize>) -> impl IntoElement {
+fn category_row(s: Store, nav: Nav, r: Reorder, c: ReadSignal<CategoryRow>, index: ReadSignal<usize>) -> impl IntoElement {
     let id = c.with_untracked(|c| c.id);
     let me = element_ref();
     let el = ui::group_corners(
@@ -76,6 +102,30 @@ fn category_row(s: Store, r: Reorder, c: ReadSignal<CategoryRow>, index: ReadSig
         move || r.count(),
     );
     r.item(el, me, move || Some(id))
+        // iOS, in its edit mode: the system's red delete control at the row's start.
+        .child(when(
+            move || ui::IOS && nav.editing.get(),
+            move || {
+                nsh_base::button()
+                    .test_id("delete-category")
+                    .accessibility_label(move || Some(s.label("Delete Category")))
+                    .size(px(ui::TOUCH))
+                    .ml(px(4.0))
+                    .mr(px(-12.0))
+                    .items_center()
+                    .justify_center()
+                    .on_press(move || s.delete_category(id))
+                    .child(
+                        view()
+                            .size(px(22.0))
+                            .rounded_full()
+                            .bg(move || theme().destructive)
+                            .items_center()
+                            .justify_center()
+                            .child(view().w(px(11.0)).h(px(2.0)).rounded_full().bg(|| AdaptiveColor::rgb(0xffffff, 0xffffff))),
+                    )
+            },
+        ))
         .child(
             // A view, not a button: it takes a press (rename) and a long press (pick up).
             view()
@@ -108,7 +158,15 @@ fn category_row(s: Store, r: Reorder, c: ReadSignal<CategoryRow>, index: ReadSig
                 })
                 .child(names(s, move || Some(c.get()))),
         )
-        .child(ui::icon_button(move || s.label("Delete Category"), || Icon::Trash).mr(px(4.0)).on_press(move || s.delete_category(id)))
+        // Android: its delete button, always there. iOS: the row's chevron (a press renames it).
+        .child(if ui::IOS {
+            view().pr(px(16.0)).child(ui::chevron()).into_element()
+        } else {
+            ui::icon_button(move || s.label("Delete Category"), || Icon::Trash)
+                .mr(px(4.0))
+                .on_press(move || s.delete_category(id))
+                .into_element()
+        })
 }
 
 /// A category's name over how many accounts it has.

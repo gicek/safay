@@ -608,7 +608,6 @@
   "Manual Entry": "手動輸入",
   "Master password changed": "主密碼已更改",
   "More": "更多",
-  "No categories yet. Create one, then long-press an account and choose Add to.": "還沒有分類。新增一個後，長按帳號並選擇「加入到」。",
   "No recently deleted accounts": "沒有最近刪除的帳號",
   "Parse": "解析",
   "Paste one otpauth:// or migration link per line": "每行貼上一個 otpauth:// 連結或遷移連結",
@@ -649,5 +648,13 @@
   "Unlock with Face ID": "使用 Face ID 解鎖",
   "Use your master password or Face ID to unlock": "使用主密碼或 Face ID 解鎖",
   "Use your master password or Touch ID to unlock": "使用主密碼或 Touch ID 解鎖",
-  "Reorder": "調整順序"
+  "Reorder": "調整順序",
+  "Undo": "復原",
+  "New Category…": "新增分類…",
+  "Categories for “{}”": "「{}」所在的分類",
+  "Categories group your accounts. Create one, and this account goes in it.": "分類可以把帳號歸在一起。新增一個分類，這個帳號就會放進去。",
+  "Accounts you delete wait here for 30 days.": "刪除的帳號會在這裡保留 30 天。",
+  "Tap a category to rename it, or touch and hold it to drag it to another place. Tap Edit to delete one; its accounts stay.": "輕點分類可重新命名，按住可拖曳到其他位置。輕點「編輯」可刪除分類，其中的帳號會保留。",
+  "No categories yet": "還沒有分類",
+  "Create one, then long-press an account and choose Add to.": "新增一個後，長按帳號並選擇「加入到」。"
 }
