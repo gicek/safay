@@ -46,7 +46,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
             },
         ))
         .child(when(move || count() > 0, move ||
-            scroll().flex_1().child(
+            scroll().flex_1().scrollable(move || r.scrollable()).child(
                 view()
                     .px(px(ui::MARGIN))
                     .pt(px(8.0))

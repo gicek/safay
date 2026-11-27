@@ -3,8 +3,8 @@
 //!
 //! How an item is picked up is the session's `Pickup`. With a pointer (`Pickup::Move`), an item claims the touches once
 //! the pointer has moved 4pt from where it went down (a click still copies). On a touch screen a move scrolls, so an
-//! item is picked up by a long press first (`Pickup::LongPress`): the press arms it, and it claims the touches once the
-//! finger then moves 4pt. Either way it keeps them against the list's scrolling. At the grant the list and the dragged item are measured once; from those
+//! item is picked up by a long press first (`Pickup::LongPress`): the press arms it (and opens its menu), and it claims
+//! the touches once the finger then moves 12pt, so a finger resting on the menu is not taken for a drag. Either way it keeps them against the list's scrolling. At the grant the list and the dragged item are measured once; from those
 //! the grid (slot pitch, columns, where slot 0 sits) is known, and every move is hit-tested against it in the list's
 //! content coordinates, so nothing is measured again while dragging.
 //!
@@ -12,8 +12,9 @@
 //! is decided on release: inside the list it is saved once, outside it (the toolbar, the sidebar, outside the window)
 //! or after Escape the original order comes back. Hit-testing uses enter / leave semantics: nothing is re-evaluated
 //! while the pointer stays on the same item, and the dragged item moves after the target when dragged down, before it
-//! when dragged up. A stand-in of the item follows the pointer while its slot stays empty. 44pt zones at the top and
-//! bottom of the account list scroll it every 160 ms; at the very end the item moves to the first or last place. The
+//! when dragged up. A stand-in of the item follows the pointer while its slot stays empty. Zones at the top and bottom of
+//! the account list scroll it every 160 ms (44pt for a pointer; 72pt for a finger, which also scrolls past the list's
+//! edges and above Android's navigation bar); at the very end the item moves to the first or last place. The
 //! account stand-in stays inside the list; the categories' block has no scroll zones, and dropping on the header, on
 //! "All" or outside the sidebar reverts.
 use crate::store::Store;
@@ -26,8 +27,12 @@ use std::time::Duration;
 
 /// How far the pointer moves before a press becomes a drag.
 const SLOP: f32 = 4.0;
-/// The auto-scroll zones' height, and the beat while the pointer rests in one.
+/// How far a finger moves after a long press before it becomes a drag: a resting finger shifts a few points, and
+/// taking that for a drag would close the item's menu.
+const LIFT_SLOP: f32 = 12.0;
+/// The auto-scroll zones' height for a pointer and for a finger, and the beat while it rests in one.
 pub const EDGE_ZONE: f32 = 44.0;
+const TOUCH_EDGE_ZONE: f32 = 72.0;
 const BEAT: Duration = Duration::from_millis(160);
 /// The swap's motion: 0.18 s for accounts, 0.16 s for categories.
 pub const SWAP_MS: f32 = 180.0;
@@ -83,6 +88,13 @@ pub struct Grid {
     /// The list's top left corner in the surface, and its size.
     pub page: (f32, f32),
     pub size: (f32, f32),
+    /// The auto-scroll zones' height.
+    pub zone: f32,
+    /// The list's bottom the system covers (Android's navigation bar, which the list scrolls under).
+    pub covered: f32,
+    /// A finger past the list's top or bottom still scrolls it (a finger drag; a pointer outside the list drops
+    /// nothing there).
+    pub beyond: bool,
 }
 
 impl Grid {
@@ -108,12 +120,13 @@ impl Grid {
     }
     /// The zone the pointer (in the list) is resting in; none while the list is too short for two zones.
     pub fn edge(&self, x: f32, y: f32) -> Option<Edge> {
-        if self.size.1 <= EDGE_ZONE * 2.0 || x < 0.0 || x > self.size.0 {
+        let bottom = self.size.1 - self.covered;
+        if bottom <= self.zone * 2.0 || x < 0.0 || x > self.size.0 {
             return None;
         }
-        if (0.0..EDGE_ZONE).contains(&y) {
+        if y < self.zone && (self.beyond || y >= 0.0) {
             Some(Edge::Up)
-        } else if y > self.size.1 - EDGE_ZONE && y <= self.size.1 {
+        } else if y > bottom - self.zone && (self.beyond || y <= bottom) {
             Some(Edge::Down)
         } else {
             None
@@ -158,7 +171,7 @@ pub struct Reorder {
     layout: Layout,
     pickup: Pickup,
     /// The item a long press picked up, until the finger lifts or the drag starts (`Pickup::LongPress`).
-    armed: Stored<Option<Uuid>>,
+    armed: Signal<Option<Uuid>>,
     pub dragged: Signal<Option<Uuid>>,
     pub target: Signal<Option<Uuid>>,
     /// The preview order while dragging (and until the saved order arrives).
@@ -191,7 +204,7 @@ impl Reorder {
             kind,
             layout,
             pickup,
-            armed: stored(None),
+            armed: signal(None),
             dragged: signal(None),
             target: signal(None),
             order: signal(None),
@@ -264,7 +277,14 @@ impl Reorder {
 
     /// Picks up `id` for a drag that starts once the finger moves (`Pickup::LongPress`): the item's long press calls it.
     pub fn arm(self, id: Uuid) {
-        self.armed.replace(Some(id));
+        self.armed.set(Some(id));
+    }
+
+    /// Whether the list may scroll: not while a long press holds an item (`Pickup::LongPress`). The finger then either
+    /// rests (the item's menu) or drags the item; a native scroll view would take the move first (past the system's
+    /// touch slop, shorter than [`LIFT_SLOP`]) wherever it can still scroll that way, and the drag would never start.
+    pub fn scrollable(self) -> bool {
+        self.armed.with(Option::is_none)
     }
 
     /// Wires an item (a card or a row) to the session.
@@ -272,15 +292,22 @@ impl Reorder {
         el.element_ref(&me)
             // A new press lifts whatever an earlier long press picked up.
             .on_press_down(move |_: &PressEvent| {
-                self.armed.replace(None);
+                self.armed.set(None);
+            })
+            // The finger lifted without dragging (the menu stays): the list scrolls again.
+            .on_press_up(move |_: &PressEvent| {
+                if self.armed.get_untracked().is_some() {
+                    self.armed.set(None);
+                }
             })
             .claim_touches(TouchClaim::on_move().ask(move |request: &ClaimRequest| {
                 let d = request.event.gesture.delta;
                 let picked = match self.pickup {
                     Pickup::Move => true,
-                    Pickup::LongPress => id().is_some() && self.armed.get() == id(),
+                    Pickup::LongPress => id().is_some() && self.armed.get_untracked() == id(),
                 };
-                if picked && !self.suppressed.get() && self.count() > 1 && d.x.0.hypot(d.y.0) >= SLOP {
+                let slop = if self.pickup == Pickup::LongPress { LIFT_SLOP } else { SLOP };
+                if picked && !self.suppressed.get() && self.count() > 1 && d.x.0.hypot(d.y.0) >= slop {
                     request.claim();
                 }
             }))
@@ -334,8 +361,9 @@ impl Reorder {
         self.dragged.set(Some(id));
         self.target.set(None);
         self.s.controller.get().activity();
-        self.armed.replace(None);
+        self.armed.set(None);
         let (gap, columns) = (self.layout)(self.s);
+        let touch = self.pickup == Pickup::LongPress;
         let list = self.list;
         self.owner.get().run(|| {
             spawn(async move {
@@ -357,6 +385,9 @@ impl Reorder {
                     columns,
                     page: (l.page.x.0, l.page.y.0),
                     size: (l.frame.size.width.0, l.frame.size.height.0),
+                    zone: if touch { TOUCH_EDGE_ZONE } else { EDGE_ZONE },
+                    covered: if touch && cfg!(target_os = "android") { safe_area().bottom.0 } else { 0.0 },
+                    beyond: touch,
                 }));
                 self.grab.replace((start.0 - m.page.x.0, start.1 - m.page.y.0));
                 if let Some(at) = self.last.get() {
@@ -463,7 +494,9 @@ impl Reorder {
             return;
         }
         match self.grid.get() {
-            Some(grid) if grid.contains(at.0 - grid.page.0, at.1 - grid.page.1) => self.commit(),
+            // A finger lifted past the list (over the chips, the bar) keeps the order it shows: a phone has nowhere else
+            // to drop it.
+            Some(grid) if grid.beyond || grid.contains(at.0 - grid.page.0, at.1 - grid.page.1) => self.commit(),
             _ => self.cancel(),
         }
     }
@@ -555,7 +588,17 @@ mod tests {
         assert_eq!(applying(&[id(2), id(9), id(1)], &[id(1), id(2)]), vec![id(2), id(1)]);
     }
     fn cards() -> Grid {
-        Grid { origin: (16.0, 16.0), item: (200.0, 94.0), pitch: (212.0, 106.0), columns: 3, page: (0.0, 0.0), size: (668.0, 400.0) }
+        Grid {
+            origin: (16.0, 16.0),
+            item: (200.0, 94.0),
+            pitch: (212.0, 106.0),
+            columns: 3,
+            page: (0.0, 0.0),
+            size: (668.0, 400.0),
+            zone: EDGE_ZONE,
+            covered: 0.0,
+            beyond: false,
+        }
     }
     #[test]
     fn slots_skip_the_gaps() {
@@ -583,6 +626,14 @@ mod tests {
         assert_eq!(g.edge(100.0, 380.0), Some(Edge::Down));
         assert_eq!(g.edge(100.0, 200.0), None);
         assert_eq!(g.edge(-1.0, 10.0), None);
+        assert_eq!(g.edge(100.0, -20.0), None);
+        // A finger: wider zones, past the edges too, above the covered bottom.
+        let f = Grid { zone: TOUCH_EDGE_ZONE, covered: 48.0, beyond: true, ..g };
+        assert_eq!(f.edge(100.0, 60.0), Some(Edge::Up));
+        assert_eq!(f.edge(100.0, -20.0), Some(Edge::Up));
+        assert_eq!(f.edge(100.0, 290.0), Some(Edge::Down));
+        assert_eq!(f.edge(100.0, 500.0), Some(Edge::Down));
+        assert_eq!(f.edge(100.0, 200.0), None);
         // 10 rows of cards: 16 + 10 * 106 - 12 + 16 = 1080, minus the 400pt viewport.
         assert_eq!(g.max_scroll(30), 680.0);
         assert_eq!(g.max_scroll(3), 0.0);

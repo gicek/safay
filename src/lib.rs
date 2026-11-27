@@ -32,7 +32,7 @@ mod store;
 use store::{Store, Surface};
 
 /// The native components of the phone interface on Android and iOS: the camera's preview
-/// (`platform::camera::PREVIEW`).
+/// (`platform::camera::PREVIEW`), and on iOS the outline an account lifts in (`platform::lift_outline`).
 #[nsh_core::prelude::native_components(android)]
 fn components(components: &nsh::Components) {
     platform::camera::register(components);
@@ -40,6 +40,7 @@ fn components(components: &nsh::Components) {
 #[nsh_core::prelude::native_components(ios)]
 fn components_ios(components: &nsh_platform_ios::Components) {
     platform::camera::register(components);
+    platform::lift_outline::register(components);
 }
 /// The development build number, from nsh.json.
 pub const BUILD: &str = "14";

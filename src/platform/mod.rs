@@ -85,6 +85,10 @@ pub mod camera;
 #[cfg(target_os = "ios")]
 #[path = "camera_ios.rs"]
 pub mod camera;
+/// iOS: the outline the system's context menu lifts an account in.
+#[cfg(target_os = "ios")]
+#[path = "lift_outline_ios.rs"]
+pub mod lift_outline;
 /// "Select on Screen" on macOS: Safay's own selection over a picture of each display.
 #[cfg(target_os = "macos")]
 #[path = "screen_capture_macos.rs"]

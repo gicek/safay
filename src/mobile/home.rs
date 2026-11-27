@@ -387,7 +387,7 @@ fn list(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
     let r = if wide {
         Reorder::new(s, Kind::Accounts, |_| (CARD_GAP, columns()), Pickup::LongPress)
     } else {
-        Reorder::new(s, Kind::Accounts, |_| (ui::GROUP_GAP, 1), Pickup::LongPress)
+        Reorder::new(s, Kind::Accounts, |_| (ROW_GAP, 1), Pickup::LongPress)
     };
     // The index's letters, in its order: those the shown accounts file under.
     let letters = computed(move || {
@@ -435,7 +435,7 @@ fn list(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
                 None => r.ids().iter().map(|id| id.to_string()).collect::<Vec<_>>(),
             })
             .estimated_item_size(move || px(if wide { CARD } else { ui::ROW }) * font_scale())
-            .row_gap(px(if wide { CARD_GAP } else { ui::GROUP_GAP }))
+            .row_gap(px(if wide { CARD_GAP } else { ROW_GAP }))
             .content_padding_x(px(if wide { CARD_MARGIN } else { ui::MARGIN }))
             // The chips above keep the room over the first row; without them it is the list's own.
             .content_padding_top(move || px(if wide || !has_categories(s) { 8.0 } else { 2.0 }))
@@ -448,6 +448,7 @@ fn list(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
                 s.controller.get().activity()
             })
             .keyboard_dismiss_mode(KeyboardDismissMode::OnDrag)
+            .scrollable(move || r.scrollable())
             .element_ref(&r.list)
             .flex_1(),
         )
@@ -476,8 +477,8 @@ fn account_row(
     let id = move || row.with(|r| r.as_ref().map(|r| r.id));
     let copied = move || s.copied.get().is_some() && s.copied.get() == id();
     let me = element_ref();
-    // iOS: the hairline from under the names.
-    let el = ui::group_corners_inset(
+    // Each account apart from the next, its corners rounded (the system's menu lifts it in its outline).
+    let el = account_corners(
         pressable(s, nav, r, row)
             .min_h(move || px(ui::ROW) * font_scale())
             .px(px(16.0))
@@ -495,13 +496,28 @@ fn account_row(
             .opacity(move || if r.is_dragging(id()) { 0.0_f32 } else { 1.0 }),
         index,
         count,
-        16.0 + 42.0 + 14.0,
     );
     if !SYSTEM_MENUS {
         return face(r.item(el, me, id), row).into_element();
     }
     // iOS: the system's menu on a held finger, and the drag handle while the list is reordered.
-    system_menu(s, nav, row, face_with(el.element_ref(&me), row, move || nav.reordering.get()).child(grip(nav, r, me, id)))
+    // The row lifts in its own corners (`platform::lift_outline`).
+    // Over the whole row, so it follows the row's size; it draws nothing and takes no touches.
+    let outline = native("safay.lift-outline")
+        .absolute()
+        .inset(px(0.0))
+        .pointer_events(nsh_core::PointerEvents::None)
+        .prop("top", move || nsh_core::JsonValue::from(f64::from(if index() == 0 { ui::GROUP_RADIUS } else { ROW_INNER })))
+        .prop("bottom", move || nsh_core::JsonValue::from(f64::from(if index() + 1 >= count() { ui::GROUP_RADIUS } else { ROW_INNER })));
+    system_menu(s, nav, row, face_with(el.element_ref(&me), row, move || nav.reordering.get()).child(grip(nav, r, me, id)).child(outline))
+}
+/// The gap between accounts, and the corners of one between two others: on both platforms each account stands apart,
+/// the list's ends rounded as a group's.
+const ROW_GAP: f32 = 2.0;
+const ROW_INNER: f32 = if ui::IOS { 10.0 } else { ui::GROUP_INNER };
+fn account_corners<E: Styled>(e: E, index: impl Fn() -> usize + Copy + 'static, count: impl Fn() -> usize + Copy + 'static) -> E {
+    e.rounded_t(move || px(if index() == 0 { ui::GROUP_RADIUS } else { ROW_INNER }))
+        .rounded_b(move || px(if index() + 1 >= count() { ui::GROUP_RADIUS } else { ROW_INNER }))
 }
 /// iOS draws an account's menu itself (`UIContextMenuInteraction`) and reorders the list by drag handles.
 const SYSTEM_MENUS: bool = cfg!(target_os = "ios");

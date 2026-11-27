@@ -460,7 +460,12 @@ pub fn fab(name: impl Fn() -> SharedString + 'static) -> nsh_base::ButtonElement
 /// A row picked up to drag, over the others: the card's color, raised by a deep shadow, and a rim that draws its edge in
 /// dark appearance, where the shadow does not show.
 pub fn lifted<E: Styled>(e: E) -> E {
-    e.rounded(px(GROUP_INNER * 2.0)).bg(move || theme().card).border_1().border_color(move || tok("elevated-rim")).shadow_xl()
+    // iOS: as round as a lifted account (whose list draws no corner between rows).
+    e.rounded(px(if IOS { 14.0 } else { GROUP_INNER * 2.0 }))
+        .bg(move || theme().card)
+        .border_1()
+        .border_color(move || tok("elevated-rim"))
+        .shadow_xl()
 }
 
 // ---- Fields --------------------------------------------------------------------------------------------------------
