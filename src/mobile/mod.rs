@@ -77,10 +77,14 @@ impl Nav {
         self.adding.set(false);
         self.menu.set(false);
         self.context.set(None);
-        if let Some(under) = self.page.get_untracked() {
-            self.stack.update(|st| st.push(under));
-        }
-        self.page.set(Some(page));
+        // One change of the routes: the stack and the page apart would show the native stack a route that is neither
+        // the old nor the new (`routes`), and it would push and pop pages for it.
+        batch(|| {
+            if let Some(under) = self.page.get_untracked() {
+                self.stack.update(|st| st.push(under));
+            }
+            self.page.set(Some(page));
+        });
     }
     /// The back the user asks for with a page's back button. iOS's navigation stack animates it.
     pub fn pop(self) {
@@ -101,8 +105,12 @@ impl Nav {
         dismiss_keyboard();
         routes.truncate(depth);
         let page = routes.pop();
-        self.stack.set(routes);
-        self.page.set(page);
+        // One change: set apart, the page left would show for a moment as the bottom route, and the page under it
+        // would be pushed again.
+        batch(|| {
+            self.stack.set(routes);
+            self.page.set(page);
+        });
     }
     /// Closes the search field: its text goes, and the keyboard with it.
     pub fn close_search(self) {
@@ -112,8 +120,10 @@ impl Nav {
     /// Back to the list, whatever is over it.
     pub fn home(self) {
         dismiss_keyboard();
-        self.stack.set(Vec::new());
-        self.page.set(None);
+        batch(|| {
+            self.stack.set(Vec::new());
+            self.page.set(None);
+        });
     }
     /// One step back; false when the list itself is showing. A page over the list goes first: what is open on the list
     /// (its menus, the search, a letter) stays for when it shows again.
@@ -122,8 +132,10 @@ impl Nav {
             dismiss_keyboard();
             let mut stack = self.stack.get_untracked();
             let under = stack.pop();
-            self.stack.set(stack);
-            self.page.set(under);
+            batch(|| {
+                self.stack.set(stack);
+                self.page.set(under);
+            });
         } else if self.context.get_untracked().is_some() {
             self.context.set(None);
         } else if self.menu.get_untracked() {
