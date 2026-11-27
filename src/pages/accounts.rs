@@ -191,7 +191,7 @@ pub fn sidebar(s: Store) -> impl IntoElement {
         )
 }
 pub(crate) fn new_category(s: Store, account: Option<Uuid>) {
-    s.editing.set(Some(CategoryEdit { account, ..Default::default() }));
+    s.editing.set(Some(CategoryEdit { account, select: true, ..Default::default() }));
 }
 /// The category rows, their own block as the drag container: dropping inside it saves the order; on the header, "All"
 /// or outside the sidebar the order comes back.

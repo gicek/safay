@@ -32,11 +32,8 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
     });
     let content = move |wide: bool| {
         when(empty_vault, move || empty(s, nav)).otherwise(move || {
-            when(
-                move || s.projection.with(|p| p.rows.is_empty()),
-                move || view().flex_1().child(when(move || ui::IOS && !wide, move || chips(s, nav))).child(nothing(s)),
-            )
-            .otherwise(move || list(s, nav, wide))
+            when(move || s.projection.with(|p| p.rows.is_empty()), move || view().flex_1().child(nothing(s)))
+                .otherwise(move || list(s, nav, wide))
         })
     };
     view()
@@ -51,16 +48,13 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
                     .into_element()
             })
             .otherwise(move || {
-                // iOS: the title and its buttons are the system's header (`header_items`), and the chips lead the
-                // list, whose scroll view the header's large title follows.
-                if ui::IOS {
-                    return view().flex_1().child(content(false)).into_element();
-                }
+                // The chips stay under the top bar as the accounts scroll; iOS: the title and its buttons are the
+                // system's header (`header_items`), which the page starts below.
                 view()
                     .flex_1()
-                    .pt_safe_area()
-                    .child(header(s, nav, false))
-                    .child(when(move || !empty_vault(), move || chips(s, nav)))
+                    .pt(ui::page_top)
+                    .child(when(|| !ui::IOS, move || header(s, nav, false)))
+                    .child(when(move || !empty_vault() && has_categories(s), move || chips(s, nav)))
                     .child(content(false))
                     .into_element()
             }),
@@ -348,6 +342,13 @@ fn side_row(
         .child(ui::dim(ui::body(text(move || count().map(|n| SharedString::from(n.to_string())).unwrap_or_default()))))
 }
 
+/// Whether there are categories to choose from: without any, the chips are not shown ("Manage Categories" stays in
+/// the menu).
+fn has_categories(s: Store) -> bool {
+    s.projection.with(|p| !p.categories.is_empty())
+}
+
+/// The categories as chips above the accounts, staying there as they scroll.
 fn chips(s: Store, nav: Nav) -> impl IntoElement {
     let select = move |id| {
         nav.letter.set(None);
@@ -428,12 +429,6 @@ fn list(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
                 if wide { card(s, nav, r, row) } else { account_row(s, nav, r, row, move || at.index(), count) }
             })
             .columns(move || if wide { columns() as u32 } else { 1 })
-            // iOS: the chips scroll with the rows, under the system's header.
-            .header(if ui::IOS && !wide {
-                view().mx(px(-ui::MARGIN)).pb(px(2.0)).child(chips(s, nav)).into_element()
-            } else {
-                view().into_element()
-            })
             .column_gap(px(CARD_GAP))
             .keys(move || match narrowed.get() {
                 Some(n) => s.projection.with(|p| n.iter().filter_map(|i| p.rows.get(*i)).map(|r| r.id.to_string()).collect::<Vec<_>>()),
@@ -442,8 +437,8 @@ fn list(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
             .estimated_item_size(move || px(if wide { CARD } else { ui::ROW }) * font_scale())
             .row_gap(px(if wide { CARD_GAP } else { ui::GROUP_GAP }))
             .content_padding_x(px(if wide { CARD_MARGIN } else { ui::MARGIN }))
-            // The chips keep the room above the first row; the end keeps its own.
-            .content_padding_top(px(if wide { 8.0 } else { 2.0 }))
+            // The chips above keep the room over the first row; without them it is the list's own.
+            .content_padding_top(move || px(if wide || !has_categories(s) { 8.0 } else { 2.0 }))
             .content_padding_bottom(px(8.0))
             // Room under the last row for the floating search button, and on Android for the navigation bar the list
             // scrolls under.

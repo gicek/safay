@@ -147,6 +147,9 @@ pub struct CategoryEdit {
     pub error: Option<Error>,
     /// Account to add once a new category is created ("Add to › New Category").
     pub account: Option<Uuid>,
+    /// Show the new category once it is created: the desktop sidebar's "New Category" does, so the new one is in view
+    /// there. The phone's list stays on what it showed ("All").
+    pub select: bool,
 }
 /// Validation marks kept apart from field values, so a blur never rewrites a field being typed in.
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -1546,7 +1549,7 @@ impl Store {
             {
                 s.membership(created, account, true)?;
             }
-            Ok(Payload::Created(edit.id.is_none() && edit.account.is_none()))
+            Ok(Payload::Created(edit.id.is_none() && edit.account.is_none() && edit.select))
         });
     }
     pub fn delete_category(self, id: Uuid) {
