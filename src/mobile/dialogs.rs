@@ -44,7 +44,12 @@ fn auth(s: Store) -> impl IntoElement {
         },
         ui::dialog_actions(false)
             .child(ui::dialog_action(move || s.label("Cancel"), ui::Act::Cancel).on_press(move || s.cancel_auth()))
-            .child(ui::dialog_action(move || s.label("Continue"), ui::Act::Default).test_id("authorize").on_press(submit)),
+            .child(
+                ui::dialog_action(move || s.label("Continue"), ui::Act::Default)
+                    .test_id("authorize")
+                    .disabled(move || s.auth_password.with(|p| p.is_empty()) || s.busy.get())
+                    .on_press(submit),
+            ),
         move || {
             if !s.busy.get() {
                 s.cancel_auth()
@@ -317,9 +322,12 @@ fn backup_password(s: Store, nav: super::Nav) -> impl IntoElement {
                 ))
                 .child(ui::field_note(move || s.error.get().map(|e| s.label(crate::i18n::error_key(e))), || true))
         },
-        ui::dialog_actions(false)
-            .child(ui::dialog_action(move || s.label("Cancel"), ui::Act::Cancel).on_press(close))
-            .child(ui::dialog_action(move || s.label("Import"), ui::Act::Default).test_id("import-go").on_press(submit)),
+        ui::dialog_actions(false).child(ui::dialog_action(move || s.label("Cancel"), ui::Act::Cancel).on_press(close)).child(
+            ui::dialog_action(move || s.label("Import"), ui::Act::Default)
+                .test_id("import-go")
+                .disabled(move || s.form.with(|f| f.password.is_empty()) || s.busy.get())
+                .on_press(submit),
+        ),
         close,
     )
 }

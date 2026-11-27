@@ -85,6 +85,7 @@
       "switch-off": "#7878802e",
       "tile-gray": "#8e8e93",
       "field": "#7676801f",
+      "alert-field": "#7676803d",
       "sheet-card": "#ffffff"
     },
     "dark": {
@@ -167,6 +168,7 @@
       "switch-off": "#78788052",
       "tile-gray": "#8e8e93",
       "field": "#7676803d",
+      "alert-field": "#7676805c",
       "sheet-card": "#2c2c2e"
     }
   }

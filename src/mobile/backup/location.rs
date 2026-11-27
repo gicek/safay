@@ -128,7 +128,7 @@ fn restore_unreadable(s: Store, nav: Nav) -> impl IntoElement {
         ui::dialog_actions(false).child(ui::dialog_action(move || s.label("Cancel"), ui::Act::Cancel).on_press(close)).child(
             ui::dialog_action(move || s.label("Restore"), ui::Act::Default)
                 .test_id("restore-go")
-                .disabled(move || s.syncing.get())
+                .disabled(move || s.syncing.get() || s.form.with(|f| f.password.is_empty()))
                 .on_press(submit),
         ),
         close,

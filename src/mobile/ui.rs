@@ -742,10 +742,10 @@ fn alert_field(
         .min_h(move || px(44.0) * font_scale())
         .px(px(12.0))
         .justify_center()
-        .rounded(px(12.0))
-        .bg(move || tok("field"))
+        .rounded_full()
+        .bg(move || tok("alert-field"))
         .border(px(1.0))
-        .border_color(move || if error() { theme().destructive } else { tok("field").opacity(0.0) })
+        .border_color(move || if error() { theme().destructive } else { tok("alert-field").opacity(0.0) })
         .on_press(move |_: &()| me.focus())
         .child(
             themed_input(input())
@@ -1477,18 +1477,19 @@ pub fn dialog_action(label_: impl Fn() -> SharedString + Copy + 'static, act: Ac
         .justify_center()
         .rounded_full()
         .bg(move || if act == Act::Default { theme().primary } else { tok("input") })
+        .text_color(move || match act {
+            Act::Default => theme().primary_foreground,
+            Act::Cancel => theme().foreground,
+            Act::Destructive => theme().destructive,
+        })
         .active(|s| s.opacity(0.7))
-        .disabled_style(|s| s.opacity(0.4))
+        // As the system's alerts: an action that cannot be taken yet is a gray capsule, its label dimmed.
+        .disabled_style(|s| s.bg(move || tok("input")).text_color(move || theme().foreground.opacity(0.3)))
         .child(
             body_large(text(label_))
                 .number_of_lines(1)
                 .font_weight(if act == Act::Default { FontWeight::SEMIBOLD } else { FontWeight::MEDIUM })
-                .text_center()
-                .text_color(move || match act {
-                    Act::Default => theme().primary_foreground,
-                    Act::Cancel => theme().foreground,
-                    Act::Destructive => theme().destructive,
-                }),
+                .text_center(),
         )
 }
 /// The row of a dialog's actions: side by side, or on iOS one over another (`stacked`) where a label is long.
@@ -1538,8 +1539,13 @@ pub fn dialog<E: IntoElement>(
                 .w_full()
                 .max_w(px(if IOS { 320.0 } else { 560.0 }))
                 .rounded(px(if IOS { 34.0 } else { 28.0 }))
-                // Android: the system's own alerts' surface, so a drawn dialog reads as one of them.
-                .bg(move || tok("popover"))
+                // Android: the system's own alerts' surface, so a drawn dialog reads as one of them. iOS: Liquid Glass,
+                // as the system's alerts (`AlertDialog` shows those where it can: a dialog is drawn only for a password,
+                // which the system's alert cannot mask through NSH).
+                .bg(move || if cfg!(target_os = "ios") { tok("popover").opacity(0.0) } else { tok("popover") })
+                .glass_effect(if cfg!(target_os = "ios") { nsh_core::GlassEffect::Regular } else { nsh_core::GlassEffect::None })
+                // Tinted with the alert's surface: the system's alerts are frosted, what is under them does not read.
+                .glass_tint_color(move || if cfg!(target_os = "ios") { Some(tok("popover").opacity(0.82)) } else { None })
                 // A light rim in dark appearance, where the shadow does not show.
                 .border_1()
                 .border_color(move || tok("sheet-rim"))
