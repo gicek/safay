@@ -3,6 +3,22 @@
 Each version's section translates the one in CHANGELOG.md, item for item. The update window shows it to people who use
 Safay in Simplified Chinese.
 
+## [1.6.0] - 2026-11-28
+
+可以备份到 Synology NAS 了；平板和折叠屏上有侧栏和卡片。
+
+### 新增
+
+- **Synology**：通过 QuickConnect ID 或地址找到你的 Synology NAS 并备份。
+- **平板和折叠屏**：分类显示在侧栏，账户以卡片显示。
+- **撤销**：在手机上删除账户后，点“撤销”即可立刻恢复。
+
+### 变更
+
+- **Dropbox**：在 Android 和 iPhone 上，装了 Dropbox 应用时通过它登录。
+- **Google Drive**：和其他服务一样自动上传更改。
+- **手机**：Android 和 iPhone 各自遵循自己系统的表单、菜单和搜索。
+
 ## [1.5.0] - 2026-11-24
 
 Safay 推出 Android 版，还能在设置中安装 Raycast 和 Tinycast 扩展。

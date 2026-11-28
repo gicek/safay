@@ -43,7 +43,7 @@ fn components_ios(components: &nsh_platform_ios::Components) {
     platform::lift_outline::register(components);
 }
 /// The development build number, from nsh.json.
-pub const BUILD: &str = "14";
+pub const BUILD: &str = "15";
 static CONTROLLER: OnceLock<(Arc<Controller>, bool)> = OnceLock::new();
 /// Debug builds: the demo vault with `total` accounts (at least its eight samples), for `--preview` with
 /// `SAFAY_PREVIEW_DEMO=<total>`.

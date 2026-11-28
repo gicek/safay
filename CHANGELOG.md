@@ -5,25 +5,21 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-28
+
+Back up to your Synology NAS, and get a sidebar and cards on tablets and foldables.
+
 ### Added
 
-- **Synology**: back up to your Synology NAS, found by its QuickConnect ID or address, with an optional two-step
-  verification code; on it, WebDAV and Nextcloud, you pick or create the backup's folder.
-- **Tablets**: on a tablet or an open foldable, your categories sit in a sidebar and your accounts show as cards.
-- **Undo**: after you delete an account on your phone, "Undo" in the message puts it right back.
+- **Synology**: back up to your Synology NAS, found by its QuickConnect ID or address.
+- **Tablets and foldables**: your categories sit in a sidebar and your accounts show as cards.
+- **Undo**: after you delete an account on your phone, "Undo" puts it right back.
 
 ### Changed
 
-- **Dropbox**: sign in through the Dropbox app on Android and iOS when it is installed.
-- **Google Drive**: changes upload automatically, as on the other services, instead of waiting for you to approve them.
-- **Phones**: Android and iPhone each follow their own system's forms, menus and search; the category chips stay put as you
-  scroll, and dragging an account near the edge scrolls the list.
-- **Add to**: ticking or unticking a category takes effect at once, and a long list scrolls inside the sheet.
-
-### Fixed
-
-- On iPhone Duo, folded or open, pages and sheets stay clear of the system controls and the camera, with the
-  list's buttons beside them.
+- **Dropbox**: on Android and iPhone, you sign in through the Dropbox app when it is installed.
+- **Google Drive**: changes upload automatically, as on the other services.
+- **Phones**: Android and iPhone each follow their own system's forms, menus and search.
 
 ## [1.5.0] - 2026-11-24
 
