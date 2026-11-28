@@ -14,6 +14,7 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
 
 ### Changed
 
+- **Dropbox**: sign in through the Dropbox app on Android and iOS when it is installed.
 - **Google Drive**: changes upload automatically, as on the other services, instead of waiting for you to approve them.
 - **Phones**: Android and iPhone each follow their own system's forms, menus and search; the category chips stay put as you
   scroll, and dragging an account near the edge scrolls the list.

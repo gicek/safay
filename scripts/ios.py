@@ -26,6 +26,7 @@ import os
 import plistlib
 import subprocess
 import sys
+import tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import package  # noqa: E402  (local.toml settings)
@@ -60,9 +61,24 @@ def connected_device() -> str:
     return real[0]
 
 
+def dropbox_scheme() -> str | None:
+    """The scheme of Dropbox's redirect URI in the local `cloud-keys.toml` (`db-<app key>`): the official Dropbox app
+    comes back to Safay with a link of it (src/platform/dropbox_app_ios.rs), which the app claims only through
+    `CFBundleURLTypes`. Not tracked, so the tracked nsh.json cannot list it."""
+    path = root / "cloud-keys.toml"
+    if not path.is_file():
+        return None
+    dropbox = tomllib.loads(path.read_text(encoding="utf-8")).get("dropbox", {})
+    redirect = str(dropbox.get("redirect_uri", "")).strip()
+    if not str(dropbox.get("app_key", "")).strip() or ":" not in redirect:
+        return None
+    scheme = redirect.split(":", 1)[0].lower()
+    return scheme if scheme not in ("http", "https") else None
+
+
 def copy_manifest(project: dict, bundle_id: str) -> tuple[Path, dict]:
     """The directory packaged from (`build/ios/app`) and the project's nsh.json for it: paths pointing back at the
-    project, the development app ID."""
+    project, the development app ID, and Dropbox's callback scheme ([`dropbox_scheme`])."""
     app = root / "build/ios/app"
     app.mkdir(parents=True, exist_ok=True)
     back = Path("../../..")
@@ -71,6 +87,8 @@ def copy_manifest(project: dict, bundle_id: str) -> tuple[Path, dict]:
     if isinstance(project.get("theme"), str):
         manifest["theme"] = str(back / project["theme"])
     manifest["id"] = bundle_id
+    if scheme := dropbox_scheme():
+        manifest["schemes"] = list(dict.fromkeys([*project.get("schemes", []), scheme]))
     return app, manifest
 
 

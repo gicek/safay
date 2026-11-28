@@ -15,7 +15,7 @@ marked *coded* are written and untested on a real system. The interface shows a 
 | Vault, accounts, categories, codes, import and export | Yes | Coded | Coded | Yes (exports go to the share sheet) | Yes (exports go to the share sheet) |
 | Folder backup | Yes | Coded | Coded | — | — |
 | WebDAV, Nextcloud and Synology backup | Yes | Coded (Credential Manager) | Yes (the Secret Service: GNOME Keyring, KWallet) | Yes | Synology: yes; WebDAV, Nextcloud: coded (the Keychain) |
-| Dropbox, OneDrive, Google Drive | Yes | Coded (sign-in in the browser) | Coded (sign-in in the browser) | Yes (sign-in in a Custom Tab) | Google Drive: yes; Dropbox, OneDrive: coded (the system sign-in session) |
+| Dropbox, OneDrive, Google Drive | Yes | Coded (sign-in in the browser) | Coded (sign-in in the browser) | Yes (Dropbox app or Custom Tab) | Dropbox and Google Drive: yes. OneDrive: coded (system sign-in session) |
 | iCloud | Yes | — | — | — | Yes (development packages so far) |
 | Touch ID / hardware-protected unlock | Touch ID | Planned: Windows Hello key release | Not planned (no common hardware key API) | Strong biometrics (a Keystore key) | Coded: Face ID or Touch ID (a Secure Enclave key) |
 | Lock on sleep, screen lock, user switch | Yes | Coded (`WM_WTSSESSION_CHANGE`, power broadcasts) | Coded (logind, screensaver) | Yes (screen off) | Coded (device lock) |
@@ -53,8 +53,8 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
   again in Settings.
 - Safay locks when the screen goes off, and after the auto-lock time in the background. The unlocked app is kept out of
   screenshots and the recent apps' pictures.
-- Exports open the share sheet, where you choose Files, a drive or another app. Dropbox, OneDrive and Google Drive sign
-  in in a Custom Tab.
+- Exports open the share sheet, where you choose Files, a drive or another app. Dropbox opens its installed app for sign-in.
+  A Custom Tab handles sign-in when Dropbox is unavailable and for OneDrive and Google Drive.
 - A window 700 dp wide or more (a tablet, a foldable open) shows the categories in a sidebar, which its menu button
   folds away, and the accounts as cards with the letter index beside them; sheets open as a dialog in the middle of the
   screen.
@@ -66,7 +66,7 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
 - On an iPhone (iOS 27, `make ios-run`): iCloud backup with silent pushes from other devices, Google Drive sign-in,
   Synology, scanning a QR code with the camera, and the copied-code message. Face ID and Touch ID, the clipboard's
   expiry and the cover in the background are coded and untried on a device.
-- Sign-ins open the system's sign-in session. A callback scheme NSH's session refuses (Google's, longer than its
+- Dropbox opens its installed app for sign-in. Web sign-ins open the system's sign-in session. A callback scheme NSH's session refuses (Google's, longer than its
   `MAX_SCHEME_LEN`) goes to `ASWebAuthenticationSession` directly (`platform::web_auth`).
 - The interface follows the system: its navigation bar, swipe back, menus, sheets, switches and segmented controls, and
   the alert for a category's name, are UIKit's. Dialogs with password fields are drawn in the look of an iOS alert,

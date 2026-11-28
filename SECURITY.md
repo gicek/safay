@@ -106,6 +106,9 @@ Remote storage receives only the encrypted vault and a metadata file with a devi
   request line, answers with one fixed page, and takes only the request the core accepts for that sign-in. The client
   secret Google issues to such clients ships inside the app and protects nothing; PKCE does. Nextcloud uses Login Flow
   v2, with the login page, polling and result required to share an origin.
+- On Android and iOS, Safay prefers the installed Dropbox app for authorization. Android checks the package name and
+  signing certificate before sending the intent. On iOS the app returns through Safay’s registered Dropbox scheme.
+  The core checks the authorization state before exchanging a code with the PKCE verifier.
 - Credentials (the serialized connection, including tokens or app passwords) are stored only in the system credential
   store (Keychain, Windows Credential Manager, the Secret Service on Linux); `sync.json` holds the entry's ID and a
   display name. Turning a backup off revokes the token where the provider supports it and deletes the entry.

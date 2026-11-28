@@ -2763,49 +2763,69 @@ impl Store {
         let current = move || self.controller.get().epoch() == epoch && self.cloud_attempt.get() == attempt;
         self.task(async move {
             use platform::Signed;
-            // Started in the task, under the window content's owner: what it spawns outlives the pressed button.
-            let outcome = match loopback {
-                Some(loopback) => {
-                    let waiting = authorization.clone();
-                    platform::loopback_sign_in(authorization.url(), loopback, move |callback| waiting.accepts(callback), page)
-                }
-                None => platform::web_sign_in(authorization.url(), &authorization.callback_scheme()),
+            // Each sign-in starts in the task, under the window content's owner: what it spawns outlives the pressed
+            // button.
+            // Closed by the user, here or in the other app: back to the form, nothing stored.
+            let back = move || {
+                self.cloud_form.update(|f| {
+                    f.working = false;
+                    f.waiting = false;
+                })
             };
-            let signed = blocking(move || outcome.recv().unwrap_or(Signed::Failed)).await.unwrap_or(Signed::Failed);
-            if !current() {
-                return;
-            }
-            let callback = match signed {
-                Signed::Callback(callback) => callback,
-                // Closed by the user: back to the form, nothing stored.
-                Signed::Closed => {
-                    return self.cloud_form.update(|f| {
-                        f.working = false;
-                        f.waiting = false;
-                    });
-                }
-                Signed::Failed => {
-                    return self.cloud_form.update(|f| {
-                        f.working = false;
-                        f.waiting = false;
-                        f.error = Some(self.label("Something went wrong while syncing"));
-                    });
-                }
+            // Dropbox: its official app signs in where it is installed (Android, iOS), the browser elsewhere.
+            let app = if platform::supports::DROPBOX_APP_SIGN_IN && provider == safay_app::cloud::Provider::Dropbox {
+                platform::dropbox_app_sign_in(&authorization)
+            } else {
+                None
             };
-            self.cloud_form.update(|f| f.waiting = false);
-            let result = blocking(move || safay_app::cloud::oauth_complete(&authorization, &callback)).await;
+            let result = if let Some(app) = app {
+                let answer = blocking(move || app.recv().ok().flatten()).await.ok().flatten();
+                if !current() {
+                    return;
+                }
+                let Some(answer) = answer else { return back() };
+                self.cloud_form.update(|f| f.waiting = false);
+                blocking(move || safay_app::cloud::dropbox_app_complete(&authorization, answer)).await
+            } else {
+                let outcome = match loopback {
+                    Some(loopback) => {
+                        let waiting = authorization.clone();
+                        platform::loopback_sign_in(authorization.url(), loopback, move |callback| waiting.accepts(callback), page)
+                    }
+                    None => platform::web_sign_in(authorization.url(), &authorization.callback_scheme()),
+                };
+                let signed = blocking(move || outcome.recv().unwrap_or(Signed::Failed)).await.unwrap_or(Signed::Failed);
+                if !current() {
+                    return;
+                }
+                let callback = match signed {
+                    Signed::Callback(callback) => callback,
+                    Signed::Closed => return back(),
+                    Signed::Failed => {
+                        return self.cloud_form.update(|f| {
+                            f.working = false;
+                            f.waiting = false;
+                            f.error = Some(self.label("Something went wrong while syncing"));
+                        });
+                    }
+                };
+                self.cloud_form.update(|f| f.waiting = false);
+                blocking(move || safay_app::cloud::oauth_complete(&authorization, &callback).map(Some)).await
+            };
             if !current() {
                 // Signed in after the user left or Safay locked: the sign-in stored for it is revoked and removed.
-                if let Ok(Ok(safay_app::sync::Location::Cloud { credential, .. })) = result {
+                if let Ok(Ok(Some(safay_app::sync::Location::Cloud { credential, .. }))) = result {
                     drop(blocking(move || safay_app::cloud::forget(&credential)).await);
                 }
                 return;
             }
             match result {
-                Ok(Ok(location)) => {
+                Ok(Ok(Some(location))) => {
                     self.cloud_form.set(CloudForm::default());
                     self.connected(location, Some(None));
                 }
+                // Cancelled in the Dropbox app.
+                Ok(Ok(None)) => back(),
                 Ok(Err(e)) => self.cloud_form.update(|f| {
                     f.working = false;
                     f.error = Some(self.label(sync_error_key(e)));

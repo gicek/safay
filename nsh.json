@@ -12,7 +12,9 @@
     "openUrl": {
       "schemes": [
         "https",
-        "http"
+        "http",
+        "dbapi-2",
+        "dbapi-8-emm"
       ]
     },
     "picker": true,
@@ -28,6 +30,10 @@
       "NSFaceIDUsageDescription": "Safay uses Face ID to unlock your vault.",
       "UISupportedInterfaceOrientations": [
         "UIInterfaceOrientationPortrait"
+      ],
+      "LSApplicationQueriesSchemes": [
+        "dbapi-2",
+        "dbapi-8-emm"
       ]
     }
   },
@@ -39,6 +45,12 @@
     "permissions": [
       "USE_BIOMETRIC",
       "CAMERA"
+    ],
+    "application": [
+      "<activity android:name=\"com.gicek.safay.DropboxAuthActivity\" android:exported=\"true\" android:excludeFromRecents=\"true\" android:noHistory=\"true\" android:theme=\"@android:style/Theme.Translucent.NoTitleBar\"/>"
+    ],
+    "queries": [
+      "<package android:name=\"com.dropbox.android\"/>"
     ]
   },
   "schemes": [

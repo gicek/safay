@@ -31,6 +31,13 @@ pub mod updates;
 // Each system's own integration.
 #[cfg(target_os = "android")]
 pub mod android;
+/// Signing in to Dropbox through its official app, where it is installed.
+#[cfg(target_os = "android")]
+#[path = "dropbox_app_android.rs"]
+mod dropbox_app_impl;
+#[cfg(target_os = "ios")]
+#[path = "dropbox_app_ios.rs"]
+mod dropbox_app_impl;
 #[cfg(target_os = "ios")]
 pub mod ios;
 #[cfg(target_os = "linux")]
@@ -158,10 +165,26 @@ pub fn loopback_sign_in(
     std::thread::spawn(move || drop(sender.send(loopback.wait(accepts, &page))));
     receiver
 }
+/// Dropbox: asks its official app to sign in (Android, iOS), where it is installed; the receiver gets its answer, or
+/// `None` when the user came back without one. `None` where there is no such app here: the browser signs in instead.
+/// On the engine thread, under an owner that lasts the sign-in (`Store::task`).
+pub fn dropbox_app_sign_in(
+    authorization: &std::sync::Arc<safay_app::cloudset::Authorization>,
+) -> Option<std::sync::mpsc::Receiver<Option<safay_app::cloud::DropboxAppAnswer>>> {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    return dropbox_app_impl::start(authorization);
+    #[allow(unreachable_code)]
+    {
+        let _ = authorization;
+        None
+    }
+}
 /// Closes the web sign-in in progress, if any (the user left its page; a page in the browser stays open, and its
-/// callback no longer ends a session).
+/// callback no longer ends a session), and a sign-in waiting for the Dropbox app.
 pub fn cancel_web_sign_in() {
     loopback::cancel();
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    dropbox_app_impl::cancel();
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     web_auth::cancel();
     #[cfg(not(target_os = "macos"))]
@@ -200,6 +223,8 @@ pub mod supports {
     /// OAuth sign-in for Dropbox, OneDrive and Google Drive (macOS: `ASWebAuthenticationSession`; Linux and Windows:
     /// the default browser, through NSH's web sign-in session). Listed only in builds with the service's client ID.
     pub const OAUTH: bool = true;
+    /// The installed Dropbox app can handle authorization.
+    pub const DROPBOX_APP_SIGN_IN: bool = cfg!(any(target_os = "android", target_os = "ios"));
     /// The OAuth sign-in page opens in the default browser, outside Safay (elsewhere a system sign-in window).
     pub const BROWSER_SIGN_IN: bool = cfg!(any(target_os = "windows", target_os = "linux"));
     /// Updating the app itself (NSH's `nsh-updater`; active only in packages that carry an update source).

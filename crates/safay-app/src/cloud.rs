@@ -722,6 +722,34 @@ pub fn oauth_begin(
     getrandom::fill(random.as_mut()).map_err(|_| SyncError::Storage)?;
     cloudset::oauth::begin(kind, access, client, &random).map_err(map_error)
 }
+/// What the official Dropbox app gave back to a sign-in it was asked for (`cloudset`'s app-to-app protocol).
+pub enum DropboxAppAnswer {
+    /// Android: the extras of the intent the app started Safay's activity with: the token type (`ACCESS_TOKEN`), the
+    /// authorization code (`ACCESS_SECRET`) and the state (`AUTH_STATE`).
+    Extras { token_type: String, code: Zeroizing<String>, state: String },
+    /// iOS: the link the app came back with (`db-<app key>://1/connect?…`).
+    Callback(String),
+}
+/// Checks the Dropbox app's answer (its state, compared in constant time), exchanges its code for tokens (the same
+/// PKCE verifier as the browser's sign-in), then checks and stores the connection, as [`oauth_complete`] does.
+/// `Ok(None)`: the user cancelled in the app; nothing was sent.
+pub fn dropbox_app_complete(
+    authorization: &cloudset::Authorization,
+    answer: DropboxAppAnswer,
+) -> Result<Option<crate::sync::Location>, SyncError> {
+    let services = services()?;
+    let config = ClientConfig::new(services.user_agent.clone());
+    let operation = match &answer {
+        DropboxAppAnswer::Extras { token_type, code, state } => authorization.complete_dropbox_app(token_type, code, state, &config),
+        DropboxAppAnswer::Callback(url) => authorization.complete_dropbox_app_callback(url, &config),
+    };
+    let operation = match operation {
+        Err(CloudError::AuthorizationDenied) => return Ok(None),
+        result => result.map_err(map_error)?,
+    };
+    let connection = run(&services, None, operation, None)?;
+    connect(connection).map(Some)
+}
 /// Exchanges the callback for tokens (the core checks the URL and `state` first), then checks and stores the connection.
 pub fn oauth_complete(authorization: &cloudset::Authorization, callback: &str) -> Result<crate::sync::Location, SyncError> {
     let services = services()?;
