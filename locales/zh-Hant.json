@@ -609,6 +609,8 @@
   "Locks after the selected time without activity or in the background, and immediately when the device locks": "無操作或在背景達到所選時間後鎖定，裝置鎖定時立即鎖定",
   "Manage": "管理",
   "Manage Categories": "管理分類",
+  "Hide Sidebar": "隱藏側邊欄",
+  "Show Sidebar": "顯示側邊欄",
   "Manual Entry": "手動輸入",
   "Master password changed": "主密碼已更改",
   "More": "更多",

@@ -338,6 +338,8 @@ pub struct Store {
     pub language: Signal<Language>,
     pub cards: Signal<bool>,
     pub copied: Signal<Option<Uuid>>,
+    /// The phone interface's wide window (an iPad): its sidebar of categories is folded away.
+    pub sidebar_hidden: Signal<bool>,
     /// The phone's lock screen has opened the biometric prompt by itself once: later it waits for its button.
     pub biometric_offered: Stored<bool>,
     pub editing: Signal<Option<CategoryEdit>>,
@@ -458,6 +460,7 @@ impl Store {
             language: signal(language),
             cards: signal(true),
             copied: signal(None),
+            sidebar_hidden: signal(false),
             biometric_offered: stored(false),
             editing: signal(None),
             sidebar: signal(true),

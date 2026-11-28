@@ -11,7 +11,10 @@ use crate::{
     store::Store,
 };
 use nsh_base::{input, theme};
-use nsh_core::prelude::*;
+use nsh_core::{
+    element::{LayoutAnimation, LayoutCurve, LayoutTransition},
+    prelude::*,
+};
 use safay_app::session::Row;
 
 /// Scanning with the camera is here (`platform::supports::CAMERA`).
@@ -132,6 +135,8 @@ fn header(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
         .h(move || px(ui::BAR) * font_scale())
         .pl(px(ui::MARGIN + 4.0))
         .pr(px(if ui::IOS { ui::MARGIN } else { 4.0 }))
+        // iOS: the sidebar folded away comes back from here.
+        .child(when(move || ui::IOS && wide && s.sidebar_hidden.get(), move || view().ml(px(-4.0)).mr(px(12.0)).child(sidebar_button(s))))
         // iOS: a large title beside the glass buttons.
         .child(if ui::IOS || wide {
             ui::display(text(name)).number_of_lines(1).flex_1().into_element()
@@ -185,7 +190,7 @@ fn search(s: Store, nav: Nav) -> impl IntoElement {
     let field = element_ref();
     // The field's width when open: the row less its margins, the button and the gap between them.
     // In a wide window, over the account pane only.
-    let wide = move || window().width - px(2.0 * ui::MARGIN + ui::FAB + 8.0 + if ui::is_wide() { ui::SIDEBAR } else { 0.0 });
+    let wide = move || window().width - px(2.0 * ui::MARGIN + ui::FAB + 8.0 + sidebar_width(s));
     view()
         .absolute()
         .left(px(0.0))
@@ -265,15 +270,46 @@ fn search(s: Store, nav: Nav) -> impl IntoElement {
 /// A wide window's sidebar: the app's name, "All" and each category with how many accounts it holds, and "Manage
 /// Categories". The chosen one is filled.
 fn sidebar(s: Store, nav: Nav) -> impl IntoElement {
-    view()
-        .w(px(ui::SIDEBAR))
-        .flex_shrink(0.0)
-        .bg(ui::sidebar)
-        .pt_safe_area()
-        // The hairline between it and the accounts.
-        .child(view().absolute().top(px(0.0)).bottom(px(0.0)).right(px(0.0)).w(px(0.5)).bg(move || tok("separator")))
-        .child(view().h(move || px(ui::BAR) * font_scale()).px(px(ui::MARGIN + 4.0)).justify_center().child(ui::display(text("Safay"))))
-        .child(sidebar_rows(s, nav))
+    // Folded away (iOS, its button), it narrows to nothing; its content keeps its width, sliding out under the edge.
+    view().w(move || px(if s.sidebar_hidden.get() { 0.0 } else { ui::SIDEBAR })).flex_shrink(0.0).overflow_hidden().bg(ui::sidebar).child(
+        view()
+            .w(px(ui::SIDEBAR))
+            .flex_1()
+            .pt_safe_area()
+            .accessibility_elements_hidden(move || s.sidebar_hidden.get())
+            // The hairline between it and the accounts.
+            .child(view().absolute().top(px(0.0)).bottom(px(0.0)).right(px(0.0)).w(px(0.5)).bg(move || tok("separator")))
+            .child(
+                view()
+                    .flex_row()
+                    .items_center()
+                    .h(move || px(ui::BAR) * font_scale())
+                    .pl(px(ui::MARGIN + 4.0))
+                    .pr(px(ui::MARGIN))
+                    .child(ui::display(text("Safay")).flex_1())
+                    .child(when(|| ui::IOS, move || sidebar_button(s))),
+            )
+            .child(sidebar_rows(s, nav)),
+    )
+}
+/// The sidebar's width in the wide window: none while it is folded away (and in a narrow one, which has none).
+fn sidebar_width(s: Store) -> f32 {
+    if ui::is_wide() && !s.sidebar_hidden.get() { ui::SIDEBAR } else { 0.0 }
+}
+/// iOS: folds the sidebar away or brings it back, as the system's split views do; at the sidebar's top while it shows,
+/// at the account pane's start while it is folded.
+fn sidebar_button(s: Store) -> impl IntoElement {
+    ui::bar_button(move || s.label(if s.sidebar_hidden.get() { "Show Sidebar" } else { "Hide Sidebar" }), || Icon::Sidebar)
+        .test_id("sidebar")
+        .on_press(move || {
+            if !reduce_motion() {
+                animate_layout(LayoutAnimation {
+                    update: Some(LayoutTransition::new(LayoutCurve::EaseInEaseOut, 300.0)),
+                    ..LayoutAnimation::default()
+                });
+            }
+            s.sidebar_hidden.update(|h| *h = !*h)
+        })
 }
 /// The sidebar's rows, in a scroll view.
 fn sidebar_rows(s: Store, nav: Nav) -> impl IntoElement {
@@ -396,7 +432,7 @@ fn chips(s: Store, nav: Nav) -> impl IntoElement {
 /// lifted copy of it follows the finger.
 fn list(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
     let r = if wide {
-        Reorder::new(s, Kind::Accounts, |_| (CARD_GAP, columns()), Pickup::LongPress)
+        Reorder::new(s, Kind::Accounts, |s| (CARD_GAP, columns(s)), Pickup::LongPress)
     } else {
         Reorder::new(s, Kind::Accounts, |_| (ROW_GAP, 1), Pickup::LongPress)
     };
@@ -439,7 +475,7 @@ fn list(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
                 let row = computed(move || row_at(at.index()));
                 if wide { card(s, nav, r, row) } else { account_row(s, nav, r, row, move || at.index(), count) }
             })
-            .columns(move || if wide { columns() as u32 } else { 1 })
+            .columns(move || if wide { columns(s) as u32 } else { 1 })
             .column_gap(px(CARD_GAP))
             .keys(move || match narrowed.get() {
                 Some(n) => s.projection.with(|p| n.iter().filter_map(|i| p.rows.get(*i)).map(|r| r.id.to_string()).collect::<Vec<_>>()),
@@ -660,8 +696,8 @@ const CARD_MARGIN: f32 = 20.0;
 const CARD: f32 = 122.0;
 const CARD_MIN: f32 = 220.0;
 /// How many columns of cards the account pane of a wide window holds.
-fn columns() -> usize {
-    let width = window().width.0 - ui::SIDEBAR - 2.0 * CARD_MARGIN;
+fn columns(s: Store) -> usize {
+    let width = window().width.0 - sidebar_width(s) - 2.0 * CARD_MARGIN;
     (((width + CARD_GAP) / (CARD_MIN * font_scale() + CARD_GAP)).floor() as usize).clamp(1, 4)
 }
 
