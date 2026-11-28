@@ -179,9 +179,17 @@ pub fn add_to(s: Store, nav: Nav) -> impl IntoElement {
             .unwrap_or_default()
     };
     let none = move || s.projection.with(|p| p.categories.is_empty());
-    ui::bottom_sheet(
+    // iOS: the title and "Done" are the sheet's navigation bar, UIKit's.
+    let bar = ui::SheetBar {
+        title: Box::new(move || s.label("Add to")),
+        items: Box::new(move || {
+            vec![nsh_core::element::header::HeaderItem::new(s.label("Done").to_string()).key("done").on_press(close)]
+        }),
+    };
+    ui::sheet_with_bar(
         move || nav.add_to.get().is_some(),
         close,
+        Some(bar),
         move || {
             view()
                 // iOS: the system's sheet sizes itself, at half the screen or all of it; the list fills what its bar
@@ -189,8 +197,11 @@ pub fn add_to(s: Store, nav: Nav) -> impl IntoElement {
                 .flex_grow(if ui::IOS { 1.0 } else { 0.0 })
                 .min_h(px(0.0))
                 .pb_safe_area_plus(px(8.0))
-                .child(if ui::IOS {
-                    // iOS: the title in the middle of the sheet, "Done" in glass at the end, as the system's sheets.
+                .child(if cfg!(target_os = "ios") {
+                    view().into_element()
+                } else if ui::IOS {
+                    // `ios-look`: the title in the middle of the sheet, "Done" in glass at the end, as the system's
+                    // sheets.
                     view()
                         .h(px(ui::TOUCH + 8.0))
                         .px(px(16.0))

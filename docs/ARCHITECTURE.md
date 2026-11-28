@@ -168,15 +168,22 @@ master password, an export's password, choosing the backup location) is a page. 
 (`ui::form`): on iOS the rows of one inset group, with what a field's value means (the strength meter, a mismatch) said
 under the group; on Android Material's outlined fields on the page. A choice among a few values is the system's pull-down
 menu from the value at the row's end on iOS, a dialog of radio buttons on Android. Android's page titles start at the
-leading edge, its drawn dialogs take the system alerts' surface, and its sheets' actions are icons; on iOS the search
-field and its button float in Liquid Glass (`ui::glass`, NSH's `glass_effect`), categories are deleted in an edit mode,
-and a sheet's actions are words in glass (`ui::glass_text_button`). Both keep the search at the bottom corner, in reach of
-the thumb. A tick in "Add to" takes effect at once; a page whose task went to the background (linking a backup location,
+leading edge, its drawn dialogs take the system alerts' surface, and its sheets' actions are icons. Android keeps the
+search button in the bottom corner. On iOS tapping Search focuses its floating field and opens the keyboard.
+Search, Add Account and More are in the native navigation bar. Add Account and More open UIKit menus. When the
+system controls take a side of the screen (iPhone Duo, `ui::side_controls`), UIKit stacks these buttons in a column
+beside them. The list then draws its own title, as the wide layout does (`home::own_title`), because UIKit would
+center a title view across the whole bar. iOS categories are deleted in edit mode. The account's sheet and "Add to"
+have a navigation bar of their own (`ui::sheet_with_bar`: a `NavStack` inside the dialog), so "Edit", "Done" and the
+title are UIKit's. Inside a sheet UIKit keeps the bar across the top, clear of the camera. Each sheet's content keeps
+to its side safe area.
+A tick in "Add to" takes effect at once; a page whose task went to the background (linking a backup location,
 resolving a conflict) goes back to settings, whose backup card shows how it ends. The pages over the list
-change as one (`Nav`: the stack and the page in one `batch`), so the native stack never sees a route in between. A
-window 700 pt wide or more (`ui::is_wide`: a tablet) lists the categories in a
-sidebar and the accounts as cards in columns, and centers the pages over it. The `ios-look` feature shows the iOS look
-in a desktop's development build (`SAFAY_MOBILE=1`, or `<width>x<height>`).
+change as one (`Nav`: the stack and the page in one `batch`), so the native stack never sees a route in between.
+On iOS the navigation bar spans the window and each page uses its own horizontal safe area. The list uses the
+available width (`ui::content_width`) for its cards and search field. At 700 pt or more (`ui::is_wide`) it shows the
+categories in a sidebar and the accounts as cards in columns. The `ios-look` feature shows the iOS look in a desktop's
+development build (`SAFAY_MOBILE=1`, or `<width>x<height>`).
 
 ### Working around NSH issues
 

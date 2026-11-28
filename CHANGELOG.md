@@ -20,6 +20,11 @@ and versions follow [Semantic Versioning](https://semver.org/). A release's sect
   scroll, and dragging an account near the edge scrolls the list.
 - **Add to**: ticking or unticking a category takes effect at once, and a long list scrolls inside the sheet.
 
+### Fixed
+
+- On iPhone Duo, folded or open, pages and sheets stay clear of the system controls and the camera, with the
+  list's buttons beside them.
+
 ## [1.5.0] - 2026-11-24
 
 Safay comes to Android, and installs its Raycast and Tinycast extension from Settings.

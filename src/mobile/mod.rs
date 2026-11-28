@@ -56,8 +56,9 @@ pub struct Nav {
     pub page: Signal<Option<Page>>,
     /// The add menu over the list is open.
     pub adding: Signal<bool>,
-    /// The search field is open at the list's bottom.
+    /// The search field is open.
     pub searching: Signal<bool>,
+    pub search_field: ElementRef,
     /// The letter the list is narrowed to, from its index: only the accounts filed under it show.
     pub letter: Signal<Option<char>>,
     /// The list's overflow menu is open.
@@ -118,6 +119,7 @@ impl Nav {
     }
     /// Closes the search field: its text goes, and the keyboard with it.
     pub fn close_search(self) {
+        self.search_field.blur();
         dismiss_keyboard();
         self.searching.set(false);
     }
@@ -167,6 +169,7 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
         page: signal(None),
         adding: signal(false),
         searching: signal(false),
+        search_field: element_ref(),
         letter: signal(None),
         menu: signal(false),
         context: signal(None),
@@ -279,7 +282,8 @@ pub fn root(controller: Arc<Controller>, fixture: bool) -> impl IntoElement {
         .on_press(move |_: &()| s.controller.get().activity())
         .child(when(move || !s.ready.get(), || view().flex_1()).otherwise(move || {
             when(move || s.unlocked(), move || unlocked(s, nav)).otherwise(move || {
-                when(move || s.projection.with(|p| p.exists), move || lock::page(s)).otherwise(move || onboarding::page(s))
+                let entry = when(move || s.projection.with(|p| p.exists), move || lock::page(s)).otherwise(move || onboarding::page(s));
+                if ui::IOS { view().flex_1().px_safe_area().child(entry).into_element() } else { entry.into_element() }
             })
         }))
         .child(when(move || s.unlocked(), move || view().child(detail::sheet(s)).child(menus::add_to(s, nav))))
@@ -357,32 +361,40 @@ fn native_stack(s: Store, nav: Nav) -> impl IntoElement {
         .child(
             nsh_base::nav_page()
                 .key("list")
-                // A wide window draws its own sidebar and header (`home::page`).
-                .header_visible(move || !ui::is_wide())
+                // The wide layout draws its titles in the content, as the list does with its buttons stacked beside the
+                // system controls (iPhone Duo), where the bar's row would hold the title alone. UIKit still places the
+                // buttons.
+                .header_visible(move || cfg!(target_os = "ios") || !ui::is_wide())
+                .header_transparent(move || cfg!(target_os = "ios") && home::own_title())
                 // The app's name at the bar's start, beside its buttons, as plain text that stays: the title's view, as
                 // wide as the window, which the system narrows to the room the buttons leave, whatever they are (a
                 // leading item would sit on glass, as a button does).
-                .title("Safay")
+                .title(move || if home::own_title() { "" } else { "Safay" })
                 .header_title(
                     // Narrowed to a letter: the bar's title is the letter's capsule alone, which UIKit centers in the bar
                     // (`home::letter_chip`); a view as wide as the window is laid at the bar's start instead.
-                    view().child(when(move || nav.letter.get().is_some(), move || home::letter_chip(s, nav).into_element()).otherwise(
+                    view().child(when(
+                        move || !home::own_title(),
                         move || {
-                            view().w(move || window().width).child(
-                                text("Safay")
-                                    .text_size(px(28.0))
-                                    .line_height(px(34.0))
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(move || theme().foreground)
-                                    .number_of_lines(1),
+                            when(move || nav.letter.get().is_some(), move || home::letter_chip(s, nav).into_element()).otherwise(
+                                move || {
+                                    view().w(move || window().width).child(
+                                        text("Safay")
+                                            .text_size(px(28.0))
+                                            .line_height(px(34.0))
+                                            .font_weight(FontWeight::BOLD)
+                                            .text_color(move || theme().foreground)
+                                            .number_of_lines(1),
+                                    )
+                                },
                             )
                         },
                     )),
                 )
                 .header_shadow_visible(false)
                 .header_right_items(move || home::header_items(s, nav))
-                .bg(move || theme().background)
-                .child(home::page(s, nav)),
+                .bg(move || if ui::is_wide() { ui::pane() } else { theme().background })
+                .child(view().flex_1().px_safe_area().child(home::page(s, nav))),
         )
         .child(each(
             move || routes.get(),
@@ -439,7 +451,8 @@ fn native_stack(s: Store, nav: Nav) -> impl IntoElement {
                 };
                 let content = page(s, nav, kind);
                 // Each page keeps its content to a readable width inside its scroll view (`ui::readable`).
-                screen.child(content)
+                // Keep the native navigation bar at the window edge and the page inside its reported side insets.
+                if kind == Page::Scan { screen.child(content) } else { screen.child(view().flex_1().px_safe_area().child(content)) }
             },
         ))
 }
@@ -475,9 +488,10 @@ fn toast(s: Store, lifted: impl Fn() -> bool + Copy + 'static) -> impl IntoEleme
                 .absolute()
                 .left(px(0.0))
                 .right(px(0.0))
-                .bottom(move || px(if lifted() { ui::FAB + ui::MARGIN } else { 0.0 }))
+                .bottom(move || px(if !cfg!(target_os = "ios") && lifted() { ui::FAB + ui::MARGIN } else { 0.0 }))
                 .pb_safe_area_plus(px(16.0))
-                .px(px(ui::MARGIN))
+                .pl(move || px(ui::MARGIN) + if ui::IOS { safe_area().left } else { px(0.0) })
+                .pr(move || px(ui::MARGIN) + if ui::IOS { safe_area().right } else { px(0.0) })
                 .items_center()
                 .pointer_events(nsh_core::PointerEvents::BoxNone)
                 .child(

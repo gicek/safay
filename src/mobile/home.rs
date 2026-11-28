@@ -22,6 +22,16 @@ const CAMERA: bool = crate::platform::supports::CAMERA;
 /// How many accounts the list holds before its letter index shows.
 const INDEXED: usize = 8;
 
+/// The gap above the titles the page draws itself ([`own_title`]), inside the iOS safe area.
+const HEADER_INSET: f32 = if ui::IOS { 12.0 } else { 0.0 };
+
+/// The list draws its title itself, not the system's header: in the wide layout, and on iOS with the header's buttons
+/// stacked beside the system controls (iPhone Duo), where the header's row would hold the title alone and UIKit would
+/// center it in the whole bar, off the content's edge.
+pub fn own_title() -> bool {
+    ui::is_wide() || ui::side_controls()
+}
+
 pub fn page(s: Store, nav: Nav) -> impl IntoElement {
     let empty_vault = move || s.projection.with(|p| p.account_count == 0);
     // A closed search leaves no text behind: the list shows every account again.
@@ -47,22 +57,30 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
                     .flex_1()
                     .flex_row()
                     .child(sidebar(s, nav))
-                    .child(view().flex_1().bg(ui::pane).pt_safe_area().child(header(s, nav, true)).child(content(true)))
+                    .child(
+                        view()
+                            .flex_1()
+                            .bg(ui::pane)
+                            .pt_safe_area_plus(px(HEADER_INSET))
+                            .child(header(s, nav, true))
+                            .child(content(true)),
+                    )
                     .into_element()
             })
             .otherwise(move || {
                 // The chips stay under the top bar as the accounts scroll; iOS: the title and its buttons are the
-                // system's header (`header_items`), which the page starts below.
+                // system's header (`header_items`), which the page starts below, unless the page draws its own title
+                // (`own_title`).
                 view()
                     .flex_1()
-                    .pt(ui::page_top)
-                    .child(when(|| !ui::IOS, move || header(s, nav, false)))
+                    .pt(move || if ui::side_controls() { safe_area().top + px(HEADER_INSET) } else { ui::page_top() })
+                    .child(when(|| !ui::IOS || ui::side_controls(), move || header(s, nav, false)))
                     .child(when(move || !empty_vault() && has_categories(s), move || chips(s, nav)))
                     .child(content(false))
                     .into_element()
             }),
         )
-        // The search button floats at the bottom corner, in reach of the thumb, on both platforms.
+        // iOS puts the search action in its native header; Android keeps it beside the field.
         .child(when(move || !empty_vault(), move || search(s, nav)))
         .child(add_menu(s, nav))
         .child(overflow(s, nav))
@@ -70,20 +88,25 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
 }
 
 /// Opens the search, the keyboard up with its field.
-fn open_search(nav: Nav, field: ElementRef) {
+fn toggle_search(nav: Nav) {
+    if nav.searching.get_untracked() {
+        nav.close_search();
+        return;
+    }
     nav.adding.set(false);
     nav.menu.set(false);
     nav.letter.set(None);
     nav.searching.set(true);
-    // From the next frames, once the field is in the page (it is made as the search opens): the keyboard comes up with
-    // it.
-    request_animation_frame(move |_| {
+    // On iOS the input takes focus when it mounts. The custom bar lets the field enter its layout first.
+    if !cfg!(target_os = "ios") {
         request_animation_frame(move |_| {
-            if nav.searching.get_untracked() {
-                field.focus()
-            }
+            request_animation_frame(move |_| {
+                if nav.searching.get_untracked() {
+                    nav.search_field.focus()
+                }
+            });
         });
-    });
+    }
 }
 
 /// Narrowed to a letter (`nav.letter`): a capsule in the middle of the top bar saying which, a press letting the list
@@ -141,7 +164,6 @@ fn header(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
             move || wide && s.sidebar_hidden.get(),
             move || view().ml(px(if ui::IOS { -4.0 } else { -16.0 })).mr(px(if ui::IOS { 12.0 } else { 4.0 })).child(sidebar_button(s)),
         ))
-        // iOS: a large title beside the glass buttons.
         .child(if ui::IOS || wide {
             ui::display(text(name)).number_of_lines(1).flex_1().into_element()
         } else {
@@ -157,14 +179,10 @@ fn header(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
                 .pointer_events(nsh_core::PointerEvents::BoxNone)
                 .child(letter_chip(s, nav)),
         )
-        .child(bar_menus(s, nav))
+        .child(when(|| !cfg!(target_os = "ios"), move || bar_menus(s, nav)))
 }
-/// The top bar's "+" and "More". iOS (a wide window's bar; the phone's are the system header's): the system's menu
-/// buttons. Elsewhere: buttons opening the app's menus (`add_menu`, `overflow`).
+/// The custom bar's add and more actions.
 fn bar_menus(s: Store, nav: Nav) -> AnyElement {
-    #[cfg(target_os = "ios")]
-    return wide_bar_menus(s, nav).into_element();
-    #[allow(unreachable_code)]
     view()
         .flex_row()
         .gap(px(if ui::IOS { 8.0 } else { 0.0 }))
@@ -187,14 +205,13 @@ fn bar_menus(s: Store, nav: Nav) -> AnyElement {
         .into_element()
 }
 
-/// The search button at the bottom: a press opens the field to its left, the keyboard up, and the button closes it
-/// again, text and keyboard with it. Above the keyboard while it is up.
+/// The search field floats above the keyboard. Android keeps its search button beside it.
 fn search(s: Store, nav: Nav) -> impl IntoElement {
     let open = move || nav.searching.get();
-    let field = element_ref();
     // The field's width when open: the row less its margins, the button and the gap between them.
     // In a wide window, over the account pane only.
-    let wide = move || window().width - px(2.0 * ui::MARGIN + ui::FAB + 8.0 + sidebar_width(s));
+    let button_space = if cfg!(target_os = "ios") { 0.0 } else { ui::FAB + 8.0 };
+    let wide = move || (ui::content_width() - px(2.0 * ui::MARGIN + button_space + sidebar_width(s))).max(px(0.0));
     view()
         .absolute()
         .left(px(0.0))
@@ -221,14 +238,15 @@ fn search(s: Store, nav: Nav) -> impl IntoElement {
                 .transition()
                 .duration(ui::SPATIAL_MS)
                 .ease_out()
-                .on_press(move |_: &()| field.focus())
+                .on_press(move |_: &()| nav.search_field.focus())
                 .child(view().pl(px(16.0)).text_color(move || theme().muted_foreground).child(icon(Icon::Search).size(px(22.0))))
                 // Only while the search is open: a text field left in the page, even out of sight, is one UIKit gives
                 // the focus back to as one of its menus (a long press, "+", a setting's choices) opens or closes, and
                 // the keyboard would come up with it.
                 .child(when(open, move || {
                     ui::themed_input(input())
-                        .element_ref(&field)
+                        .element_ref(&nav.search_field)
+                        .auto_focus(cfg!(target_os = "ios"))
                         .test_id("search")
                         .label(move || s.label("Search accounts or sites"))
                         .placeholder(move || s.label("Search accounts or sites").to_string())
@@ -250,25 +268,22 @@ fn search(s: Store, nav: Nav) -> impl IntoElement {
                         .text_color(move || theme().foreground)
                 })),
         )
-        .child(
-            ui::fab(move || s.label(if open() { "Close" } else { "Search" }))
-                .test_id("search-button")
-                .transition()
-                .duration(ui::SPATIAL_MS)
-                .ease_out()
-                .on_press(move || {
-                    if open() {
-                        nav.close_search();
-                    } else {
-                        open_search(nav, field);
-                    }
-                })
-                .child(
-                    view()
-                        .size(px(24.0))
-                        .child(dynamic(move || icon(if open() { Icon::Close } else { Icon::Search }).size(px(24.0)).into_element())),
-                ),
-        )
+        .child(when(
+            || !cfg!(target_os = "ios"),
+            move || {
+                ui::fab(move || s.label(if open() { "Close" } else { "Search" }))
+                    .test_id("search-button")
+                    .transition()
+                    .duration(ui::SPATIAL_MS)
+                    .ease_out()
+                    .on_press(move || toggle_search(nav))
+                    .child(
+                        view()
+                            .size(px(24.0))
+                            .child(dynamic(move || icon(if open() { Icon::Close } else { Icon::Search }).size(px(24.0)).into_element())),
+                    )
+            },
+        ))
 }
 
 /// A wide window's sidebar: the app's name, "All" and each category with how many accounts it holds, and "Manage
@@ -279,7 +294,7 @@ fn sidebar(s: Store, nav: Nav) -> impl IntoElement {
         view()
             .w(px(ui::SIDEBAR))
             .flex_1()
-            .pt_safe_area()
+            .pt_safe_area_plus(px(HEADER_INSET))
             .accessibility_elements_hidden(move || s.sidebar_hidden.get())
             // The hairline between it and the accounts.
             .child(view().absolute().top(px(0.0)).bottom(px(0.0)).right(px(0.0)).w(px(0.5)).bg(move || tok("separator")))
@@ -705,7 +720,7 @@ const CARD: f32 = 122.0;
 const CARD_MIN: f32 = 220.0;
 /// How many columns of cards the account pane of a wide window holds.
 fn columns(s: Store) -> usize {
-    let width = window().width.0 - sidebar_width(s) - 2.0 * CARD_MARGIN;
+    let width = ui::content_width().0 - sidebar_width(s) - 2.0 * CARD_MARGIN;
     (((width + CARD_GAP) / (CARD_MIN * font_scale() + CARD_GAP)).floor() as usize).clamp(1, 4)
 }
 
@@ -1138,6 +1153,7 @@ fn list_actions(s: Store, more: bool) -> Vec<(&'static str, &'static str, &'stat
 }
 /// Runs the list action `id` ([`list_actions`]).
 fn run_list_action(s: Store, nav: Nav, id: &str) {
+    dismiss_keyboard();
     match id {
         "scan" => nav.push(Page::Scan),
         "photos" => {
@@ -1158,16 +1174,11 @@ fn run_list_action(s: Store, nav: Nav, id: &str) {
     }
 }
 
-/// iOS: the buttons of the list's system header: "+" and its menu of the ways to add an account, and "More" with the
-/// list's other places. Their menus are the system's.
+/// The system navigation bar's actions on iOS, in both the narrow and wide layouts.
 pub fn header_items(s: Store, nav: Nav) -> Vec<nsh_core::element::header::HeaderItem> {
     use nsh_core::element::{desktop::MenuItem, header::HeaderItem};
-    // Reordering: "Done" alone ends it.
     if nav.reordering.get() {
-        return vec![
-            // "Done" in words: the system's Done item is a check mark on iOS 26.
-            HeaderItem::new(s.label("Done").to_string()).key("done").on_press(move || nav.reordering.set(false)),
-        ];
+        return vec![HeaderItem::new(s.label("Done").to_string()).key("done").on_press(move || nav.reordering.set(false))];
     }
     let menu = |more: bool| {
         list_actions(s, more)
@@ -1177,44 +1188,13 @@ pub fn header_items(s: Store, nav: Nav) -> Vec<nsh_core::element::header::Header
             })
             .collect::<Vec<_>>()
     };
-    vec![
+    let mut items = vec![
         HeaderItem::symbol("ellipsis").key("more").label(s.label("More").to_string()).menu(menu(true)),
         HeaderItem::symbol("plus").key("add").label(s.label("Add Account").to_string()).menu(menu(false)),
-    ]
-}
-/// iOS, a wide window's own top bar: "+" and "More" as the system's menu buttons, with the menus of the iPhone's header
-/// ([`header_items`]); "Done" alone while the cards are reordered.
-#[cfg(target_os = "ios")]
-fn wide_bar_menus(s: Store, nav: Nav) -> impl IntoElement {
-    let menu_button = move |more: bool, name: &'static str, glyph: Icon, test: &'static str| {
-        ui::glass(
-            nsh_base::menu_button()
-                .test_id(test)
-                .accessibility_label(move || Some(s.label(name)))
-                .items(move || {
-                    list_actions(s, more)
-                        .into_iter()
-                        .map(|(id, label, symbol)| nsh_base::MenuButtonItem::new(id, s.label(label)).icon(symbol))
-                        .collect::<Vec<_>>()
-                })
-                .on_select(move |id: &SharedString| run_list_action(s, nav, id))
-                .size(px(44.0))
-                .items_center()
-                .justify_center()
-                .text_color(move || theme().foreground)
-                .child(crate::icons::icon_bold(glyph).size(px(24.0))),
-        )
-    };
-    when(
-        move || nav.reordering.get(),
-        move || ui::glass_text_button(move || s.label("Done")).test_id("done").on_press(move || nav.reordering.set(false)),
-    )
-    .otherwise(move || {
-        view().flex_row().gap(px(8.0)).child(menu_button(false, "Add Account", Icon::Plus, "add")).child(menu_button(
-            true,
-            "More",
-            Icon::More,
-            "more",
-        ))
-    })
+    ];
+    if cfg!(target_os = "ios") && s.projection.with(|p| p.account_count > 0) {
+        let (symbol, label) = if nav.searching.get() { ("xmark", "Close") } else { ("magnifyingglass", "Search") };
+        items.push(HeaderItem::symbol(symbol).key("search-button").label(s.label(label).to_string()).on_press(move || toggle_search(nav)));
+    }
+    items
 }

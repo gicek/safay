@@ -114,18 +114,25 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
         }))
         // The frame to aim with, centered.
         .child(
-            view().absolute().inset(px(0.0)).items_center().justify_center().pointer_events(nsh_core::PointerEvents::None).child(
-                view()
-                    .size(px(FRAME))
-                    .rounded(px(28.0))
-                    .border(px(3.0))
-                    .border_color(|| WHITE)
-                    .opacity(move || if failed.get().is_some() { 0.0_f32 } else { 0.9 }),
-            ),
+            view()
+                .absolute()
+                .inset(px(0.0))
+                .px_safe_area()
+                .items_center()
+                .justify_center()
+                .pointer_events(nsh_core::PointerEvents::None)
+                .child(
+                    view()
+                        .size(px(FRAME))
+                        .rounded(px(28.0))
+                        .border(px(3.0))
+                        .border_color(|| WHITE)
+                        .opacity(move || if failed.get().is_some() { 0.0_f32 } else { 0.9 }),
+                ),
         )
         // The bar: closing, and the page's name.
         .child(
-            view().absolute().left(px(0.0)).right(px(0.0)).top(px(0.0)).pt_safe_area().bg(|| SHADE.opacity(0.45)).child(
+            view().absolute().left(px(0.0)).right(px(0.0)).top(px(0.0)).pt_safe_area().px_safe_area().bg(|| SHADE.opacity(0.45)).child(
                 view()
                     .flex_row()
                     .items_center()
@@ -154,7 +161,8 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
                 .bottom(px(0.0))
                 .pt(px(24.0))
                 .pb_safe_area_plus(px(48.0))
-                .px(px(32.0))
+                .pl_safe_area_plus(px(32.0))
+                .pr_safe_area_plus(px(32.0))
                 .bg(|| SHADE.opacity(0.45))
                 .items_center()
                 .gap(px(16.0))

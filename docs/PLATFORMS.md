@@ -68,12 +68,17 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
   expiry and the cover in the background are coded and untried on a device.
 - Dropbox opens its installed app for sign-in. Web sign-ins open the system's sign-in session. A callback scheme NSH's session refuses (Google's, longer than its
   `MAX_SCHEME_LEN`) goes to `ASWebAuthenticationSession` directly (`platform::web_auth`).
-- The interface follows the system: its navigation bar, swipe back, menus, sheets, switches and segmented controls, and
-  the alert for a category's name, are UIKit's. Dialogs with password fields are drawn in the look of an iOS alert,
-  since the system's alert has no secure field.
-- iPhone: portrait only. iPad: every orientation; a window 700 pt wide or more shows the categories in a sidebar, which its button folds away, and
-  the accounts as cards, and sheets (an account's details, "Add to", a server's setup) open as a card in the middle of the
-  screen; a narrower one (Split View, Slide Over) shows the phone's layout and sheets.
+- UIKit supplies the navigation bar, swipe back, menus, sheets, switches, segmented controls and the category-name
+  alert. Dialogs with password fields use Safay's own controls.
+- Known simulator issue (iPhone Duo, iOS 27.2): opening Add Account or More in the vertical navigation bar can
+  bring up the software keyboard while the native menu is visible, even before opening Search. Device behavior
+  has not been verified.
+- iPhone: portrait only. On iPad (every orientation) and iPhone Duo, the width between the side safe areas
+  determines the layout. At 700 pt or more, the categories move to a collapsible sidebar and the accounts appear as
+  cards. Narrower windows show the phone layout. Account details, "Add to", and server setup use the system's sheet
+  presentation.
+- iPhone Duo (tried in the iOS 27.2 simulator): folded, the phone layout, with the system controls and the list's
+  buttons in a column at the side; open, the wide layout. Folding or opening keeps the page you are on.
 - Safay locks when the device locks with a passcode, and after the auto-lock time. While unlocked, a blurred cover hides
   it in the app switcher. A copied code stays on this device (never Universal Clipboard) and expires.
 - The app icon is `assets/ios/icon.png`, edge to edge without transparency (`scripts/mobile_icons.py`).

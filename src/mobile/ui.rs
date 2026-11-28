@@ -52,9 +52,27 @@ pub const PAGE_MAX: f32 = 720.0;
 pub fn readable(content: impl IntoElement) -> View {
     view().w_full().items_center().child(view().w_full().max_w(px(PAGE_MAX)).child(content))
 }
-/// The window is wide ([`WIDE`]).
+/// Width available to the mobile content. iOS can place system controls on either side of the window.
+pub fn content_width() -> Points {
+    let width = window().width;
+    if IOS {
+        let insets = safe_area();
+        (width - insets.left - insets.right).max(px(0.0))
+    } else {
+        width
+    }
+}
+/// The system controls take a side of the screen (iPhone Duo), and UIKit stacks the navigation bar's buttons beside
+/// them instead of across the top.
+pub fn side_controls() -> bool {
+    cfg!(target_os = "ios") && {
+        let insets = safe_area();
+        insets.left > px(0.0) || insets.right > px(0.0)
+    }
+}
+/// The content has room for the wide layout ([`WIDE`]).
 pub fn is_wide() -> bool {
-    window().width >= px(WIDE)
+    content_width() >= px(WIDE)
 }
 /// What a wide window's account pane is drawn on: iOS's plain background (cards stand out from it in the grouped gray),
 /// elsewhere the page's.
@@ -1610,12 +1628,30 @@ pub fn bottom_sheet(
     close: impl Fn() + Copy + 'static,
     content: impl Fn() -> AnyElement + 'static,
 ) -> AnyElement {
+    sheet_with_bar(open, close, None, content)
+}
+/// An iOS sheet's navigation bar: its title and its buttons, UIKit's. UIKit lays the buttons at the bar's end, or in the
+/// column beside the system controls when they take a side of the screen (iPhone Duo).
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub struct SheetBar {
+    pub title: Box<dyn Fn() -> SharedString>,
+    pub items: Box<dyn Fn() -> Vec<nsh_core::element::header::HeaderItem>>,
+}
+/// [`bottom_sheet`], on iOS with the system's navigation bar ([`SheetBar`]) over the content. Elsewhere the bar is
+/// ignored: the content draws its own.
+pub fn sheet_with_bar(
+    open: impl Fn() -> bool + Copy + 'static,
+    close: impl Fn() + Copy + 'static,
+    bar: Option<SheetBar>,
+    content: impl Fn() -> AnyElement + 'static,
+) -> AnyElement {
     // iOS: the system's sheet (`UISheetPresentationController`): on a phone (and a narrow iPad window) half the screen
     // or all of it, dragged between them, over the page it leaves visible, closed by a swipe down; in a wide iPad window
     // a card in the middle of the screen over the dimmed page, as iPadOS presents forms.
     #[cfg(target_os = "ios")]
     {
         let content = std::rc::Rc::new(content);
+        let bar = bar.map(std::rc::Rc::new);
         return when(open, move || {
             let content = content.clone();
             let dialog = if untracked(is_wide) {
@@ -1625,17 +1661,36 @@ pub fn bottom_sheet(
                     .presentation(nsh_core::ModalPresentation::PageSheet)
                     .detents(vec![nsh_core::SheetDetent::Medium, nsh_core::SheetDetent::Large])
             };
-            dialog.on_cancel(move |_: &()| close()).child(
-                view()
-                    .flex_1()
-                    .bg(move || tok("sheet-surface"))
-                    .pt(px(12.0))
-                    // A column the content's scroll view fills.
-                    .child(view().flex_1().min_h(px(0.0)).child(content())),
+            let dialog = dialog.on_cancel(move |_: &()| close());
+            // The sheet's background spans it; its content keeps to the side insets, clear of the system controls.
+            let Some(bar) = bar.clone() else {
+                return dialog.child(
+                    view()
+                        .flex_1()
+                        .bg(move || tok("sheet-surface"))
+                        .pt(px(12.0))
+                        .px_safe_area()
+                        // A column the content's scroll view fills.
+                        .child(view().flex_1().min_h(px(0.0)).child(content())),
+                );
+            };
+            let (title, items) = (bar.clone(), bar);
+            dialog.child(
+                nsh_base::nav_stack().flex_1().child(
+                    nsh_base::nav_page()
+                        .key("sheet")
+                        .title(move || (title.title)())
+                        .header_shadow_visible(false)
+                        .header_right_items(move || (items.items)())
+                        .bg(move || tok("sheet-surface"))
+                        .child(view().flex_1().min_h(px(0.0)).px_safe_area().child(content())),
+                ),
             )
         })
         .into_element();
     }
+    #[cfg(not(target_os = "ios"))]
+    let _ = bar;
     // Android, a wide window (a tablet): a dialog in the middle of the screen, as Material has large screens show forms
     // rather than a sheet from the bottom edge; a narrow one keeps the bottom sheet.
     #[allow(unreachable_code)]

@@ -31,32 +31,65 @@ fn close(s: Store) {
 }
 
 pub fn sheet(s: Store) -> impl IntoElement {
-    ui::bottom_sheet(
+    // Whether the names are being edited; each account the sheet opens on starts without.
+    let editing = signal(false);
+    // iOS: "Edit" and "Done" are the navigation bar's, which UIKit places at its end or, with the system controls at a
+    // side of the screen (iPhone Duo), in the column beside them.
+    let bar = ui::SheetBar {
+        title: Box::new(SharedString::default),
+        items: Box::new(move || {
+            use nsh_core::element::header::HeaderItem;
+            let Some(id) = shown(s) else { return Vec::new() };
+            if editing.get() {
+                vec![HeaderItem::new(s.label("Done").to_string()).key("done").on_press(move || save(s, id))]
+            } else {
+                vec![HeaderItem::new(s.label("Edit").to_string()).key("edit").on_press(move || start_editing(s, editing))]
+            }
+        }),
+    };
+    ui::sheet_with_bar(
         move || shown(s).is_some() && s.detail.with(Option::is_some),
         move || close(s),
-        move || dynamic(move || shown(s).map(|id| content(s, id).into_element())).into_element(),
+        Some(bar),
+        move || {
+            dynamic(move || {
+                shown(s).map(|id| {
+                    untracked(|| editing.set(false));
+                    content(s, id, editing).into_element()
+                })
+            })
+            .into_element()
+        },
     )
 }
 
-fn content(s: Store, id: Uuid) -> impl IntoElement {
+/// Starts editing the names, what the last edit said gone.
+fn start_editing(s: Store, editing: Signal<bool>) {
+    s.error.set(None);
+    s.marks.update(|m| m.website_error = false);
+    editing.set(true)
+}
+
+/// Saves the edited names. The fields stay until the save is through (it closes the sheet): a website that isn't one,
+/// or a save that fails, is said under them.
+fn save(s: Store, id: Uuid) {
+    let bad = s.form.with(|f| !f.website.trim().is_empty() && site_icon::normalized_website(&f.website).is_none());
+    s.marks.update(|m| m.website_error = bad);
+    if bad || s.busy.get() {
+        return;
+    }
+    dismiss_keyboard();
+    s.save_detail(id);
+}
+
+fn content(s: Store, id: Uuid, editing: Signal<bool>) -> impl IntoElement {
     let row = computed(move || s.projection.with(|p| p.rows.iter().find(|r| r.id == id).cloned()));
     let detail = move || s.detail.get();
-    let editing = signal(false);
     let issuer = move || detail().map(|d| d.issuer).unwrap_or_default();
     let urgent = move || row.with(|r| r.as_ref().is_some_and(|r| r.remaining <= 5));
     let copied = move || s.copied.get() == Some(id);
     let revealed = move || !s.revealed.with(|r| r.is_empty());
-    // The fields stay until the save is through (it closes the sheet): a website that isn't one, or a save that
-    // fails, is said under them.
-    let save = move || {
-        let bad = s.form.with(|f| !f.website.trim().is_empty() && site_icon::normalized_website(&f.website).is_none());
-        s.marks.update(|m| m.website_error = bad);
-        if bad || s.busy.get() {
-            return;
-        }
-        dismiss_keyboard();
-        s.save_detail(id);
-    };
+    let save = move || save(s, id);
     scroll()
         .max_h(move || ui::sheet_room(0.0))
         .flex_grow(if cfg!(target_os = "ios") { 1.0 } else { 0.0 })
@@ -79,37 +112,37 @@ fn content(s: Store, id: Uuid) -> impl IntoElement {
                                 ui::dim(ui::body(text(move || detail().map(|d| d.username).unwrap_or_default()))).number_of_lines(1),
                             ),
                         )
-                        .child(
-                            when(
-                                move || editing.get(),
-                                move || {
-                                    // iOS: "Done" in words, as the system's. Android: a check mark, as its other sheets'
-                                    // actions are icons (the pencil that started the edit, a close button).
-                                    if ui::IOS {
-                                        ui::glass_text_button(move || s.label("Done")).test_id("done").on_press(save).into_element()
+                        // iOS: in the sheet's navigation bar instead (`sheet`).
+                        .child(when(
+                            || !cfg!(target_os = "ios"),
+                            move || {
+                                when(
+                                    move || editing.get(),
+                                    move || {
+                                        // `ios-look`: "Done" in words, as the system's. Android: a check mark, as its
+                                        // other sheets' actions are icons (the pencil that started the edit, a close
+                                        // button).
+                                        if ui::IOS {
+                                            ui::glass_text_button(move || s.label("Done")).test_id("done").on_press(save).into_element()
+                                        } else {
+                                            ui::icon_button(move || s.label("Done"), || Icon::Check)
+                                                .text_color(move || theme().primary)
+                                                .test_id("done")
+                                                .on_press(save)
+                                                .into_element()
+                                        }
+                                    },
+                                )
+                                .otherwise(move || {
+                                    let edit = if ui::IOS {
+                                        ui::glass_text_button(move || s.label("Edit"))
                                     } else {
-                                        ui::icon_button(move || s.label("Done"), || Icon::Check)
-                                            .text_color(move || theme().primary)
-                                            .test_id("done")
-                                            .on_press(save)
-                                            .into_element()
-                                    }
-                                },
-                            )
-                            .otherwise(move || {
-                                // iOS: "Edit" in words, as the system's.
-                                let edit = if ui::IOS {
-                                    ui::glass_text_button(move || s.label("Edit"))
-                                } else {
-                                    ui::icon_button(move || s.label("Edit"), || Icon::Pencil)
-                                };
-                                edit.test_id("edit").on_press(move || {
-                                    s.error.set(None);
-                                    s.marks.update(|m| m.website_error = false);
-                                    editing.set(true)
+                                        ui::icon_button(move || s.label("Edit"), || Icon::Pencil)
+                                    };
+                                    edit.test_id("edit").on_press(move || start_editing(s, editing))
                                 })
-                            }),
-                        ),
+                            },
+                        )),
                 )
                 // The code: a press copies it.
                 .child(
