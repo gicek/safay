@@ -209,14 +209,16 @@ pub fn add_to(s: Store, nav: Nav) -> impl IntoElement {
                         .child(ui::glass_text_button(move || s.label("Done")).test_id("done").on_press(close))
                         .into_element()
                 } else {
-                    // Android: the title at the start over the account in small text, the sheet's close button at the
-                    // end, as the other sheets'.
+                    // Android: the sheet's close button at the start, as the other sheets' (a full-screen dialog's),
+                    // then the title over the account in small text.
                     view()
                         .flex_row()
                         .items_center()
-                        .pl(px(24.0))
-                        .pr(px(8.0))
+                        .gap(px(4.0))
+                        .pl(px(4.0))
+                        .pr(px(24.0))
                         .pb(px(8.0))
+                        .child(ui::icon_button(move || s.label("Close"), || Icon::Close).test_id("close").on_press(close))
                         .child(
                             view()
                                 .flex_1()
@@ -224,7 +226,6 @@ pub fn add_to(s: Store, nav: Nav) -> impl IntoElement {
                                 .child(ui::title_large(text(move || s.label("Add to"))).number_of_lines(1))
                                 .child(ui::dim(ui::caption(text(account))).number_of_lines(1)),
                         )
-                        .child(ui::icon_button(move || s.label("Close"), || Icon::Close).test_id("close").on_press(close))
                         .into_element()
                 })
                 // iOS: which account, under the bar, as a group's header.

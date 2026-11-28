@@ -58,8 +58,38 @@ fn setup(s: Store, provider: Provider, close: impl Fn() + Copy + 'static) -> imp
         if oauth { s.connect_oauth(provider) } else { s.connect_cloud(provider) }
     };
     let waiting = move || s.cloud_form.with(|f| f.waiting);
-    // The title row (48), and the action under the scroll view (12 above a 56 pt button, 12 below it).
-    const CHROME: f32 = 48.0 + 12.0 + 56.0 + 12.0;
+    // The bar's leading button: while the browser sign-in waits, it stops that and the form stays; otherwise the sheet
+    // goes.
+    let leading = move || {
+        if waiting() {
+            crate::platform::cancel_web_sign_in();
+            s.cloud_form.update(|f| {
+                f.working = false;
+                f.waiting = false;
+            })
+        } else {
+            close()
+        }
+    };
+    // The bar's action: "Choose" while a folder is picked, else "Connect" ("Sign In" through the browser); a spinner
+    // while it works or the browser sign-in waits.
+    let picking = move || s.folder_browser.with(|b| b.open);
+    let label = move || {
+        s.label(if picking() {
+            "Choose"
+        } else if oauth {
+            "Sign In"
+        } else {
+            "Connect"
+        })
+    };
+    let enabled = move || if picking() { crate::pages::backup::folder_usable(s) } else { ready() };
+    let busy = move || if picking() { s.folder_browser.with(|b| b.working) } else { s.cloud_form.with(|f| f.working) };
+    let act = move || {
+        if picking() { s.use_folder() } else { go() }
+    };
+    // The bar (its buttons are 44 pt, 4 above and below): the action is there, none under the scroll view.
+    const CHROME: f32 = 52.0;
     view()
         // iOS: the system's sheet sizes itself; this fills it, so the scroll view below takes what the title and the
         // action leave and scrolls (a long list of a NAS's folders). Sized by its content, it would run past the sheet.
@@ -67,23 +97,36 @@ fn setup(s: Store, provider: Provider, close: impl Fn() + Copy + 'static) -> imp
         .flex_shrink(1.0)
         .min_h(px(0.0))
         .pb(move || ui::sheet_bottom(12.0))
-        .child(
-            view()
-                .flex_row()
-                .items_center()
-                .pl(px(24.0))
-                .pr(px(8.0))
-                .child(
-                    ui::title_large(text(move || s.fmt(if restore() { "Restore from {}" } else { "Connect to {}" }, &[provider.name()])))
-                        .flex_1(),
-                )
-                // iOS: "Cancel" in glass, as the other sheets' actions; Android: the close button.
-                .child(if ui::IOS {
-                    ui::glass_text_button(move || s.label("Cancel")).test_id("Close").on_press(close).into_element()
-                } else {
-                    ui::icon_button(move || s.label("Close"), || Icon::Close).on_press(close).into_element()
-                }),
-        )
+        // The sheet's bar, as a form's: leaving at the start, the action at the end. iOS: "Cancel" and the action in
+        // glass, the title in the middle. Android (a full-screen dialog's): the close button, the title, the action in
+        // words.
+        .child({
+            let title_ = move || s.fmt(if restore() { "Restore from {}" } else { "Connect to {}" }, &[provider.name()]);
+            if ui::IOS {
+                view()
+                    .h(px(ui::TOUCH + 8.0))
+                    .px(px(16.0))
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .child(ui::title(text(title_)).absolute().left(px(104.0)).right(px(104.0)).text_center().number_of_lines(1))
+                    .child(ui::glass_text_button(move || s.label("Cancel")).test_id("Close").on_press(leading))
+                    .child(bar_action(s, label, enabled, busy, act))
+                    .into_element()
+            } else {
+                view()
+                    .h(px(ui::TOUCH + 8.0))
+                    .pl(px(4.0))
+                    .pr(px(12.0))
+                    .flex_row()
+                    .items_center()
+                    .gap(px(4.0))
+                    .child(ui::icon_button(move || s.label("Close"), || Icon::Close).on_press(leading))
+                    .child(ui::title_large(text(title_)).flex_1().min_w(px(0.0)).number_of_lines(1))
+                    .child(bar_action(s, label, enabled, busy, act))
+                    .into_element()
+            }
+        })
         .child(
             scroll()
                 .max_h(move || ui::sheet_room(CHROME))
@@ -110,43 +153,41 @@ fn setup(s: Store, provider: Provider, close: impl Fn() + Copy + 'static) -> imp
                         )),
                 ),
         )
-        .child(
-            view().px(px(24.0)).pt(px(12.0)).child(
-                when(waiting, move || {
-                    ui::outlined_button(move || s.label("Cancel")).on_press(move || {
-                        crate::platform::cancel_web_sign_in();
-                        s.cloud_form.update(|f| {
-                            f.working = false;
-                            f.waiting = false;
-                        })
-                    })
-                })
-                .otherwise(move || {
-                    // Picking a folder (WebDAV, Nextcloud, Synology): the button uses the folder shown.
-                    when(
-                        move || s.folder_browser.with(|b| b.open),
-                        move || {
-                            ui::primary_button(
-                                move || s.label("Use This Folder"),
-                                move || crate::pages::backup::folder_usable(s),
-                                move || s.folder_browser.with(|b| b.working),
-                            )
-                            .test_id("use-folder")
-                            .on_press(move || s.use_folder())
-                        },
-                    )
-                    .otherwise(move || {
-                        ui::primary_button(
-                            move || s.label(if oauth { "Sign In" } else { "Connect" }),
-                            ready,
-                            move || s.cloud_form.with(|f| f.working),
-                        )
-                        .test_id("connect")
-                        .on_press(go)
-                    })
-                }),
-            ),
-        )
+}
+
+/// The setup bar's action: "Connect" (or "Choose", "Sign In") in glass on iOS, in words in the accent color on Android;
+/// dimmed until it can be pressed, a spinner while it works (screen readers hear "Connecting").
+fn bar_action(
+    s: Store,
+    label: impl Fn() -> SharedString + Copy + 'static,
+    enabled: impl Fn() -> bool + Copy + 'static,
+    busy: impl Fn() -> bool + Copy + 'static,
+    act: impl Fn() + 'static,
+) -> impl IntoElement {
+    let ink = move || if enabled() { if ui::IOS { theme().foreground } else { theme().primary } } else { theme().muted_foreground };
+    let b = nsh_base::button()
+        .test_id("connect")
+        .accessibility_label(move || Some(if busy() { s.label("Connecting") } else { label() }))
+        .disabled(move || !enabled() || busy())
+        .h(px(if ui::IOS { ui::TOUCH } else { 40.0 }))
+        .min_w(px(if ui::IOS { 72.0 } else { 64.0 }))
+        .px(px(if ui::IOS { 20.0 } else { 12.0 }))
+        .items_center()
+        .justify_center()
+        .on_press(act)
+        .child(when(busy, move || crate::components::spinner_in(20.0, ink)).otherwise(move || {
+            let t = text(label).number_of_lines(1).text_color(ink);
+            if ui::IOS {
+                ui::body_large(t).font_weight(FontWeight::SEMIBOLD)
+            } else {
+                t.text_size(px(14.0)).font_weight(FontWeight::MEDIUM)
+            }
+        }));
+    if ui::IOS {
+        ui::glass(b.active(|st| st.scale(0.94))).into_element()
+    } else {
+        b.rounded_full().active(|st| st.bg(move || tok("pressed"))).into_element()
+    }
 }
 
 /// Safay, a locked link and the service; what is kept there.
