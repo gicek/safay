@@ -2664,7 +2664,9 @@ impl Store {
                     // The stored sign-in carries the session on; the one held for browsing is just dropped.
                     self.held.replace(None);
                     self.held_generation.with(|g| *g = g.wrapping_add(1));
-                    self.folder_browser.set(FolderBrowser::default());
+                    // The folders stay, "Choose" still turning, until the sheet goes: restoring, it reads the backup
+                    // first, and the setup's form shown meanwhile would flash up between the folders and the next page.
+                    // Linking lets them go itself (`release_held`), as does the next setup.
                     self.cloud_form.set(CloudForm::default());
                     let submitted = CloudForm {
                         address: form.address,
