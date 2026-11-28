@@ -328,7 +328,7 @@ fn unlocked(s: Store, nav: Nav) -> AnyElement {
     pages
         .into_iter()
         .fold(view().flex_1().child(when(move || nav.page.get().is_none(), move || home::page(s, nav))), |root, p| {
-            root.child(when(move || nav.page.get() == Some(p), move || readable(page(s, nav, p))))
+            root.child(when(move || nav.page.get() == Some(p), move || page(s, nav, p)))
         })
         .into_element()
 }
@@ -346,11 +346,6 @@ fn page(s: Store, nav: Nav, page: Page) -> AnyElement {
         Page::Export => settings::export(s, nav).into_element(),
         Page::Location => backup::location(s, nav).into_element(),
     }
-}
-/// A page in a column of a readable width, centered in a wide window ([`ui::PAGE_MAX`]); the camera's page takes the
-/// whole window.
-fn readable(page: AnyElement) -> impl IntoElement {
-    view().flex_1().items_center().child(view().flex_1().w_full().max_w(px(ui::PAGE_MAX)).child(page))
 }
 /// iOS: the list and the pages over it in the system's navigation stack, which pushes and pops them as the system's
 /// own (the swipe from the edge included). A page in the system's header shows its title there, large while its
@@ -443,7 +438,8 @@ fn native_stack(s: Store, nav: Nav) -> impl IntoElement {
                     screen
                 };
                 let content = page(s, nav, kind);
-                if kind == Page::Scan { screen.child(content) } else { screen.child(readable(content)) }
+                // Each page keeps its content to a readable width inside its scroll view (`ui::readable`).
+                screen.child(content)
             },
         ))
 }

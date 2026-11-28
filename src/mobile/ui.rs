@@ -46,6 +46,12 @@ pub const WIDE: f32 = 700.0;
 pub const SIDEBAR: f32 = 300.0;
 /// The widest a page over the list grows in a wide window: its content stays centered.
 pub const PAGE_MAX: f32 = 720.0;
+/// `content` in a column of a readable width ([`PAGE_MAX`]), centered in a wide window. Pages put it inside their scroll
+/// view, which spans the window: its indicator stays at the window's edge, and on iOS the system's header, which takes
+/// its background from that scroll view, spans it too.
+pub fn readable(content: impl IntoElement) -> View {
+    view().w_full().items_center().child(view().w_full().max_w(px(PAGE_MAX)).child(content))
+}
 /// The window is wide ([`WIDE`]).
 pub fn is_wide() -> bool {
     window().width >= px(WIDE)

@@ -187,68 +187,72 @@ pub fn review(s: Store, nav: Nav) -> impl IntoElement {
         .flex_1()
         .pt(ui::page_top)
         .child(ui::top_bar(s, Some("Add Account"), leave))
-        .child(scroll().flex_1().child(view().px(px(ui::MARGIN)).pt(px(8.0)).pb(px(16.0)).gap(px(ui::GROUP_GAP)).child(each(
-            move || {
-                items()
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, p)| {
-                        (i, p.is_valid(), p.issuer.clone(), p.account.clone(), p.failure.map(|f| f.l10n_key()), p.digits, p.period)
-                    })
-                    .collect::<Vec<_>>()
-            },
-            |x| format!("{}:{}:{}", x.0, x.2, x.3),
-            move |item, index| {
-                let ok = move || item.with(|x| x.1);
-                let count = move || items().len();
-                ui::group_corners_inset(
-                    view()
-                        .flex_row()
-                        .items_center()
-                        .gap(px(16.0))
-                        .px(px(16.0))
-                        .py(px(12.0))
-                        .min_h(move || px(ui::ROW) * font_scale())
-                        .bg(move || theme().card),
-                    move || index.get(),
-                    count,
-                    16.0 + 40.0 + 16.0,
-                )
-                .child(when(ok, move || badge_with_icon(move || item.with(|x| x.2.clone()), || false, || None, 40.0)).otherwise(|| {
-                    view()
-                        .size(px(40.0))
-                        .items_center()
-                        .justify_center()
-                        .text_color(move || theme().destructive)
-                        .child(icon(Icon::Warning).size(px(24.0)))
-                }))
-                .child(
-                    view()
-                        .flex_1()
-                        .min_w(px(0.0))
-                        .child(
-                            ui::body_large(text(move || {
-                                item.with(|x| SharedString::from(if x.2.is_empty() { "—".to_owned() } else { x.2.clone() }))
-                            }))
-                            .number_of_lines(1),
-                        )
-                        .child(
-                            ui::body(text(move || {
-                                item.with(|x| match x.4 {
-                                    Some(key) => s.label(key),
-                                    None => SharedString::from(x.3.clone()),
-                                })
-                            }))
-                            .number_of_lines(1)
-                            .text_color(move || if ok() { theme().muted_foreground } else { theme().destructive }),
-                        ),
-                )
-                .child(when(ok, move || {
-                    ui::dim(ui::caption(text(move || item.with(|x| s.fmt("{} digits · {} sec", &[&x.5.to_string(), &x.6.to_string()])))))
-                }))
-            },
+        .child(scroll().flex_1().child(ui::readable(view().px(px(ui::MARGIN)).pt(px(8.0)).pb(px(16.0)).gap(px(ui::GROUP_GAP)).child(
+            each(
+                move || {
+                    items()
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, p)| {
+                            (i, p.is_valid(), p.issuer.clone(), p.account.clone(), p.failure.map(|f| f.l10n_key()), p.digits, p.period)
+                        })
+                        .collect::<Vec<_>>()
+                },
+                |x| format!("{}:{}:{}", x.0, x.2, x.3),
+                move |item, index| {
+                    let ok = move || item.with(|x| x.1);
+                    let count = move || items().len();
+                    ui::group_corners_inset(
+                        view()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(16.0))
+                            .px(px(16.0))
+                            .py(px(12.0))
+                            .min_h(move || px(ui::ROW) * font_scale())
+                            .bg(move || theme().card),
+                        move || index.get(),
+                        count,
+                        16.0 + 40.0 + 16.0,
+                    )
+                    .child(when(ok, move || badge_with_icon(move || item.with(|x| x.2.clone()), || false, || None, 40.0)).otherwise(|| {
+                        view()
+                            .size(px(40.0))
+                            .items_center()
+                            .justify_center()
+                            .text_color(move || theme().destructive)
+                            .child(icon(Icon::Warning).size(px(24.0)))
+                    }))
+                    .child(
+                        view()
+                            .flex_1()
+                            .min_w(px(0.0))
+                            .child(
+                                ui::body_large(text(move || {
+                                    item.with(|x| SharedString::from(if x.2.is_empty() { "—".to_owned() } else { x.2.clone() }))
+                                }))
+                                .number_of_lines(1),
+                            )
+                            .child(
+                                ui::body(text(move || {
+                                    item.with(|x| match x.4 {
+                                        Some(key) => s.label(key),
+                                        None => SharedString::from(x.3.clone()),
+                                    })
+                                }))
+                                .number_of_lines(1)
+                                .text_color(move || if ok() { theme().muted_foreground } else { theme().destructive }),
+                            ),
+                    )
+                    .child(when(ok, move || {
+                        ui::dim(ui::caption(text(move || {
+                            item.with(|x| s.fmt("{} digits · {} sec", &[&x.5.to_string(), &x.6.to_string()]))
+                        })))
+                    }))
+                },
+            ),
         ))))
-        .child(view().px(px(ui::MARGIN)).pt(px(8.0)).pb_safe_area_plus(px(16.0)).child(
+        .child(ui::readable(view().px(px(ui::MARGIN)).pt(px(8.0)).pb_safe_area_plus(px(16.0)).child(
             ui::primary_button(move || s.count("add_n", valid()), move || valid() > 0, move || s.busy.get()).test_id("add-all").on_press(
                 move || {
                     if valid() > 0 && !s.busy.get() {
@@ -256,7 +260,7 @@ pub fn review(s: Store, nav: Nav) -> impl IntoElement {
                     }
                 },
             ),
-        ))
+        )))
 }
 
 /// Links pasted one per line: `otpauth://` links and Google Authenticator's migration links. "Parse" reads them, and

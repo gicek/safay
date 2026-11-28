@@ -46,7 +46,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
             },
         ))
         .child(when(move || count() > 0, move ||
-            scroll().flex_1().scrollable(move || r.scrollable()).child(
+            scroll().flex_1().scrollable(move || r.scrollable()).child(ui::readable(
                 view()
                     .px(px(ui::MARGIN))
                     .pt(px(8.0))
@@ -72,7 +72,7 @@ pub fn page(s: Store, nav: Nav) -> impl IntoElement {
                         })))
                         .p(px(16.0)),
                     ),
-            ),
+            )),
         ))
         // iOS: "+" in the system's header instead (`mobile::native_stack`).
         .child(when(|| !ui::IOS, move ||

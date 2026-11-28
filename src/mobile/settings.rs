@@ -241,7 +241,7 @@ pub fn deleted(s: Store, nav: Nav) -> impl IntoElement {
         .child(when(
             move || count() > 0,
             move || {
-                scroll().flex_1().child(
+                scroll().flex_1().child(ui::readable(
                     view()
                         .px(px(ui::MARGIN))
                         .pt(px(8.0))
@@ -293,7 +293,7 @@ pub fn deleted(s: Store, nav: Nav) -> impl IntoElement {
                                 )
                             },
                         )),
-                )
+                ))
             },
         ))
 }

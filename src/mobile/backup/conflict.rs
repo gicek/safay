@@ -113,7 +113,7 @@ pub fn conflict(s: Store, nav: Nav) -> impl IntoElement {
                 },
             )
             .otherwise(move || {
-                scroll().flex_1().child(
+                scroll().flex_1().child(ui::readable(
                     view()
                         .px(px(ui::MARGIN))
                         .pb(px(24.0))
@@ -261,7 +261,7 @@ pub fn conflict(s: Store, nav: Nav) -> impl IntoElement {
                                     }),
                             ),
                         ),
-                )
+                ))
             }),
         )
 }
