@@ -43,7 +43,7 @@ pub const TILE_INSET: f32 = 16.0 + 30.0 + 14.0;
 /// the accounts, which take columns of cards; pages over it keep a readable width ([`PAGE_MAX`]).
 pub const WIDE: f32 = 700.0;
 /// The sidebar of a wide window.
-pub const SIDEBAR: f32 = 300.0;
+pub const SIDEBAR: f32 = 270.0;
 /// The widest a page over the list grows in a wide window: its content stays centered.
 pub const PAGE_MAX: f32 = 720.0;
 /// `content` in a column of a readable width ([`PAGE_MAX`]), centered in a wide window. Pages put it inside their scroll
@@ -1544,8 +1544,9 @@ pub fn dialog<E: IntoElement>(
     let content = compact(content);
     // Centered in the room above the keyboard while it is up.
     let scrim = view().flex_1().items_center().justify_center().px(px(27.0)).pt_safe_area().pb_keyboard();
-    // A modal of its own: over the page and over a sheet that is open on it. The back key asks to close it.
-    nsh_base::dialog().animation(nsh_core::ModalAnimation::Fade).on_cancel(move |_: &()| dismiss()).child(
+    // A modal of its own: over the page and over a sheet that is open on it. The back key asks to close it. Android: its
+    // scrim reaches under the status bar, which dims with the page, as the bottom sheet's does.
+    nsh_base::dialog().animation(nsh_core::ModalAnimation::Fade).status_bar_translucent(true).on_cancel(move |_: &()| dismiss()).child(
         scrim.bg(move || tok("scrim")).on_press(move |_: &()| dismiss()).child(
             view()
                 .w_full()
@@ -1635,7 +1636,57 @@ pub fn bottom_sheet(
         })
         .into_element();
     }
+    // Android, a wide window (a tablet): a dialog in the middle of the screen, as Material has large screens show forms
+    // rather than a sheet from the bottom edge; a narrow one keeps the bottom sheet.
     #[allow(unreachable_code)]
+    let content = std::rc::Rc::new(content);
+    let centered = content.clone();
+    view()
+        .child(when(move || open() && is_wide(), move || centered_sheet(close, centered.clone())))
+        .child(bottom_panel(move || open() && !is_wide(), close, move || content()))
+        .into_element()
+}
+/// A wide Android window's sheet: a panel of a readable width in the middle of the screen over the scrim, as tall as its
+/// content up to most of the room above the keyboard (its scroll view takes the rest). A press on the scrim and the back
+/// key close it, as its own close button does.
+fn centered_sheet(close: impl Fn() + Copy + 'static, content: std::rc::Rc<impl Fn() -> AnyElement + 'static>) -> impl IntoElement {
+    let scrim = view().flex_1().items_center().justify_center().px(px(24.0)).pt_safe_area().pb_keyboard();
+    // Its scrim reaches under the status bar, which dims with the page.
+    nsh_base::dialog().animation(nsh_core::ModalAnimation::Fade).status_bar_translucent(true).on_cancel(move |_: &()| close()).child(
+        scrim.bg(move || tok("scrim")).on_press(move |_: &()| close()).child(
+            view()
+                .w_full()
+                .max_w(px(CENTERED_SHEET_MAX))
+                // Most of the room, its edges showing; with the keyboard up all of it but a margin above and below, so
+                // a landscape tablet keeps the field typed into in view.
+                .max_h(move || {
+                    let keyboard = (keyboard_height() - safe_area().bottom).max(px(0.0));
+                    let room = window().height - safe_area().top - safe_area().bottom - keyboard;
+                    if keyboard > px(0.0) { room - px(16.0) } else { room * 0.9 }
+                })
+                .rounded(px(28.0))
+                .bg(move || tok("sheet-surface"))
+                .border_1()
+                .border_color(move || tok("sheet-rim"))
+                .shadow_lg()
+                .overflow_hidden()
+                .pt(px(12.0))
+                .pb(px(8.0))
+                // A press inside stays inside.
+                .on_press(|_: &()| {})
+                // The content gives way first: its scroll view takes what is left.
+                .child(view().flex_shrink(1.0).min_h(px(0.0)).child(content())),
+        ),
+    )
+}
+/// The widest a wide Android window's centered sheet grows (Material's dialogs: 560 dp).
+const CENTERED_SHEET_MAX: f32 = 560.0;
+/// The bottom sheet of a phone (and a narrow window).
+fn bottom_panel(
+    open: impl Fn() -> bool + Copy + 'static,
+    close: impl Fn() + Copy + 'static,
+    content: impl Fn() -> AnyElement + 'static,
+) -> AnyElement {
     nsh_base::sheet()
         .open(move || Some(open()))
         .on_open_change(move |e: &nsh_base::SheetEvent| {
@@ -1649,7 +1700,6 @@ pub fn bottom_sheet(
         .backdrop_style(|s| s.bg(move || tok("scrim")))
         .child(
             view()
-                // A wide window: a column of a readable width in the middle, as a tablet's form sheet.
                 .w_full()
                 .max_w(px(SHEET_MAX))
                 .self_center()

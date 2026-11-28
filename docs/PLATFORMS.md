@@ -55,7 +55,9 @@ On Windows and Linux, Settings opens as a dialog over the main window; macOS use
   screenshots and the recent apps' pictures.
 - Exports open the share sheet, where you choose Files, a drive or another app. Dropbox, OneDrive and Google Drive sign
   in in a Custom Tab.
-- A window 700 dp wide or more (a tablet, a foldable open) shows the categories in a sidebar and the accounts as cards.
+- A window 700 dp wide or more (a tablet, a foldable open) shows the categories in a sidebar, which its menu button
+  folds away, and the accounts as cards with the letter index beside them; sheets open as a dialog in the middle of the
+  screen.
 
 ## iOS and iPadOS details
 

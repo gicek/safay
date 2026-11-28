@@ -56,6 +56,8 @@ pub enum Icon {
     CloudOff,
     Download,
     Sidebar,
+    /// Material's navigation menu (three lines).
+    Menu,
     Close,
     Keyboard,
     Sliders,
@@ -180,6 +182,7 @@ fn shape(name: Icon) -> &'static str {
         Icon::CloudDown => {
             "<path d='M7 18.5h10.5a3.75 3.75 0 0 0 .4-7.5 6 6 0 0 0-11.5 1.5A3 3 0 0 0 7 18.5Z'/><path d='M12 10.5v5m-2.2-2.2 2.2 2.2 2.2-2.2'/>"
         }
+        Icon::Menu => "<path d='M4 7h16M4 12h16M4 17h16'/>",
         Icon::Sidebar => "<rect x='3.5' y='4.5' width='17' height='15' rx='2.5'/><path d='M9.5 4.5v15M5.8 8h1.6M5.8 11h1.6'/>",
         Icon::Close => "<path d='m6.5 6.5 11 11m0-11-11 11'/>",
         Icon::Keyboard => "<rect x='3' y='6' width='18' height='12' rx='2'/><path d='M7 10h.1M10.3 10h.1M13.6 10h.1M17 10h.1M7 14h10'/>",
@@ -232,6 +235,7 @@ fn sf_name(name: Icon) -> Option<&'static str> {
         Icon::Download => "square.and.arrow.down",
         Icon::Settings => "gearshape",
         Icon::Sidebar => "sidebar.left",
+        Icon::Menu => "line.3.horizontal",
         Icon::Lock => "lock",
         Icon::List => "list.bullet",
         Icon::Grid => "square.grid.2x2",

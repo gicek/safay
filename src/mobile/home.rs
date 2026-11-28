@@ -136,7 +136,11 @@ fn header(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
         .pl(px(ui::MARGIN + 4.0))
         .pr(px(if ui::IOS { ui::MARGIN } else { 4.0 }))
         // iOS: the sidebar folded away comes back from here.
-        .child(when(move || ui::IOS && wide && s.sidebar_hidden.get(), move || view().ml(px(-4.0)).mr(px(12.0)).child(sidebar_button(s))))
+        // The sidebar folded away comes back from here, before the title.
+        .child(when(
+            move || wide && s.sidebar_hidden.get(),
+            move || view().ml(px(if ui::IOS { -4.0 } else { -16.0 })).mr(px(if ui::IOS { 12.0 } else { 4.0 })).child(sidebar_button(s)),
+        ))
         // iOS: a large title beside the glass buttons.
         .child(if ui::IOS || wide {
             ui::display(text(name)).number_of_lines(1).flex_1().into_element()
@@ -270,7 +274,7 @@ fn search(s: Store, nav: Nav) -> impl IntoElement {
 /// A wide window's sidebar: the app's name, "All" and each category with how many accounts it holds, and "Manage
 /// Categories". The chosen one is filled.
 fn sidebar(s: Store, nav: Nav) -> impl IntoElement {
-    // Folded away (iOS, its button), it narrows to nothing; its content keeps its width, sliding out under the edge.
+    // Folded away (its button), it narrows to nothing; its content keeps its width, sliding out under the edge.
     view().w(move || px(if s.sidebar_hidden.get() { 0.0 } else { ui::SIDEBAR })).flex_shrink(0.0).overflow_hidden().bg(ui::sidebar).child(
         view()
             .w(px(ui::SIDEBAR))
@@ -284,8 +288,11 @@ fn sidebar(s: Store, nav: Nav) -> impl IntoElement {
                     .flex_row()
                     .items_center()
                     .h(move || px(ui::BAR) * font_scale())
-                    .pl(px(ui::MARGIN + 4.0))
+                    // Android: the menu button before the name, where it stays as the sidebar folds (Material's
+                    // navigation menu). iOS: the sidebar button at the end, as the system's sidebars have it.
+                    .pl(px(if ui::IOS { ui::MARGIN + 4.0 } else { 4.0 }))
                     .pr(px(ui::MARGIN))
+                    .child(when(|| !ui::IOS, move || view().mr(px(4.0)).child(sidebar_button(s))))
                     .child(ui::display(text("Safay")).flex_1())
                     .child(when(|| ui::IOS, move || sidebar_button(s))),
             )
@@ -296,10 +303,11 @@ fn sidebar(s: Store, nav: Nav) -> impl IntoElement {
 fn sidebar_width(s: Store) -> f32 {
     if ui::is_wide() && !s.sidebar_hidden.get() { ui::SIDEBAR } else { 0.0 }
 }
-/// iOS: folds the sidebar away or brings it back, as the system's split views do; at the sidebar's top while it shows,
-/// at the account pane's start while it is folded.
+/// Folds the sidebar away or brings it back: iOS, the system's sidebar button, as its split views have; Android,
+/// Material's menu button. At the sidebar's top while it shows, before the account pane's title while it is folded.
 fn sidebar_button(s: Store) -> impl IntoElement {
-    ui::bar_button(move || s.label(if s.sidebar_hidden.get() { "Show Sidebar" } else { "Hide Sidebar" }), || Icon::Sidebar)
+    let glyph = || if ui::IOS { Icon::Sidebar } else { Icon::Menu };
+    ui::bar_button(move || s.label(if s.sidebar_hidden.get() { "Show Sidebar" } else { "Hide Sidebar" }), glyph)
         .test_id("sidebar")
         .on_press(move || {
             if !reduce_motion() {
@@ -501,9 +509,9 @@ fn list(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
         )
         .child(when(move || r.pointer.get().is_some() && r.standin.with(|row| row.is_some()), move || standin(r, wide)))
         .child(when(
+            // Cards too: in a wide window's columns there are as many accounts to go through.
             move || {
-                !wide
-                    && !nav.searching.get()
+                !nav.searching.get()
                     && !nav.reordering.get()
                     && r.dragged.get().is_none()
                     && r.count() >= INDEXED
