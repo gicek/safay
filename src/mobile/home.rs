@@ -148,12 +148,22 @@ fn header(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
                 .pointer_events(nsh_core::PointerEvents::BoxNone)
                 .child(letter_chip(s, nav)),
         )
+        .child(bar_menus(s, nav))
+}
+/// The top bar's "+" and "More". iOS (a wide window's bar; the phone's are the system header's): the system's menu
+/// buttons. Elsewhere: buttons opening the app's menus (`add_menu`, `overflow`).
+fn bar_menus(s: Store, nav: Nav) -> AnyElement {
+    #[cfg(target_os = "ios")]
+    return wide_bar_menus(s, nav).into_element();
+    #[allow(unreachable_code)]
+    view()
+        .flex_row()
+        .gap(px(if ui::IOS { 8.0 } else { 0.0 }))
         .child(ui::bar_button(move || s.label("Add Account"), || Icon::Plus).test_id("add").on_press(move || {
             dismiss_keyboard();
             nav.menu.set(false);
             nav.adding.update(|v| *v = !*v)
         }))
-        .gap(px(if ui::IOS { 8.0 } else { 0.0 }))
         // The glyph is the row of dots, upright here (iOS keeps it level, as the system's "More").
         .child(
             ui::bar_button(move || s.label("More"), || Icon::More)
@@ -165,6 +175,7 @@ fn header(s: Store, nav: Nav, wide: bool) -> impl IntoElement {
                     nav.menu.set(true)
                 }),
         )
+        .into_element()
 }
 
 /// The search button at the bottom: a press opens the field to its left, the keyboard up, and the button closes it
@@ -501,14 +512,11 @@ fn account_row(
         return face(r.item(el, me, id), row).into_element();
     }
     // iOS: the system's menu on a held finger, and the drag handle while the list is reordered.
-    // The row lifts in its own corners (`platform::lift_outline`).
-    // Over the whole row, so it follows the row's size; it draws nothing and takes no touches.
-    let outline = native("safay.lift-outline")
-        .absolute()
-        .inset(px(0.0))
-        .pointer_events(nsh_core::PointerEvents::None)
-        .prop("top", move || nsh_core::JsonValue::from(f64::from(if index() == 0 { ui::GROUP_RADIUS } else { ROW_INNER })))
-        .prop("bottom", move || nsh_core::JsonValue::from(f64::from(if index() + 1 >= count() { ui::GROUP_RADIUS } else { ROW_INNER })));
+    // The row lifts in its own corners.
+    let outline = lift_outline(
+        move || if index() == 0 { ui::GROUP_RADIUS } else { ROW_INNER },
+        move || if index() + 1 >= count() { ui::GROUP_RADIUS } else { ROW_INNER },
+    );
     system_menu(s, nav, row, face_with(el.element_ref(&me), row, move || nav.reordering.get()).child(grip(nav, r, me, id)).child(outline))
 }
 /// The gap between accounts, and the corners of one between two others: on both platforms each account stands apart,
@@ -519,6 +527,18 @@ fn account_corners<E: Styled>(e: E, index: impl Fn() -> usize + Copy + 'static, 
     e.rounded_t(move || px(if index() == 0 { ui::GROUP_RADIUS } else { ROW_INNER }))
         .rounded_b(move || px(if index() + 1 >= count() { ui::GROUP_RADIUS } else { ROW_INNER }))
 }
+/// iOS: the outline the system's menu lifts a row or a card in, its corners `top` and `bottom`
+/// (`platform::lift_outline`). Over the whole of it, so it follows its size; it draws nothing and takes no touches.
+fn lift_outline(top: impl Fn() -> f32 + 'static, bottom: impl Fn() -> f32 + 'static) -> impl IntoElement {
+    native("safay.lift-outline")
+        .absolute()
+        .inset(px(0.0))
+        .pointer_events(nsh_core::PointerEvents::None)
+        .prop("top", move || nsh_core::JsonValue::from(f64::from(top())))
+        .prop("bottom", move || nsh_core::JsonValue::from(f64::from(bottom())))
+}
+/// A card's corners.
+const CARD_RADIUS: f32 = 18.0;
 /// iOS draws an account's menu itself (`UIContextMenuInteraction`) and reorders the list by drag handles.
 const SYSTEM_MENUS: bool = cfg!(target_os = "ios");
 
@@ -652,7 +672,7 @@ fn card(s: Store, nav: Nav, r: Reorder, row: Memo<Option<Row>>) -> AnyElement {
     let copied = move || s.copied.get().is_some() && s.copied.get() == id();
     let me = element_ref();
     let el = pressable(s, nav, r, row)
-        .rounded(px(18.0))
+        .rounded(px(CARD_RADIUS))
         .bg(move || if copied() { tok("primary-container") } else { ui::cell() })
         .transition()
         .duration(move || if copied() { 0.0 } else { ui::EFFECTS_MS })
@@ -662,7 +682,10 @@ fn card(s: Store, nav: Nav, r: Reorder, row: Memo<Option<Row>>) -> AnyElement {
     if !SYSTEM_MENUS {
         return card_face(r.item(el, me, id), row).into_element();
     }
-    let el = card_face(el.element_ref(&me), row).child(view().absolute().top(px(8.0)).right(px(4.0)).child(grip(nav, r, me, id)));
+    let el = card_face(el.element_ref(&me), row)
+        .child(view().absolute().top(px(8.0)).right(px(4.0)).child(grip(nav, r, me, id)))
+        // It lifts in its own corners.
+        .child(lift_outline(|| CARD_RADIUS, || CARD_RADIUS));
     system_menu(s, nav, row, el)
 }
 /// What a card shows.
@@ -1047,23 +1070,54 @@ fn menu_item(s: Store, glyph: Icon, label_: &'static str, press: impl Fn() + 'st
     ui::menu_item(glyph, move || s.label(label_), false).test_id(label_).on_press(press)
 }
 
+/// The list's actions behind "+" and "More": (id, label, SF Symbol), in their order. "Reorder" only with two accounts or
+/// more.
+fn list_actions(s: Store, more: bool) -> Vec<(&'static str, &'static str, &'static str)> {
+    if !more {
+        let mut add = Vec::new();
+        if CAMERA {
+            add.push(("scan", "Scan QR Code", "qrcode.viewfinder"));
+        }
+        add.extend([
+            ("photos", "Choose from Photos", "photo.on.rectangle"),
+            ("key", "Enter Setup Key", "keyboard"),
+            ("import", "Import Backup File", "doc"),
+        ]);
+        return add;
+    }
+    let mut items = vec![("settings", "Settings", "gearshape"), ("categories", "Manage Categories", "slider.horizontal.3")];
+    if s.projection.with(|p| p.rows.len() > 1) {
+        items.push(("reorder", "Reorder", "arrow.up.arrow.down"));
+    }
+    items.push(("lock", "Lock Now", "lock"));
+    items
+}
+/// Runs the list action `id` ([`list_actions`]).
+fn run_list_action(s: Store, nav: Nav, id: &str) {
+    match id {
+        "scan" => nav.push(Page::Scan),
+        "photos" => {
+            s.scanned.set(Default::default());
+            s.choose_images()
+        }
+        "key" => super::add::open(s, nav),
+        "import" => s.choose_backup(),
+        "settings" => nav.push(Page::Settings),
+        "categories" => nav.push(Page::Categories),
+        "reorder" => {
+            nav.close_search();
+            nav.letter.set(None);
+            nav.reordering.set(true)
+        }
+        "lock" => s.lock(),
+        _ => {}
+    }
+}
+
 /// iOS: the buttons of the list's system header: "+" and its menu of the ways to add an account, and "More" with the
 /// list's other places. Their menus are the system's.
 pub fn header_items(s: Store, nav: Nav) -> Vec<nsh_core::element::header::HeaderItem> {
     use nsh_core::element::{desktop::MenuItem, header::HeaderItem};
-    let item = |label: &'static str, symbol: &str| MenuItem::new(s.label(label).to_string()).symbol(symbol);
-    let mut add = Vec::new();
-    if CAMERA {
-        add.push(item("Scan QR Code", "qrcode.viewfinder").on_select(move || nav.push(Page::Scan)));
-    }
-    add.extend([
-        item("Choose from Photos", "photo.on.rectangle").on_select(move || {
-            s.scanned.set(Default::default());
-            s.choose_images()
-        }),
-        item("Enter Setup Key", "keyboard").on_select(move || super::add::open(s, nav)),
-        item("Import Backup File", "doc").on_select(move || s.choose_backup()),
-    ]);
     // Reordering: "Done" alone ends it.
     if nav.reordering.get() {
         return vec![
@@ -1071,20 +1125,52 @@ pub fn header_items(s: Store, nav: Nav) -> Vec<nsh_core::element::header::Header
             HeaderItem::new(s.label("Done").to_string()).key("done").on_press(move || nav.reordering.set(false)),
         ];
     }
-    let mut more = vec![
-        item("Settings", "gearshape").on_select(move || nav.push(Page::Settings)),
-        item("Manage Categories", "slider.horizontal.3").on_select(move || nav.push(Page::Categories)),
-    ];
-    if s.projection.with(|p| p.rows.len() > 1) {
-        more.push(item("Reorder", "arrow.up.arrow.down").on_select(move || {
-            nav.close_search();
-            nav.letter.set(None);
-            nav.reordering.set(true)
-        }));
-    }
-    more.push(item("Lock Now", "lock").on_select(move || s.lock()));
+    let menu = |more: bool| {
+        list_actions(s, more)
+            .into_iter()
+            .map(|(id, label, symbol)| {
+                MenuItem::new(s.label(label).to_string()).symbol(symbol).on_select(move || run_list_action(s, nav, id))
+            })
+            .collect::<Vec<_>>()
+    };
     vec![
-        HeaderItem::symbol("ellipsis").key("more").label(s.label("More").to_string()).menu(more),
-        HeaderItem::symbol("plus").key("add").label(s.label("Add Account").to_string()).menu(add),
+        HeaderItem::symbol("ellipsis").key("more").label(s.label("More").to_string()).menu(menu(true)),
+        HeaderItem::symbol("plus").key("add").label(s.label("Add Account").to_string()).menu(menu(false)),
     ]
+}
+/// iOS, a wide window's own top bar: "+" and "More" as the system's menu buttons, with the menus of the iPhone's header
+/// ([`header_items`]); "Done" alone while the cards are reordered.
+#[cfg(target_os = "ios")]
+fn wide_bar_menus(s: Store, nav: Nav) -> impl IntoElement {
+    let menu_button = move |more: bool, name: &'static str, glyph: Icon, test: &'static str| {
+        ui::glass(
+            nsh_base::menu_button()
+                .test_id(test)
+                .accessibility_label(move || Some(s.label(name)))
+                .items(move || {
+                    list_actions(s, more)
+                        .into_iter()
+                        .map(|(id, label, symbol)| nsh_base::MenuButtonItem::new(id, s.label(label)).icon(symbol))
+                        .collect::<Vec<_>>()
+                })
+                .on_select(move |id: &SharedString| run_list_action(s, nav, id))
+                .size(px(44.0))
+                .items_center()
+                .justify_center()
+                .text_color(move || theme().foreground)
+                .child(crate::icons::icon_bold(glyph).size(px(24.0))),
+        )
+    };
+    when(
+        move || nav.reordering.get(),
+        move || ui::glass_text_button(move || s.label("Done")).test_id("done").on_press(move || nav.reordering.set(false)),
+    )
+    .otherwise(move || {
+        view().flex_row().gap(px(8.0)).child(menu_button(false, "Add Account", Icon::Plus, "add")).child(menu_button(
+            true,
+            "More",
+            Icon::More,
+            "more",
+        ))
+    })
 }
